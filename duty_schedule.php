@@ -153,7 +153,7 @@ $next_week = date('Y-m-d', strtotime($target_date . ' + 7 days'));
                 <table class="w-full text-left border-collapse min-w-[800px]">
                     <thead>
                         <tr class="bg-gray-800 text-white text-sm font-semibold uppercase tracking-wide">
-                            <th class="border-b-2 border-r-2 border-gray-800 py-4 px-4 text-center w-32">ผลัดปฏิบัติหน้าที่</th>
+                            <th class="border-b-2 border-r-2 border-gray-800 py-4 px-4 text-center w-32">ผลัดป���ิบัติหน้าที่</th>
                             <th class="border-b-2 border-r-2 border-gray-800 py-4 px-4 text-center w-56">จุดรักษาการณ์</th>
                             <th class="border-b-2 border-r-2 border-gray-800 py-4 px-4 text-center w-32">รหัสประจำตัว</th>
                             <th class="border-b-2 border-r-2 border-gray-800 py-4 px-4 text-center">ยศ ชื่อ - นามสกุล</th>
@@ -234,6 +234,12 @@ $next_week = date('Y-m-d', strtotime($target_date . ' + 7 days'));
             ระบบตารางปฏิบัติหน้าที่เวรรักษาการณ์ประจำวันศุกร์ | โรงเรียนช่างฝีมือทหาร สถาบันวิชาการป้องกันประเทศ
         </div>
     </div>
+
+<!-- Vercel Speed Insights -->
+<script>
+  window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
+</script>
+<script defer src="/_vercel/speed-insights/script.js"></script>
 
 </body>
 </html>

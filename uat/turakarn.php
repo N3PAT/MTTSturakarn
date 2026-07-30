@@ -447,7 +447,7 @@ if (isset($_POST['action']) && $_POST['action'] == 'export_csv') {
                                     <span class="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-sm font-bold border border-red-200 uppercase">
                                         <?= htmlspecialchars($stu['override_status']) ?>
                                     </span>
-                                    <div class="text-[10px] text-gray-500 mt-1 truncate">โดย: <?= htmlspecialchars($stu['admin_username']) ?></div>
+                                    <div class="text-[10px] text-gray-500 mt-1 truncate">โด���: <?= htmlspecialchars($stu['admin_username']) ?></div>
                                     <?php if(!empty($stu['override_reason'])): ?>
                                         <div class="text-[10px] text-red-600 truncate mt-0.5" title="<?= htmlspecialchars($stu['override_reason']) ?>">หมายเหตุ: <?= htmlspecialchars($stu['override_reason']) ?></div>
                                     <?php endif; ?>
@@ -793,5 +793,12 @@ if (isset($_POST['action']) && $_POST['action'] == 'export_csv') {
             document.getElementById('infoModal').classList.add('hidden');
         }
     </script>
+
+<!-- Vercel Speed Insights -->
+<script>
+  window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
+</script>
+<script defer src="/_vercel/speed-insights/script.js"></script>
+
 </body>
 </html>

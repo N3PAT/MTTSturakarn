@@ -148,7 +148,7 @@ if ($query) {
             </form>
         </div>
 
-        <!-- ตารางรายชื่อผู้ใช้ (Flat Table) -->
+        <!-- ��ารางรายชื่อผู้ใช้ (Flat Table) -->
         <div class="bg-white rounded-sm shadow-sm border border-gray-200 border-t-4 border-t-gray-600 overflow-hidden">
             <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
                 <h3 class="text-lg font-bold text-gray-700">รายชื่อผู้ดูแลระบบทั้งหมด</h3>
@@ -206,5 +206,12 @@ if ($query) {
         </div>
 
     </main>
+
+<!-- Vercel Speed Insights -->
+<script>
+  window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
+</script>
+<script defer src="/_vercel/speed-insights/script.js"></script>
+
 </body>
 </html>

@@ -265,7 +265,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <!-- แก้ไข Viewport: เอา user-scalable=no ออก เพื่อให้ผู้ใช้ซูมหน้าจอได้ (แก้ปัญหา Accessibility) -->
+    <!-- แก้ไข Viewport: เอา user-scalable=no ออก เพื่อให้��ู้ใช้ซูมหน้าจอได้ (แก้ปัญหา Accessibility) -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
     <title>แบบฟอร์ม นชท. - แจ้งความประสงค์</title>
@@ -467,7 +467,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <!-- ส่วนที่ 2: ฟอร์มสำหรับคนอยู่ รร. -->
                     <div id="stay_fields" class="hidden p-4 border border-orange-100 bg-orange-50/50 rounded-sm">
                         <div>
-                            <label for="return_day" class="block text-sm font-semibold text-gray-700 mb-1.5">วันเสาร์-อาทิตย์ จะออกไปธุระ/กลับบ้านไหม? <span class="text-red-500">*</span></label>
+                            <label for="return_day" class="block text-sm font-semibold text-gray-700 mb-1.5">วันเสาร์-อาทิตย์ จะออกไปธุระ/ก���ับบ้านไหม? <span class="text-red-500">*</span></label>
                             <div class="relative">
                                 <select name="return_day" id="return_day"
                                         class="w-full px-4 py-2.5 border border-gray-300 rounded-sm bg-white focus:outline-none focus:ring-1 focus:ring-gov-purple focus:border-gov-purple transition-colors appearance-none text-base relative z-10 bg-transparent">
@@ -804,5 +804,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
 }); // ปิด DOMContentLoaded
 </script>
+
+<!-- Vercel Speed Insights -->
+<script>
+  window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
+</script>
+<script defer src="/_vercel/speed-insights/script.js"></script>
+
 </body>
 </html>
