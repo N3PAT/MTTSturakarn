@@ -18,12 +18,13 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_student_name' && isset($_G
     // 💡 ปิด Session ทันทีเพื่อลดปัญหาคอขวดบน Server (ช่วยให้ iOS Safari ทำงานแบบ Asynchronous ได้ลื่นขึ้น)
     session_write_close(); 
 
-    // ล้าง output buffer ป้องกันอักขระขยะหลุดไปพัง JSON
     while (ob_get_level()) { ob_end_clean(); }
     
     header('Content-Type: application/json; charset=utf-8');
     
-    // 🚀 Cache Header: ให้ Vercel Edge จำไว้ 1 วัน (ลดเวลาค้นหาเหลือ 0.01 วิ) และ Safari จำไว้ 1 นาที
+    // 🚀 สั่ง Cache อย่างถูกต้อง 
+    // max-age=60 : ให้เบราว์เซอร์ (รวมถึง iOS) จำไว้ 1 นาที (ไม่โหลดซ้ำถี่เกินไป)
+    // s-maxage=86400 : ให้ Vercel Edge Server จำไว้ 1 วัน (ลดเวลาจาก 4 วิ เหลือ 0.01 วิ)
     header('Cache-Control: public, max-age=60, s-maxage=86400, stale-while-revalidate=3600');
 
     $code = trim($_GET['code']);
@@ -54,7 +55,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_student_name' && isset($_G
             echo json_encode(['found' => false, 'name' => '', 'section' => ''], JSON_UNESCAPED_UNICODE);
         }
     } catch (Exception $e) {
-        // หากเจอ Error ห้ามให้ระบบ Cache ผลลัพธ์เด็ดขาด
+        // หากเจอ Error ห้ามให้ระบบ Cache ผลลัพธ์
         header('Cache-Control: no-cache, no-store, must-revalidate');
         echo json_encode([
             'found' => false,
@@ -94,45 +95,33 @@ $is_voting_open = (
 $alert_type = "";
 $message = "";
 
-// ---------------- 2. ลอจิกการคำนวณเวร (ผลัดละ 16 คน วนลูป) ----------------
+// ---------------- 2. ลอจิกการคำนวณเวร (ปรับปรุงให้ไวขึ้นสำหรับคน 300+ คน - ใช้ลอจิกเดิมของคุณ) ----------------
 $duty_roster_ids = [];
 $total_students = 0;
 
 try {
     if (isset($conn) && $conn) {
+        // หาจำนวนนักเรียนทั้งหมดแทนการดึงข้อมูลทั้งหมดมาไว้ในแรม
         $res_count = $conn->query("SELECT COUNT(id) AS total FROM students");
         if ($res_count && $row_count = $res_count->fetch_assoc()) {
             $total_students = (int)$row_count['total'];
         }
 
         if ($total_students > 0) {
-            $start_dt_obj = new DateTime($start_date, $tz);
-            $start_dt_obj->setTime(0, 0, 0); 
+            $diff_days = floor((strtotime($target_date) - strtotime($start_date)) / 86400);
+            if ($diff_days < 0) $diff_days = 0;
             
-            $target_dt_obj = new DateTime($target_date, $tz);
-            $target_dt_obj->setTime(0, 0, 0);
-
-            if ($target_dt_obj < $start_dt_obj) {
-                $diff_weeks = 0;
-            } else {
-                $interval = $start_dt_obj->diff($target_dt_obj);
-                $diff_days = $interval->days; 
-                $diff_weeks = floor($diff_days / 7); 
-            }
+            $start_index = ($diff_days * 16) % $total_students;
             
-            // คำนวณลำดับจุดเริ่มต้นของเวรสัปดาห์นี้
-            $start_index = ($diff_weeks * 16) % $total_students;
-            
+            // คำนวณการดึงข้อมูลเฉพาะ 16 คน (รองรับกรณี index วนกลับไปเริ่ม 0)
             $limit1 = 16;
             $limit2 = 0;
-            
-            // กรณีจำนวนคนวนเลยรอบ ให้ดึงส่วนที่เหลือและวนกลับไปเริ่มคนแรก
             if ($start_index + 16 > $total_students) {
                 $limit1 = $total_students - $start_index;
                 $limit2 = 16 - $limit1;
             }
             
-            // คิวรีชุดที่ 1: ดึงรายชื่อตามลำดับ
+            // คิวรีชุดที่ 1
             $stmt_duty1 = $conn->prepare("SELECT student_code FROM students ORDER BY id ASC LIMIT ? OFFSET ?");
             $stmt_duty1->bind_param("ii", $limit1, $start_index);
             $stmt_duty1->execute();
@@ -141,7 +130,7 @@ try {
                 $duty_roster_ids[] = $row['student_code'];
             }
             
-            // คิวรีชุดที่ 2: วนกลับไปเก็บส่วนแรกของตารางถ้าจำนวนคนไม่ครบ 16
+            // คิวรีชุดที่ 2 (กรณีรายชื่อวนรอบ)
             if ($limit2 > 0) {
                 $offset0 = 0;
                 $stmt_duty2 = $conn->prepare("SELECT student_code FROM students ORDER BY id ASC LIMIT ? OFFSET ?");
@@ -154,25 +143,23 @@ try {
             }
         }
     }
-} catch (Exception $e) {
-    error_log("Duty Calculation Error: " . $e->getMessage());
-}
+} catch (Exception $e) {}
 
-// ---------------- 3. เมื่อนักเรียนกดบันทึกข้อมูล (POST) ----------------
+
+// ---------------- 3. เมื่อนักเรียนกดบันทึกข้อมูล ----------------
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     $csrf_token = $_POST['csrf_token'] ?? '';
+    $stu_code = trim($_POST['student_code'] ?? '');
+    $section = trim($_POST['section'] ?? '');
+    $status = trim($_POST['status'] ?? '');
     
-    // รับค่าและทำความสะอาดข้อมูลเพื่อป้องกัน XSS
-    $stu_code = htmlspecialchars(trim($_POST['student_code'] ?? ''), ENT_QUOTES, 'UTF-8');
-    $section = htmlspecialchars(trim($_POST['section'] ?? ''), ENT_QUOTES, 'UTF-8');
-    $status = htmlspecialchars(trim($_POST['status'] ?? ''), ENT_QUOTES, 'UTF-8');
+    // รับค่าฟิลด์ใหม่ (ใช้ htmlspecialchars เพื่อป้องกัน XSS)
     $province = htmlspecialchars(trim($_POST['province'] ?? ''), ENT_QUOTES, 'UTF-8');
     $travel_method = htmlspecialchars(trim($_POST['travel_method'] ?? ''), ENT_QUOTES, 'UTF-8');
     $return_day = htmlspecialchars(trim($_POST['return_day'] ?? ''), ENT_QUOTES, 'UTF-8');
     $stay_travel_method = htmlspecialchars(trim($_POST['stay_travel_method'] ?? ''), ENT_QUOTES, 'UTF-8');
 
-    // 🔒 ตรวจสอบความปลอดภัย CSRF Token
     if (empty($csrf_token) || !hash_equals($_SESSION['csrf_token'], $csrf_token)) {
         $alert_type = "error";
         $message = "เซสชันไม่ถูกต้อง กรุณารีเฟรชหน้าเว็บแล้วทำรายการใหม่";
@@ -189,9 +176,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $message = "สถานะไม่ถูกต้องตามที่ระบบกำหนด";
         } else if ($status === 'duty' && !in_array($stu_code, $duty_roster_ids)) {
             $alert_type = "error";
-            $message = "รหัส " . $stu_code . " ไม่ได้มีรายชื่อเวร ไม่สามารถเลือกสถานะเวรได้";
+            $message = "รหัส " . htmlspecialchars($stu_code) . " ไม่ได้มีรายชื่อเวร ไม่สามารถเลือกสถานะเวรได้";
         } else {
-            // ล้างค่าฟิลด์ที่ไม่เกี่ยวข้องตามสถานะที่เลือก
             if ($status === 'home') {
                 $return_day = null;
             } else if ($status === 'stay') {
@@ -208,7 +194,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             }
 
             try {
-                // เช็กการลงทะเบียนซ้ำประจำสัปดาห์
+                // เช็คกันส่งซ้ำ
                 $stmt_check = $conn->prepare("SELECT id FROM weekly_votes WHERE student_code = ? AND vote_date = ?");
                 $stmt_check->bind_param("ss", $stu_code, $target_date);
                 $stmt_check->execute();
@@ -216,19 +202,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
                 if ($result_check->num_rows > 0) {
                     $alert_type = "error";
-                    $message = "รหัส " . $stu_code . " ได้ทำการบันทึกข้อมูลของสัปดาห์นี้ไปแล้ว ไม่สามารถทำรายการซ้ำได้";
+                    $message = "รหัส " . htmlspecialchars($stu_code) . " ได้ทำการบันทึกข้อมูลของสัปดาห์นี้ไปแล้ว ไม่สามารถทำรายการซ้ำได้";
                 } else {
-                    // เริ่ม Transaction ป้องกันข้อมูลบันทึกไม่ครบถ้วน
-                    $conn->begin_transaction(); 
+                    $conn->begin_transaction(); // ใช้ Transaction ป้องกันข้อมูลไม่สมบูรณ์
 
-                    // อัปเดตข้อมูลหมวด/ฝ่ายในตารางนักเรียน
                     $stmt_update = $conn->prepare("UPDATE students SET section = ? WHERE student_code = ?");
                     $stmt_update->bind_param("ss", $section, $stu_code);
                     $stmt_update->execute();
 
                     $real_time_now = date('Y-m-d H:i:s');
                     
-                    // บันทึกคำตอบลงตาราง weekly_votes
                     $stmt_insert = $conn->prepare("INSERT INTO weekly_votes (student_code, vote_date, status, province, travel_method, return_day, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)");
                     $stmt_insert->bind_param("sssssss", $stu_code, $target_date, $status, $province, $travel_method, $return_day, $real_time_now);
                     $stmt_insert->execute();
@@ -236,14 +219,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     $conn->commit();
 
                     $alert_type = "success";
-                    $message = "บันทึกข้อมูลรหัส " . $stu_code . " ประจำวันศุกร์ที่ " . date('d/m/Y', strtotime($target_date)) . " เรียบร้อยแล้ว";
+                    $message = "บันทึกข้อมูลรหัส " . htmlspecialchars($stu_code) . " ประจำวันศุกร์ที่ " . date('d/m/Y', strtotime($target_date)) . " เรียบร้อยแล้ว";
                 }
             } catch (mysqli_sql_exception $e) {
                 if (isset($conn)) $conn->rollback();
                 
+                // ดักจับ Error 1062 (Duplicate entry) กรณี 2 รีเควสส่งมาพร้อมกันในระดับมิลลิวินาที
                 if ($e->getCode() == 1062) {
                     $alert_type = "error";
-                    $message = "รหัส " . $stu_code . " มีการส่งข้อมูลเข้าระบบไปแล้ว";
+                    $message = "รหัส " . htmlspecialchars($stu_code) . " มีการส่งข้อมูลเข้าระบบไปแล้ว";
                 } else {
                     $alert_type = "error";
                     $message = "เกิดข้อผิดพลาดจากฐานข้อมูล: โปรดติดต่อผู้ดูแลระบบ";
