@@ -14,7 +14,7 @@ $host   = 'mtts-mtts.a.aivencloud.com';
 $port   = 15983; // Port ของ Aiven Cloud
 $user   = 'avnadmin'; 
 $pass   = 'AVNS_OXeWWNxKP7DEpKb3Myl'; 
-$dbname = 'if0_42434539_mtts'; // หรือใส่ 'defaultdb' หากไม่ได้สร้าง DB ชื่อ if0_42434539_mtts[cite: 3]
+$dbname = 'defaultdb'; // หรือใส่ 'defaultdb' หากไม่ได้สร้าง DB ชื่อ if0_42434539_mtts[cite: 3]
 
 try {
     // 3. เตรียมการเชื่อมต่อฐานข้อมูล
