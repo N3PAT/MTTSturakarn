@@ -15,22 +15,18 @@ require 'db.php';
 // ---------------- 0. API สำหรับดึงข้อมูลนักเรียนผ่าน AJAX ----------------
 if (isset($_GET['action']) && $_GET['action'] == 'get_student_name' && isset($_GET['code'])) {
     
-    // ป้องกันบอทยิง API โดยบังคับว่าต้องมี CSRF Token ที่ถูกต้อง
-    $request_token = $_GET['csrf_token'] ?? '';
-    if (empty($request_token) || !hash_equals($_SESSION['csrf_token'], $request_token)) {
-        header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(['found' => false, 'name' => 'Error: Unauthorized API call', 'section' => '']);
-        exit;
-    }
-
+    // 💡 ปิด Session ทันทีเพื่อลดปัญหาคอขวดบน Server (ช่วยให้ iOS Safari ทำงานแบบ Asynchronous ได้ลื่นขึ้น)
     session_write_close(); 
 
+    // ล้าง output buffer ป้องกันอักขระขยะหลุดไปพัง JSON
     while (ob_get_level()) { ob_end_clean(); }
     
     header('Content-Type: application/json; charset=utf-8');
-    header('Cache-Control: no-cache, no-store, must-revalidate'); 
-    header('Pragma: no-cache');
-    header('Expires: 0');
+    
+    // 🚀 พระเอกของงาน: สั่ง Cache อย่างถูกต้อง 
+    // max-age=60 : ให้เบราว์เซอร์ (รวมถึง iOS) จำไว้ 1 นาที (ไม่โหลดซ้ำถี่เกินไป)
+    // s-maxage=86400 : ให้ Vercel Edge Server จำไว้ 1 วัน (ลดเวลาจาก 4 วิ เหลือ 0.01 วิ)
+    header('Cache-Control: public, max-age=60, s-maxage=86400, stale-while-revalidate=3600');
 
     $code = trim($_GET['code']);
     
@@ -60,6 +56,8 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_student_name' && isset($_G
             echo json_encode(['found' => false, 'name' => '', 'section' => ''], JSON_UNESCAPED_UNICODE);
         }
     } catch (Exception $e) {
+        // หากเจอ Error ห้ามให้ระบบ Cache ผลลัพธ์ที่พังเด็ดขาด
+        header('Cache-Control: no-cache, no-store, must-revalidate');
         echo json_encode([
             'found' => false,
             'name' => 'Error: ' . $e->getMessage(),
@@ -98,51 +96,42 @@ $is_voting_open = (
 $alert_type = "";
 $message = "";
 
-// ---------------- 2. ลอจิกการคำนวณเวร (ปรับให้แม่นยำสูงสุดด้วย DateTime) ----------------
+// ---------------- 2. ลอจิกการคำนวณเวร ----------------
 $duty_roster_ids = [];
 $total_students = 0;
 
 try {
     if (isset($conn) && $conn) {
-        // หาจำนวนนักเรียนทั้งหมด
         $res_count = $conn->query("SELECT COUNT(id) AS total FROM students");
         if ($res_count && $row_count = $res_count->fetch_assoc()) {
             $total_students = (int)$row_count['total'];
         }
 
         if ($total_students > 0) {
-            // 1. กำหนดวันเริ่มต้นแบบตั้งเวลาเที่ยงคืนตรง เพื่อความเป๊ะ
             $start_dt_obj = new DateTime($start_date, $tz);
             $start_dt_obj->setTime(0, 0, 0); 
             
-            // 2. ใช้วันที่เป้าหมาย (วันศุกร์) ตั้งเวลาเที่ยงคืนตรง
             $target_dt_obj = new DateTime($target_date, $tz);
             $target_dt_obj->setTime(0, 0, 0);
 
-            // 3. คำนวณหาระยะห่างของสัปดาห์
             if ($target_dt_obj < $start_dt_obj) {
-                // ถ้ายังไม่ถึงวันเริ่มคำนวณเวร ให้คิวเป็นสัปดาห์ที่ 0
                 $diff_weeks = 0;
             } else {
-                // ใช้ DateInterval ของ PHP เพื่อความแม่นยำสูงสุด
                 $interval = $start_dt_obj->diff($target_dt_obj);
                 $diff_days = $interval->days; 
                 $diff_weeks = floor($diff_days / 7); 
             }
             
-            // 4. คำนวณ Index เริ่มต้น
             $start_index = ($diff_weeks * 16) % $total_students;
             
             $limit1 = 16;
             $limit2 = 0;
             
-            // หากดึงรายชื่อแล้วทะลุจำนวนนักเรียนทั้งหมด (วนลูปกลับไปเริ่มคนแรก)
             if ($start_index + 16 > $total_students) {
                 $limit1 = $total_students - $start_index;
                 $limit2 = 16 - $limit1;
             }
             
-            // คิวรีชุดที่ 1: ดึงรายชื่อตามลำดับ
             $stmt_duty1 = $conn->prepare("SELECT student_code FROM students ORDER BY id ASC LIMIT ? OFFSET ?");
             $stmt_duty1->bind_param("ii", $limit1, $start_index);
             $stmt_duty1->execute();
@@ -151,7 +140,6 @@ try {
                 $duty_roster_ids[] = $row['student_code'];
             }
             
-            // คิวรีชุดที่ 2: ดึงรายชื่อส่วนที่วนกลับไปเริ่มคนแรกใหม่
             if ($limit2 > 0) {
                 $offset0 = 0;
                 $stmt_duty2 = $conn->prepare("SELECT student_code FROM students ORDER BY id ASC LIMIT ? OFFSET ?");
@@ -168,12 +156,12 @@ try {
     error_log("Duty Calculation Error: " . $e->getMessage());
 }
 
-// ---------------- 3. เมื่อนักเรียนกดบันทึกข้อมูล ----------------
+// ---------------- 3. เมื่อนักเรียนกดบันทึกข้อมูล (POST) ----------------
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     $csrf_token = $_POST['csrf_token'] ?? '';
     
-    // รับค่าฟิลด์ใหม่ (ใช้ htmlspecialchars เพื่อป้องกัน XSS)
+    // รับค่าฟิลด์ใหม่ (ป้องกัน XSS)
     $stu_code = htmlspecialchars(trim($_POST['student_code'] ?? ''), ENT_QUOTES, 'UTF-8');
     $section = htmlspecialchars(trim($_POST['section'] ?? ''), ENT_QUOTES, 'UTF-8');
     $status = htmlspecialchars(trim($_POST['status'] ?? ''), ENT_QUOTES, 'UTF-8');
@@ -182,6 +170,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $return_day = htmlspecialchars(trim($_POST['return_day'] ?? ''), ENT_QUOTES, 'UTF-8');
     $stay_travel_method = htmlspecialchars(trim($_POST['stay_travel_method'] ?? ''), ENT_QUOTES, 'UTF-8');
 
+    // 🔒 เช็ก CSRF Token เฉพาะการแก้ไขข้อมูลเพื่อความปลอดภัย
     if (empty($csrf_token) || !hash_equals($_SESSION['csrf_token'], $csrf_token)) {
         $alert_type = "error";
         $message = "เซสชันไม่ถูกต้อง กรุณารีเฟรชหน้าเว็บแล้วทำรายการใหม่";
@@ -225,7 +214,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     $alert_type = "error";
                     $message = "รหัส " . $stu_code . " ได้ทำการบันทึกข้อมูลของสัปดาห์นี้ไปแล้ว ไม่สามารถทำรายการซ้ำได้";
                 } else {
-                    $conn->begin_transaction(); // ใช้ Transaction ป้องกันข้อมูลไม่สมบูรณ์
+                    $conn->begin_transaction(); // เริ่ม Transaction
 
                     $stmt_update = $conn->prepare("UPDATE students SET section = ? WHERE student_code = ?");
                     $stmt_update->bind_param("ss", $section, $stu_code);
