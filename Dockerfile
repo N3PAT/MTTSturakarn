@@ -1,12 +1,17 @@
-# ใช้ Image PHP ที่มี Apache มาให้เลย
+# ใช้ Image PHP 7.4 พร้อม Apache
 FROM php:7.4-apache
 
 # 1. ติดตั้ง Extension สำหรับ MySQL และ Curl
 RUN apt-get update && apt-get install -y \
     libcurl4-openssl-dev \
-    && docker-php-ext-install mysqli pdo pdo_mysql curl
+    && docker-php-ext-install mysqli pdo pdo_mysql curl \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# 2. ปรับแต่งค่า PHP สำหรับการอัปโหลดไฟล์จำนวนมาก (200 ไฟล์ / 3 นาที)
+# 2. เปิดใช้งาน mod_rewrite และตั้งค่า Apache อนุญาตให้ใช้ .htaccess (แก้ไขปัญหา 403 Forbidden)
+RUN a2enmod rewrite \
+    && sed -i 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf
+
+# 3. ปรับแต่งค่า PHP สำหรับการอัปโหลดไฟล์จำนวนมาก
 RUN { \
     echo 'upload_max_filesize = 500M'; \
     echo 'post_max_size = 500M'; \
@@ -15,13 +20,14 @@ RUN { \
     echo 'memory_limit = 512M'; \
 } > /usr/local/etc/php/conf.d/uploads.ini
 
-# 3. ก๊อปปี้ไฟล์งานทั้งหมดไปไว้ในโฟลเดอร์เว็บ
+# 4. ก๊อปปี้ไฟล์งานทั้งหมดไปไว้ในโฟลเดอร์เว็บ
 COPY . /var/www/html/
 
-# 4. จัดการ Permission (แก้ไขปัญหา Permission Denied)
-RUN mkdir -p /var/www/html/gallery/uploads
-RUN chown -R www-data:www-data /var/www/html/
-RUN chmod -R 775 /var/www/html/gallery/uploads
+# 5. จัดการ Permission และสร้างโฟลเดอร์ Uploads
+RUN mkdir -p /var/www/html/gallery/uploads \
+    && chown -R www-data:www-data /var/www/html \
+    && chmod -R 755 /var/www/html \
+    && chmod -R 775 /var/www/html/gallery/uploads
 
-# 5. เปิดพอร์ต 80
+# 6. เปิดพอร์ต 80
 EXPOSE 80
