@@ -10,7 +10,7 @@ ini_set('display_startup_errors', 0);
 error_reporting(E_ALL);
 
 session_start();
-require_once 'db.php';
+require_once '/db.php';
 
 if (isset($_SESSION['student_code'])) {
     header("Location: main.php");
