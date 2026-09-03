@@ -3,10 +3,10 @@ const CACHE_NAME = 'mtts-app-v1';
 // ไฟล์พื้นฐานที่ต้องการแคชไว้เพื่อให้แอปโหลดเร็วขึ้นและรองรับตอนออฟไลน์
 const urlsToCache = [
   '/',
-  '/login.php',
-  '/manifest.json',
-  '/icon-192x192.png',
-  '/icon-512x512.png'
+  'login.php',
+  'manifest.json',
+  'icon/icon-192x192.png',
+  'icon/icon-512x512.png'
 ];
 
 // 1. Install Service Worker และทำการ Caching ไฟล์
