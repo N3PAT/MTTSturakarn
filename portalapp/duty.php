@@ -11,13 +11,20 @@ if (empty($_SESSION['student_code'])) {
 
 $login_student_code = $_SESSION['student_code'];
 
+/* 2. ตรวจสอบการแสดงหน้า Loading Screen (แสดงครั้งแรกของ Session) */
+$show_loading = false;
+if (!isset($_SESSION['has_seen_loading'])) {
+    $show_loading = true;
+    $_SESSION['has_seen_loading'] = true;
+}
+
 /* ตรวจสอบการเชื่อมต่อฐานข้อมูล */
 if (!isset($conn) || !($conn instanceof mysqli)) {
     die("เกิดข้อผิดพลาด: ไม่สามารถเชื่อมต่อฐานข้อมูลได้");
 }
 $conn->set_charset("utf8mb4");
 
-// ---------------- 2. ดึงข้อมูลส่วนตัวนักเรียนที่ล็อกอิน (สำหรับ Profile Header) ----------------
+// ---------------- 3. ดึงข้อมูลส่วนตัวนักเรียน ----------------
 $student_profile = null;
 try {
     $stmt_me = $conn->prepare("
@@ -34,7 +41,7 @@ try {
     }
     $stmt_me->close();
 } catch (Exception $e) {
-    // จัดการข้อผิดพลาดเงียบๆ หรือบันทึก Log
+    error_log("Profile Fetch Error: " . $e->getMessage());
 }
 
 /* กำหนดตัวแปรแสดงผล Profile */
@@ -50,11 +57,57 @@ if (!empty($student_profile['section']))   $unit_parts[] = "ตอนเรี�
 $student_unit = !empty($unit_parts) ? implode(" ", $unit_parts) : "นักเรียนทหาร";
 
 if (empty($profile_image) || $profile_image === "default_student.png" || $profile_image === "0") {
-    $profile_image = "https://ui-avatars.com/api/?name=" . urlencode($name) . "&background=fff&color=5a42a0&size=128&bold=true";
+    $profile_image = "https://ui-avatars.com/api/?name=" . urlencode($name) . "&background=5a42a0&color=fff&size=128";
 }
 
-// ---------------- 3. ระบบกำหนดเดือน และคำนวณเวรประจำเดือน ----------------
-/* Validate รูปแบบเดือนให้เป็น YYYY-MM เท่านั้น เพื่อความปลอดภัย */
+// ---------------- 4. ดึงข้อมูลการแจ้งเตือน (สำหรับแสดง Badge บนไอคอนกระดิ่ง) ----------------
+$duty_notifications = [];
+$has_voted = true;
+
+try {
+    // ดึงข้อมูลแจ้งเตือนเวรล่วงหน้า 3 วัน และ 1 วัน
+    $stmt_duty = $conn->prepare("
+        SELECT duty_name, duty_date, DATEDIFF(duty_date, CURDATE()) AS days_left 
+        FROM student_duties 
+        WHERE student_code = ? 
+          AND DATEDIFF(duty_date, CURDATE()) IN (1, 3)
+        ORDER BY duty_date ASC
+    ");
+    if ($stmt_duty) {
+        $stmt_duty->bind_param("s", $login_student_code);
+        $stmt_duty->execute();
+        $res_duty = $stmt_duty->get_result();
+        while ($row = $res_duty->fetch_assoc()) {
+            $duty_notifications[] = $row;
+        }
+        $stmt_duty->close();
+    }
+
+    // ตรวจสอบว่าโหวตประสงค์กลับบ้านหรือยัง
+    $stmt_vote = $conn->prepare("
+        SELECT COUNT(*) as vote_count 
+        FROM votes 
+        WHERE student_code = ? 
+          AND YEARWEEK(vote_date, 1) = YEARWEEK(CURDATE(), 1)
+    ");
+    if ($stmt_vote) {
+        $stmt_vote->bind_param("s", $login_student_code);
+        $stmt_vote->execute();
+        $res_vote = $stmt_vote->get_result();
+        if ($row_vote = $res_vote->fetch_assoc()) {
+            if ($row_vote['vote_count'] == 0) {
+                $has_voted = false;
+            }
+        }
+        $stmt_vote->close();
+    }
+} catch (Throwable $e) {
+    error_log("Notification Error: " . $e->getMessage());
+}
+
+$noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
+
+// ---------------- 5. ระบบกำหนดเดือน และคำนวณเวรประจำเดือน ----------------
 $selected_month = date('Y-m');
 if (isset($_GET['month']) && preg_match('/^\d{4}-\d{2}$/', $_GET['month'])) {
     $selected_month = $_GET['month'];
@@ -86,7 +139,7 @@ $location_names = [
     "จุดที่ 4 อาคารยานยนต์", 
     "จุดที่ 5 ผฟอ.", 
     "จุดที่ 6 กศน.", 
-    "จุดที่ 7 ศาลพระปิ่น"
+    "จุดที่ 3 โรงรถ บก.หน้า"
 ];
 $shift_labels = ["ผลัดที่ 1", "ผลัดที่ 2", "ผลัดที่ 3", "ผลัดที่ 4"];
 
@@ -101,7 +154,7 @@ $current_m_num = date('m', strtotime($first_day_of_month));
 $current_y_num = date('Y', strtotime($first_day_of_month)) + 543;
 $month_display_text = ($thai_months[$current_m_num] ?? '') . " " . $current_y_num;
 
-// วนลูปตรวจสอบทุกวันในเดือนที่เลือกเพื่อหาว่ามีเวรวันไหนบ้าง
+// วนลูปตรวจสอบทุกวันในเดือนที่เลือกเพื่อหาเวรของนักเรียน
 $my_monthly_duties = [];
 
 if ($total_students > 0) {
@@ -130,7 +183,7 @@ if ($total_students > 0) {
                     'shift' => $shift_labels[$shift_idx],
                     'location' => $location_names[$loc_idx]
                 ];
-                break; // เจอเวรของตัวเองในวันนี้แล้ว ข้ามไปหาวันอื่นต่อเลย
+                break;
             }
         }
     }
@@ -140,28 +193,27 @@ if ($total_students > 0) {
 $prev_month = date('Y-m', strtotime($first_day_of_month . ' -1 month'));
 $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
 ?>
-
 <!DOCTYPE html>
 <html lang="th">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#f8fafc" />
+  <meta name="theme-color" content="#f6f8fc" />
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <title>ตารางเวรประจำเดือน - MTTS</title>
+  <title>เวรของฉัน - MTTS</title>
   
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
   
   <style>
     :root {
-      --primary: #5b40b8;
+      --primary: #5a42a0;
       --primary-light: #7a60d8;
       --secondary: #f43f5e;
-      --bg-color: #f8fafc;
+      --bg-color: #f6f8fc;
       --card-bg: #ffffff;
-      --text-dark: #0f172a;
+      --text-dark: #1e293b;
       --text-gray: #64748b;
       --border-light: #e2e8f0;
       --safe-area-bottom: env(safe-area-inset-bottom, 20px);
@@ -184,7 +236,79 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
     }
 
     ::-webkit-scrollbar { display: none; }
-    
+
+    /* ---------------- Loading Screen ---------------- */
+    #page-loader {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #ffffff;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      transition: opacity 0.5s ease, visibility 0.5s ease;
+    }
+    #page-loader.hidden {
+      opacity: 0;
+      visibility: hidden;
+    }
+    .loader-logo {
+      width: 80px;
+      height: 80px;
+      border-radius: 15px;
+      animation: pulse 1.5s infinite ease-in-out;
+    }
+    .loader-spinner {
+      margin-top: 20px;
+      width: 40px;
+      height: 40px;
+      border: 4px solid rgba(90, 66, 160, 0.2);
+      border-top: 4px solid var(--primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    .loader-text {
+      margin-top: 15px;
+      color: var(--primary);
+      font-weight: 600;
+      font-size: 0.9rem;
+      letter-spacing: 1px;
+      animation: flash 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(90, 66, 160, 0.4); }
+      50% { transform: scale(1.05); box-shadow: 0 0 20px 0 rgba(90, 66, 160, 0); }
+      100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(90, 66, 160, 0); }
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    @keyframes flash {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* ---------------- Fade In Animations ---------------- */
+    .fade-in-up {
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    @keyframes fadeInUp {
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .delay-1 { animation-delay: 0.1s; }
+    .delay-2 { animation-delay: 0.2s; }
+    .delay-3 { animation-delay: 0.3s; }
+    .delay-4 { animation-delay: 0.4s; }
+
+    /* ---------------- Main Container ---------------- */
     .app-container {
       width: 100%;
       max-width: 430px;
@@ -192,24 +316,18 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
       min-height: 100vh;
       position: relative;
       padding-bottom: calc(90px + var(--safe-area-bottom));
-      box-shadow: 0 0 30px rgba(0,0,0,0.15);
+      box-shadow: 0 0 20px rgba(0,0,0,0.1);
       overflow-x: hidden;
       overflow-y: auto;
     }
 
     /* Top Header */
     .top-header {
-      position: sticky;
-      top: 0;
-      z-index: 50;
       display: flex;
       align-items: center;
       justify-content: space-between;
       padding: 15px 20px;
-      background: rgba(248, 250, 252, 0.85);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border-bottom: 1px solid rgba(0,0,0,0.05);
+      background: var(--bg-color);
     }
 
     .header-left {
@@ -219,38 +337,52 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
     }
 
     .school-logo {
-      width: 40px;
-      height: 40px;
+      width: 45px;
+      height: 45px;
+      object-fit: contain;
       border-radius: 10px;
-      object-fit: cover;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
 
     .school-name h1 {
-      font-size: 0.95rem;
+      font-size: 1rem;
       font-weight: 700;
       color: var(--text-dark);
-      margin-bottom: 2px;
+      margin: 0 0 2px 0;
     }
 
     .school-name p {
       font-size: 0.75rem;
       color: var(--text-gray);
+      margin: 0;
     }
 
-    .header-action-btn {
-      width: 36px;
-      height: 36px;
+    .noti-btn {
+      position: relative;
+      background: none;
+      border: none;
+      font-size: 1.4rem;
+      color: #94a3b8;
+      cursor: pointer;
+    }
+
+    .noti-badge {
+      position: absolute;
+      top: -2px;
+      right: -2px;
+      background: #ef4444;
+      color: white;
+      font-size: 0.65rem;
+      font-weight: 700;
+      width: 18px;
+      height: 18px;
       border-radius: 50%;
-      background: #f1f5f9;
       display: flex;
       align-items: center;
       justify-content: center;
-      color: var(--text-dark);
-      text-decoration: none;
-      font-size: 1.1rem;
+      border: 2px solid var(--bg-color);
     }
 
+    /* Student Card */
     .student-card {
       background: var(--primary);
       border-radius: 16px;
@@ -264,6 +396,7 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
       display: flex;
       gap: 8px;
       margin-bottom: 12px;
+      flex-wrap: wrap;
     }
 
     .badge-item {
@@ -287,55 +420,6 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
       margin: 0;
       opacity: 0.9;
     }
-    
-    .profile-wrap {
-      display: flex;
-      align-items: center;
-      gap: 15px;
-      position: relative;
-      z-index: 2;
-    }
-
-    .profile-img {
-      width: 65px;
-      height: 65px;
-      border-radius: 18px;
-      border: 2px solid rgba(255,255,255,0.4);
-      background-color: white;
-      object-fit: cover;
-    }
-
-    .profile-info {
-      flex: 1;
-    }
-
-    .profile-info .badges {
-      display: flex;
-      gap: 6px;
-      margin-bottom: 6px;
-      flex-wrap: wrap;
-    }
-
-    .profile-info .badge-item {
-      background: rgba(255, 255, 255, 0.2);
-      padding: 3px 10px;
-      border-radius: 12px;
-      font-size: 0.65rem;
-      font-weight: 600;
-      backdrop-filter: blur(4px);
-      letter-spacing: 0.3px;
-    }
-
-    .profile-info h2 {
-      font-size: 1.15rem;
-      font-weight: 600;
-      margin-bottom: 2px;
-    }
-
-    .profile-info p {
-      font-size: 0.8rem;
-      opacity: 0.9;
-    }
 
     /* Month Navigator */
     .month-navigator {
@@ -346,12 +430,12 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
       margin: 0 20px 20px;
       padding: 8px;
       border-radius: 16px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.03);
     }
 
     .nav-btn {
-      width: 44px;
-      height: 44px;
+      width: 42px;
+      height: 42px;
       border-radius: 12px;
       background: var(--bg-color);
       display: flex;
@@ -374,7 +458,7 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
     }
 
     .month-info h3 {
-      font-size: 1rem;
+      font-size: 0.95rem;
       color: var(--text-dark);
       font-weight: 700;
     }
@@ -412,16 +496,17 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
     }
 
     .section-pill {
-      width: 4px;
-      height: 20px;
+      width: 5px;
+      height: 24px;
       background: var(--primary);
       border-radius: 4px;
     }
 
     .section-title h3 {
-      font-size: 1.05rem;
+      font-size: 1.1rem;
       font-weight: 700;
       color: var(--text-dark);
+      margin: 0;
     }
 
     /* Duty Cards */
@@ -435,11 +520,11 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
     .duty-item-card {
       background: var(--card-bg);
       border-radius: 16px;
-      padding: 12px;
+      padding: 14px;
       display: flex;
       align-items: center;
       gap: 15px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.03);
       border: 1px solid rgba(0,0,0,0.03);
       position: relative;
       overflow: hidden;
@@ -466,7 +551,7 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
     }
 
     .duty-date-box {
-      background: rgba(91, 64, 184, 0.08);
+      background: #f3e8ff;
       color: var(--primary);
       border-radius: 12px;
       padding: 10px;
@@ -479,7 +564,7 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
     }
 
     .duty-date-box .day-num {
-      font-size: 1.4rem;
+      font-size: 1.3rem;
       font-weight: 700;
       line-height: 1;
     }
@@ -566,22 +651,22 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
 
     /* Bottom Navigation */
     .bottom-nav {
-      position: fixed;
+      position: fixed; 
       bottom: 0;
       width: 100%;
-      max-width: 430px;
-      background: rgba(255, 255, 255, 0.9);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
+      max-width: 430px; 
+      left: 50%;
+      transform: translateX(-50%); 
+      height: 70px;
+      background: white;
+      border-top-left-radius: 25px;
+      border-top-right-radius: 25px;
       display: flex;
       justify-content: space-around;
       align-items: center;
-      box-shadow: 0 -5px 25px rgba(0,0,0,0.04);
-      padding: 10px 10px calc(15px + var(--safe-area-bottom));
-      z-index: 100;
-      border-top-left-radius: 24px;
-      border-top-right-radius: 24px;
-      border: 1px solid rgba(255,255,255,0.5);
+      box-shadow: 0 -5px 20px rgba(0,0,0,0.03);
+      padding: 0 10px;
+      z-index: 1000; 
     }
 
     .nav-link {
@@ -591,61 +676,46 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
       text-decoration: none;
       color: #94a3b8;
       font-size: 0.7rem;
-      font-weight: 500;
-      width: 33%;
-      gap: 6px;
-      transition: all 0.2s;
-      position: relative;
-    }
-
-    .nav-link i {
-      font-size: 1.35rem;
-      transition: transform 0.2s;
+      font-weight: 600;
+      width: 30%;
+      gap: 4px;
     }
 
     .nav-link.active {
       color: var(--primary);
-      font-weight: 600;
     }
 
-    .nav-link.active i {
-      transform: translateY(-2px);
-    }
-
-    .nav-link.active::after {
-      content: '';
-      position: absolute;
-      top: -10px;
-      width: 4px;
-      height: 4px;
-      background: var(--primary);
-      border-radius: 50%;
-    }
-    
-    .nav-link:active i {
-      transform: scale(0.85);
+    .nav-link i {
+      font-size: 1.3rem;
     }
   </style>
 </head>
 <body>
 
+  <!-- Loading Screen -->
+  
+
   <div class="app-container">
     
     <!-- Top Header -->
-    <div class="top-header">
+    <div class="top-header fade-in-up delay-1">
       <div class="header-left">
-        <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg" alt="Logo" class="school-logo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg?utm_source=th.wikipedia.org&utm_campaign=index&utm_content=thumbnail_unscaled" alt="Logo" class="school-logo">
         <div class="school-name">
           <h1>ระบบบริการสารสนเทศ กองพันนักเรียนที่ 1</h1>
           <p>โรงเรียนช่างฝีมือทหาร</p>
         </div>
       </div>
-      <a href="#" class="header-action-btn">
+      <button class="noti-btn">
         <i class="far fa-bell"></i>
-      </a>
+        <?php if ($noti_count > 0): ?>
+          <span class="noti-badge"><?= $noti_count ?></span>
+        <?php endif; ?>
+      </button>
     </div>
 
-        <div class="student-card">
+    <!-- Student Card -->
+    <div class="student-card fade-in-up delay-2">
       <div class="badges">
         <div class="badge-item">ปีการศึกษา 2569</div>
         <div class="badge-item"><?= htmlspecialchars($student_unit) ?></div>
@@ -653,8 +723,9 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
       <h2><?= htmlspecialchars($name) ?></h2>
       <p><?= htmlspecialchars($student_code_display) ?></p>
     </div>
+
     <!-- แถบเลือกเดือน -->
-    <div class="month-navigator">
+    <div class="month-navigator fade-in-up delay-3">
       <a href="?month=<?= htmlspecialchars($prev_month); ?>" class="nav-btn">
         <i class="fas fa-chevron-left"></i>
       </a>
@@ -674,20 +745,20 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
     </div>
 
     <!-- หัวข้อรายการเวรประจำเดือน -->
-    <div class="section-title">
+    <div class="section-title fade-in-up delay-4">
       <div class="title-left">
         <div class="section-pill"></div>
         <h3>ตารางปฏิบัติหน้าที่</h3>
       </div>
-      <i class="fas fa-sliders-h text-muted" style="font-size: 0.9rem;"></i>
+      <i class="fas fa-sliders-h" style="font-size: 0.9rem; color: #94a3b8;"></i>
     </div>
 
     <!-- รายการเวร -->
-    <div class="duty-container mb-4">
+    <div class="duty-container fade-in-up delay-4">
       <?php if (!empty($my_monthly_duties)): ?>
         
         <?php foreach ($my_monthly_duties as $index => $duty): ?>
-          <div class="duty-item-card" style="animation-delay: <?= $index * 0.08 ?>s;">
+          <div class="duty-item-card" style="animation-delay: <?= 0.4 + ($index * 0.08) ?>s;">
             <div class="duty-date-box">
               <div class="day-num"><?= sprintf("%02d", $duty['day_num']); ?></div>
               <div class="day-name"><?= $duty['day_name']; ?></div>
@@ -736,5 +807,7 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
 
   </div>
 
+  <!-- Javascript สำหรับจัดการ Loading Screen -->
+  
 </body>
 </html>
