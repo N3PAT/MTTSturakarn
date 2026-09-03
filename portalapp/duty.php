@@ -693,7 +693,13 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
 <body>
 
   <!-- Loading Screen -->
-  
+  <?php if ($show_loading): ?>
+  <div id="page-loader">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg?utm_source=th.wikipedia.org&utm_campaign=index&utm_content=thumbnail_unscaled" alt="Loading Logo" class="loader-logo">
+    <div class="loader-spinner"></div>
+    <div class="loader-text">กำลังโหลดข้อมูล...</div>
+  </div>
+  <?php endif; ?>
 
   <div class="app-container">
     
@@ -808,6 +814,18 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
   </div>
 
   <!-- Javascript สำหรับจัดการ Loading Screen -->
-  
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      const loader = document.getElementById('page-loader');
+      if (loader) {
+        setTimeout(function() {
+          loader.classList.add('hidden');
+          setTimeout(function() {
+            loader.remove();
+          }, 100);
+        }, 1200);
+      }
+    });
+  </script>
 </body>
 </html>
