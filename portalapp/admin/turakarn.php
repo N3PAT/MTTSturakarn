@@ -899,13 +899,22 @@ if (isset($_POST['action']) && $_POST['action'] == 'export_csv') {
             }
         }
 
-        // --- ระบบแจ้งเตือน (Notification System) ---
+        // ==========================================
+        // ระบบแจ้งเตือน (Notification System)
+        // ==========================================
+        
+        // ฟังก์ชันแสดง Toast บนหน้าจอ
         function showToast(message, type = 'success') {
             const container = document.getElementById('toastContainer');
+            if(!container) return;
+
             const toast = document.createElement('div');
-            const bgColor = type === 'success' ? 'bg-green-600' : 'bg-red-600';
+            let bgColor = 'bg-green-600';
+            if (type === 'danger' || type === 'error') bgColor = 'bg-red-600';
+            if (type === 'info') bgColor = 'bg-blue-600';
+            if (type === 'warning') bgColor = 'bg-yellow-600';
             
-            toast.className = `${bgColor} text-white px-4 py-3 rounded shadow-lg flex items-center justify-between text-sm animate-bounce`;
+            toast.className = `${bgColor} text-white px-4 py-3 rounded shadow-lg flex items-center justify-between text-sm transition-all duration-300 transform translate-y-0`;
             toast.innerHTML = `
                 <div class="flex items-center gap-2">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
@@ -914,10 +923,14 @@ if (isset($_POST['action']) && $_POST['action'] == 'export_csv') {
                 <button onclick="this.parentElement.remove()" class="ml-4 font-bold text-white hover:text-gray-200">&times;</button>
             `;
             container.appendChild(toast);
-            setTimeout(() => { toast.remove(); }, 5000);
+            setTimeout(() => { 
+                toast.classList.add('opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 5000);
         }
 
-        function sendNotificationToUnvoted() {
+        // ฟังก์ชันเมื่อกดปุ่มส่งแจ้งเตือน
+        async function sendNotificationToUnvoted() {
             const count = unvotedStudents.length;
             if (count === 0) {
                 showToast("ไม่มี นชท. ที่ยังไม่ทำรายการในขณะนี้", "info");
@@ -928,28 +941,44 @@ if (isset($_POST['action']) && $_POST['action'] == 'export_csv') {
                 return;
             }
 
-            // ขอสิทธิ์ระบบ Web Notification ของเบราว์เซอร์
-            if ("Notification" in window) {
-                if (Notification.permission === "granted") {
-                    triggerWebNotification(count);
-                } else if (Notification.permission !== "denied") {
-                    Notification.requestPermission().then(permission => {
-                        if (permission === "granted") {
-                            triggerWebNotification(count);
-                        }
-                    });
-                }
+            // ตรวจสอบระบบ Browser Web Notification
+            if (!("Notification" in window)) {
+                showToast(`ส่งแจ้งเตือนแล้ว: มี นชท. ยังไม่ทำรายการ ${count} นาย (เบราว์เซอร์ไม่รองรับ Web Notification)`, "info");
+                return;
             }
 
-            // แสดง Toast แจ้งเตือนบนหน้าจอระบบ
-            showToast(`ส่งการแจ้งเตือนสำเร็จ! แจ้งเตือนไปยัง นชท. ทั้งหมด ${count} นายเรียบร้อยแล้ว`, "success");
+            let permission = Notification.permission;
+
+            if (permission === "default") {
+                permission = await Notification.requestPermission();
+            }
+
+            if (permission === "granted") {
+                triggerWebNotification(count);
+                showToast(`ส่งการแจ้งเตือนสำเร็จ! ส่งไปยัง นชท. ทั้งหมด ${count} นายเรียบร้อยแล้ว`, "success");
+            } else if (permission === "denied") {
+                showToast(`ส่งแจ้งเตือนผ่าน Toast แล้ว (${count} นาย) *การแจ้งเตือนของเบราว์เซอร์ถูกบล็อกอยู่*`, "warning");
+            } else {
+                showToast(`ส่งการแจ้งเตือนไปยัง นชท. ทั้งหมด ${count} นายเรียบร้อยแล้ว`, "success");
+            }
         }
 
+        // ยิงคำสั่งแจ้งเตือนไปยัง Desktop/Mobile Browser Notification
         function triggerWebNotification(count) {
-            new Notification("ระบบแจ้งเตือนโหวตประสงค์กลับบ้าน", {
-                body: `ส่งคำเตือนไปยัง นชท. ที่ยังไม่ได้ทำรายการจำนวน ${count} นาย ประจำวันที่ ${targetDateFormatted} เรียบร้อยแล้ว`,
-                icon: "https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg"
-            });
+            if ("Notification" in window && Notification.permission === "granted") {
+                const notif = new Notification("ระบบแจ้งเตือนโหวตประสงค์กลับบ้าน นชท.", {
+                    body: `มี นชท. ยังไม่ได้แจ้งยอดจำนวน ${count} นาย ประจำวันที่ ${targetDateFormatted}`,
+                    icon: "https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg",
+                    tag: "unvoted-reminder",
+                    requireInteraction: true
+                });
+
+                notif.onclick = function(event) {
+                    event.preventDefault();
+                    window.focus();
+                    notif.close();
+                };
+            }
         }
     </script>
 </body>
