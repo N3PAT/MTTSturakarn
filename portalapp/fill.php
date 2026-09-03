@@ -343,7 +343,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       <div class="header-left">
         <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg?utm_source=th.wikipedia.org&utm_campaign=index&utm_content=thumbnail_unscaled" alt="Logo" class="school-logo">
         <div class="school-name">
-          <h1>ระบบบริการสารสนเทศ</h1>
+          <h1>ระบบบริการสารสนเทศ กองพันนักเรียนที่ 1</h1>
           <p>โรงเรียนช่างฝีมือทหาร</p>
         </div>
       </div>
