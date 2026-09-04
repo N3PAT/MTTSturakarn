@@ -39,12 +39,10 @@ self.addEventListener('activate', event => {
 // 3. จัดการ Fetch Request (ดึงข้อมูล)
 self.addEventListener('fetch', event => {
   // สำหรับระบบ PHP ที่มีการ Login ควรใช้กลยุทธ์ "Network First, falling back to cache"
-  // คือพยายามโหลดจากเน็ตก่อน ถ้าไม่มีเน็ตค่อยเอาจากแคชมาแสดง
   if (event.request.method === 'GET') {
     event.respondWith(
       fetch(event.request)
         .then(response => {
-          // ถ้าดึงข้อมูลสำเร็จ ให้เอามาอัปเดตลงแคชด้วย
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then(cache => {
             cache.put(event.request, responseClone);
@@ -52,9 +50,40 @@ self.addEventListener('fetch', event => {
           return response;
         })
         .catch(() => {
-          // ถ้าไม่มีอินเทอร์เน็ต ให้ดึงจากแคชมาแสดง
           return caches.match(event.request);
         })
     );
   }
+});
+
+// ==========================================
+// ส่วนที่เพิ่มใหม่: สำหรับรับแจ้งเตือนเมื่อปิดแอป (Web Push)
+// ==========================================
+
+// 4. รับข้อมูล Push Notification จาก Server
+self.addEventListener('push', event => {
+  if (event.data) {
+    const payload = event.data.json();
+    const options = {
+      body: payload.body || 'คุณมีการแจ้งเตือนใหม่',
+      icon: payload.icon || 'https://www.mtts.ac.th/assets/images/1x1.png',
+      badge: payload.icon || 'https://www.mtts.ac.th/assets/images/1x1.png',
+      vibrate: [100, 50, 100],
+      data: {
+        url: payload.url || '/main.php' // ลิงก์ที่จะเปิดเมื่อกดแจ้งเตือน
+      }
+    };
+
+    event.waitUntil(
+      self.registration.showNotification(payload.title || 'ระบบแจ้งเตือน MTTS', options)
+    );
+  }
+});
+
+// 5. เมื่อนักเรียนกดจิ้มที่ Pop-up แจ้งเตือน
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(
+    clients.openWindow(event.notification.data.url)
+  );
 });
