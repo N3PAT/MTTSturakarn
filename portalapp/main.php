@@ -503,12 +503,13 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
           <p>โรงเรียนช่างฝีมือทหาร</p>
         </div>
       </div>
-      <button class="noti-btn">
-        <i class="far fa-bell"></i>
-        <?php if ($noti_count > 0): ?>
-          <span class="noti-badge"><?= $noti_count ?></span>
-        <?php endif; ?>
-      </button>
+
+<button class="noti-btn" id="notiBellBtn" title="เปิดใช้งานการแจ้งเตือน">
+  <i class="far fa-bell"></i>
+  <?php if ($noti_count > 0): ?>
+    <span class="noti-badge"><?= $noti_count ?></span>
+  <?php endif; ?>
+</button>
     </div>
 
     <div class="student-card fade-in-up delay-2">
