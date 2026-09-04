@@ -596,6 +596,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
     </div>
 
   </div>
+<!-- ปรับแก้สคริปต์ JavaScript ด้านล่างสุดของ main.php -->
 <script>
   // ฟังก์ชันแปลง VAPID Public Key ให้เป็น Uint8Array
   function urlBase64ToUint8Array(base64String) {
@@ -609,37 +610,55 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
     return outputArray;
   }
 
-  // ลงทะเบียน Push Notification หลังเข้าสู่ระบบสำเร็จ
+  // ลงทะเบียน Service Worker เมื่อโหลดหน้าเว็บ
   if ('serviceWorker' in navigator && 'PushManager' in window) {
-    navigator.serviceWorker.ready.then(registration => {
-      Notification.requestPermission().then(permission => {
-        if (permission === 'granted') {
-          // แทนที่ PUBLIC_VAPID_KEY ด้วย VAPID Public Key ของคุณ
-          const publicVapidKey = 'YOUR_PUBLIC_VAPID_KEY_HERE'; 
-          
-          registration.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
-          })
-          .then(subscription => {
-            // ส่งข้อมูล Subscription ไปบันทึกที่ฝั่ง PHP
-            return fetch('save_subscription.php', {
-              method: 'POST',
-              body: JSON.stringify(subscription),
-              headers: { 'Content-Type': 'application/json' }
-            });
-          })
-          .then(res => res.json())
-          .then(resData => {
-            if (resData.success) console.log('ผูกการแจ้งเตือน PWA สำเร็จ');
-          })
-          .catch(err => console.error('Push Subscription Error:', err));
-        }
-      });
-    });
+    navigator.serviceWorker.register('sw.js')
+      .then(reg => console.log('Service Worker Registered'))
+      .catch(err => console.error('SW Registration Error:', err));
   }
-</script>
 
+  // ผูกการเปิดใช้งานเมื่อ "คลิกที่รูปกระดิ่ง"
+  document.getElementById('notiBellBtn').addEventListener('click', async function() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      alert('เบราว์เซอร์ของคุณไม่รองรับการแจ้งเตือนเด้งเข้าตัวเครื่อง');
+      return;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        const registration = await navigator.serviceWorker.ready;
+        
+        // ใส่ VAPID Public Key ของคุณตรงนี้ (สร้างได้จากเว็บ web-push-codelab.glitch.me หรือ Composer)
+        const publicVapidKey = 'YOUR_PUBLIC_VAPID_KEY_HERE'; 
+        
+        const subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
+        });
+
+        // ส่งข้อมูล Subscription ไปเซฟเข้าตาราง push_subscriptions
+        const res = await fetch('save_subscription.php', {
+          method: 'POST',
+          body: JSON.stringify(subscription),
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          alert('เปิดการแจ้งเตือนสำเร็จแล้ว!');
+        } else {
+          alert('เกิดข้อผิดพลาดในการบันทึกข้อมูลการแจ้งเตือน');
+        }
+      } else if (permission === 'denied') {
+        alert('คุณได้ปฏิเสธการแจ้งเตือน โปรดเปิดสิทธิ์การแจ้งเตือนในการตั้งค่าของเบราว์เซอร์');
+      }
+    } catch (err) {
+      console.error('Subscription error:', err);
+      alert('เกิดข้อผิดพลาดในการลงทะเบียนรับแจ้งเตือน');
+    }
+  });
+</script>
   <!-- Javascript สำหรับซ่อน Loading Screen -->
   <script>
     document.addEventListener("DOMContentLoaded", function() {
