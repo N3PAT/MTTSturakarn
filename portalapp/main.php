@@ -630,7 +630,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
         const registration = await navigator.serviceWorker.ready;
         
         // ใส่ VAPID Public Key ของคุณตรงนี้ (สร้างได้จากเว็บ web-push-codelab.glitch.me หรือ Composer)
-        const publicVapidKey = 'YOUR_PUBLIC_VAPID_KEY_HERE'; 
+        const publicVapidKey = 'BDcVYH88lfTwHxM-yyzWmQzIc6_orJpWxXr156VsSppe-srH4z1gYGz0W6z9I67JHkBkcnnbrwqoLuBZLAzC7HA'; 
         
         const subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
