@@ -27,14 +27,22 @@
         });
       }
 
-      // บันทึกลงฐานข้อมูลผ่าน save_subscription.php
+      // ส่งข้อมูลไปบันทึกที่ save_subscription.php
       const res = await fetch('save_subscription.php', {
         method: 'POST',
         body: JSON.stringify(subscription),
         headers: { 'Content-Type': 'application/json' }
       });
 
-      const data = await res.json();
+      // ดักจับและอ่านการตอบกลับฝั่ง Server อย่างปลอดภัย
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        throw new Error('เซิร์ฟเวอร์ตอบกลับผิดรูปแบบ (PHP Error): ' + text.substring(0, 100));
+      }
+
       return data;
     } catch (err) {
       console.error('Push Registration Error:', err);
@@ -42,17 +50,21 @@
     }
   }
 
-  // ลงทะเบียน Service Worker และทำงานอัตโนมัติหากเคยเปิดสิทธิ์ไว้แล้ว
+  // ลงทะเบียน Service Worker เมื่อโหลดหน้าเว็บเสร็จสมบูรณ์
   if ('serviceWorker' in navigator && 'PushManager' in window) {
-    navigator.serviceWorker.register('sw.js')
-      .then(async reg => {
-        console.log('Service Worker Registered');
-        // หากผู้ใช้เคยอนุญาตสิทธิ์ไว้แล้ว ให้บันทึกข้อมูลเข้า DB ทันทีโดยไม่ต้องรอคลิก
+    window.addEventListener('load', async () => {
+      try {
+        await navigator.serviceWorker.register('sw.js');
+        await navigator.serviceWorker.ready;
+        
+        // หากผู้ใช้เคยเปิดสิทธิ์ไว้แล้ว ให้ส่งข้อมูลเข้าฐานข้อมูลอัตโนมัติ
         if (Notification.permission === 'granted') {
           await registerPushSubscription();
         }
-      })
-      .catch(err => console.error('SW Registration Error:', err));
+      } catch (err) {
+        console.error('SW/Push Init Error:', err);
+      }
+    });
   }
 
   // ผูกเหตุการณ์เมื่อผู้ใช้กดปุ่มรูปกระดิ่ง
@@ -69,7 +81,7 @@
         if (result && result.success) {
           alert('เปิดการแจ้งเตือนสำเร็จแล้ว!');
         } else {
-          alert('เกิดข้อผิดพลาดฝั่งเซิร์ฟเวอร์: ' + JSON.stringify(result));
+          alert('เกิดข้อผิดพลาดฝั่งเซิร์ฟเวอร์: ' + (result.error || JSON.stringify(result)));
         }
       } else if (permission === 'denied') {
         alert('คุณได้ปฏิเสธการแจ้งเตือน โปรดเปิดสิทธิ์ในการตั้งค่าของเบราว์เซอร์');
