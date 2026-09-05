@@ -32,9 +32,9 @@ use Minishlink\WebPush\WebPush;
 use Minishlink\WebPush\Subscription;
 
 // 3. ตั้งค่า VAPID Keys (นำ Keys ที่ได้จากเว็บหรือระบบของคุณมาใส่ที่นี่)
-$vapidSubject = 'mailto:admin@mtts.ac.th';
-$publicKey    = 'YOUR_PUBLIC_VAPID_KEY_HERE';
-$privateKey   = 'YOUR_PRIVATE_KEY_HERE';
+$vapidSubject = 'natthapatinsangchan@gmail.com';
+$publicKey    = 'BDcVYH88lfTwHxM-yyzWmQzIc6_orJpWxXr156VsSppe-srH4z1gYGz0W6z9I67JHkBkcnnbrwqoLuBZLAzC7HA';
+$privateKey   = 'w86Ccb6pIc6w6EMWun3uVj9zfDe0Q-44hA2asE_RUSs';
 
 if ($publicKey === 'YOUR_PUBLIC_VAPID_KEY_HERE' || $privateKey === 'YOUR_PRIVATE_KEY_HERE') {
     echo json_encode(['success' => false, 'message' => 'กรุณาตั้งค่า VAPID Keys ในไฟล์ send_push.php']);
