@@ -900,7 +900,7 @@ if (isset($_POST['action']) && $_POST['action'] == 'export_csv') {
         }
 
 // ==========================================
-// ระบบแจ้งเตือน (Notification System) รองรับ PWA
+// ระบบแจ้งเตือน (Notification System) - ฝั่งผู้ดูแลระบบ (Admin)
 // ==========================================
 
 // ฟังก์ชันแสดง Toast บนหน้าจอ
@@ -929,78 +929,45 @@ function showToast(message, type = 'success') {
     }, 5000);
 }
 
-// ฟังก์ชันเมื่อกดปุ่มส่งแจ้งเตือน
+// ฟังก์ชันเมื่อแอดมินกดปุ่มส่งแจ้งเตือนไปยัง นชท. ที่ยังไม่ได้ทำรายการ
 async function sendNotificationToUnvoted() {
-    // สมมติว่ามีตัวแปร unvotedStudents และ targetDateFormatted อยู่ใน Scope แล้ว
-    const count = unvotedStudents.length;
+    const count = typeof unvotedStudents !== 'undefined' ? unvotedStudents.length : 0;
+    
     if (count === 0) {
         showToast("ไม่มี นชท. ที่ยังไม่ทำรายการในขณะนี้", "info");
         return;
     }
 
-    if (!confirm(`ยืนยันการส่งข้อความ "คุณยังไม่ได้ทำรายการ" ไปยัง นชท. จำนวน ${count} นาย?`)) {
+    if (!confirm(`ยืนยันการส่ง Push Notification ข้อความ "คุณยังไม่ได้ทำรายการ" ไปยังเครื่อง นชท. จำนวน ${count} นาย?`)) {
         return;
     }
 
-    if (!("Notification" in window)) {
-        showToast(`ส่งแจ้งเตือนแล้ว (เบราว์เซอร์ไม่รองรับ Web Notification)`, "info");
-        return;
-    }
+    showToast("กำลังส่งการแจ้งเตือนไปยังเซิร์ฟเวอร์...", "info");
 
-    let permission = Notification.permission;
-    if (permission === "default") {
-        permission = await Notification.requestPermission();
-    }
+    try {
+        // ยิง API ไปที่ send_push.php เพื่อสั่งให้ minishlink/web-push ทำงาน
+        const response = await fetch('send_push.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                target_date: typeof targetDateFormatted !== 'undefined' ? targetDateFormatted : '',
+                unvoted_list: typeof unvotedStudents !== 'undefined' ? unvotedStudents : []
+            })
+        });
 
-    if (permission === "granted") {
-        triggerWebNotification();
-        showToast(`ส่งการแจ้งเตือนสำเร็จ! แจ้งให้ นชท. ทราบแล้วว่ายังไม่ได้ทำรายการ`, "success");
-    } else if (permission === "denied") {
-        showToast(`ส่งแจ้งเตือนผ่าน Toast แล้ว *การแจ้งเตือนของเบราว์เซอร์ถูกบล็อกอยู่*`, "warning");
-    } else {
-        showToast(`ดำเนินการส่งการแจ้งเตือนเรียบร้อยแล้ว`, "success");
-    }
-}
+        const data = await response.json();
 
-// ยิงคำสั่งแจ้งเตือนไปยัง PWA Mobile / Desktop ผ่าน Service Worker
-async function triggerWebNotification() {
-    if ("Notification" in window && Notification.permission === "granted") {
-        const title = "ระบบแจ้งเตือน นชท.";
-        const options = {
-            body: `คุณยังไม่ได้ทำรายการ ประจำวันที่ ${targetDateFormatted} กรุณาเข้ามาดำเนินการให้เรียบร้อย`,
-            icon: "https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg",
-            tag: "unvoted-reminder",
-            requireInteraction: true,
-            vibrate: [200, 100, 200, 100, 200, 100, 200], // เพิ่มแพทเทิร์นการสั่นสำหรับมือถือ
-            badge: "https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg" // ไอคอนเล็กบนแถบแจ้งเตือน
-        };
-
-        // ตรวจสอบและใช้ Service Worker สำหรับ PWA
-        if ('serviceWorker' in navigator) {
-            try {
-                // รอให้ Service Worker พร้อมทำงาน
-                const registration = await navigator.serviceWorker.ready;
-                // สั่งแจ้งเตือนผ่าน Service Worker
-                await registration.showNotification(title, options);
-            } catch (error) {
-                console.error("การแจ้งเตือนผ่าน Service Worker ล้มเหลว:", error);
-                // Fallback กลับไปใช้แบบธรรมดาเผื่อรันบน Desktop ทั่วไปที่ไม่มี SW
-                fallbackStandardNotification(title, options);
-            }
+        if (data.success) {
+            showToast(`ส่ง Push Notification สำเร็จ! ยิงไปยังเครื่อง นชท. แล้วจำนวน ${data.sent_count} เครื่อง`, "success");
         } else {
-            fallbackStandardNotification(title, options);
+            showToast(data.message || "เกิดข้อผิดพลาดในการส่งแจ้งเตือนจากเซิร์ฟเวอร์", "error");
         }
+    } catch (error) {
+        console.error("Push Notification Error:", error);
+        showToast("ไม่สามารถติดต่อเซิร์ฟเวอร์ส่งแจ้งเตือนได้", "danger");
     }
-}
-
-// ฟังก์ชันสำรองกรณีไม่มี Service Worker
-function fallbackStandardNotification(title, options) {
-    const notif = new Notification(title, options);
-    notif.onclick = function(event) {
-        event.preventDefault();
-        window.focus();
-        notif.close();
-    };
 }
     </script>
 </body>
