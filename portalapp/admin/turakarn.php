@@ -900,88 +900,108 @@ if (isset($_POST['action']) && $_POST['action'] == 'export_csv') {
         }
 
 // ==========================================
-        // ระบบแจ้งเตือน (Notification System)
-        // ==========================================
-        
-        // ฟังก์ชันแสดง Toast บนหน้าจอ
-        function showToast(message, type = 'success') {
-            const container = document.getElementById('toastContainer');
-            if(!container) return;
+// ระบบแจ้งเตือน (Notification System) รองรับ PWA
+// ==========================================
 
-            const toast = document.createElement('div');
-            let bgColor = 'bg-green-600';
-            if (type === 'danger' || type === 'error') bgColor = 'bg-red-600';
-            if (type === 'info') bgColor = 'bg-blue-600';
-            if (type === 'warning') bgColor = 'bg-yellow-600';
-            
-            toast.className = `${bgColor} text-white px-4 py-3 rounded shadow-lg flex items-center justify-between text-sm transition-all duration-300 transform translate-y-0`;
-            toast.innerHTML = `
-                <div class="flex items-center gap-2">
-                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    <span>${message}</span>
-                </div>
-                <button onclick="this.parentElement.remove()" class="ml-4 font-bold text-white hover:text-gray-200">&times;</button>
-            `;
-            container.appendChild(toast);
-            setTimeout(() => { 
-                toast.classList.add('opacity-0');
-                setTimeout(() => toast.remove(), 300);
-            }, 5000);
+// ฟังก์ชันแสดง Toast บนหน้าจอ
+function showToast(message, type = 'success') {
+    const container = document.getElementById('toastContainer');
+    if(!container) return;
+
+    const toast = document.createElement('div');
+    let bgColor = 'bg-green-600';
+    if (type === 'danger' || type === 'error') bgColor = 'bg-red-600';
+    if (type === 'info') bgColor = 'bg-blue-600';
+    if (type === 'warning') bgColor = 'bg-yellow-600';
+    
+    toast.className = `${bgColor} text-white px-4 py-3 rounded shadow-lg flex items-center justify-between text-sm transition-all duration-300 transform translate-y-0`;
+    toast.innerHTML = `
+        <div class="flex items-center gap-2">
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <span>${message}</span>
+        </div>
+        <button onclick="this.parentElement.remove()" class="ml-4 font-bold text-white hover:text-gray-200">&times;</button>
+    `;
+    container.appendChild(toast);
+    setTimeout(() => { 
+        toast.classList.add('opacity-0');
+        setTimeout(() => toast.remove(), 300);
+    }, 5000);
+}
+
+// ฟังก์ชันเมื่อกดปุ่มส่งแจ้งเตือน
+async function sendNotificationToUnvoted() {
+    // สมมติว่ามีตัวแปร unvotedStudents และ targetDateFormatted อยู่ใน Scope แล้ว
+    const count = unvotedStudents.length;
+    if (count === 0) {
+        showToast("ไม่มี นชท. ที่ยังไม่ทำรายการในขณะนี้", "info");
+        return;
+    }
+
+    if (!confirm(`ยืนยันการส่งข้อความ "คุณยังไม่ได้ทำรายการ" ไปยัง นชท. จำนวน ${count} นาย?`)) {
+        return;
+    }
+
+    if (!("Notification" in window)) {
+        showToast(`ส่งแจ้งเตือนแล้ว (เบราว์เซอร์ไม่รองรับ Web Notification)`, "info");
+        return;
+    }
+
+    let permission = Notification.permission;
+    if (permission === "default") {
+        permission = await Notification.requestPermission();
+    }
+
+    if (permission === "granted") {
+        triggerWebNotification();
+        showToast(`ส่งการแจ้งเตือนสำเร็จ! แจ้งให้ นชท. ทราบแล้วว่ายังไม่ได้ทำรายการ`, "success");
+    } else if (permission === "denied") {
+        showToast(`ส่งแจ้งเตือนผ่าน Toast แล้ว *การแจ้งเตือนของเบราว์เซอร์ถูกบล็อกอยู่*`, "warning");
+    } else {
+        showToast(`ดำเนินการส่งการแจ้งเตือนเรียบร้อยแล้ว`, "success");
+    }
+}
+
+// ยิงคำสั่งแจ้งเตือนไปยัง PWA Mobile / Desktop ผ่าน Service Worker
+async function triggerWebNotification() {
+    if ("Notification" in window && Notification.permission === "granted") {
+        const title = "ระบบแจ้งเตือน นชท.";
+        const options = {
+            body: `คุณยังไม่ได้ทำรายการ ประจำวันที่ ${targetDateFormatted} กรุณาเข้ามาดำเนินการให้เรียบร้อย`,
+            icon: "https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg",
+            tag: "unvoted-reminder",
+            requireInteraction: true,
+            vibrate: [200, 100, 200, 100, 200, 100, 200], // เพิ่มแพทเทิร์นการสั่นสำหรับมือถือ
+            badge: "https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg" // ไอคอนเล็กบนแถบแจ้งเตือน
+        };
+
+        // ตรวจสอบและใช้ Service Worker สำหรับ PWA
+        if ('serviceWorker' in navigator) {
+            try {
+                // รอให้ Service Worker พร้อมทำงาน
+                const registration = await navigator.serviceWorker.ready;
+                // สั่งแจ้งเตือนผ่าน Service Worker
+                await registration.showNotification(title, options);
+            } catch (error) {
+                console.error("การแจ้งเตือนผ่าน Service Worker ล้มเหลว:", error);
+                // Fallback กลับไปใช้แบบธรรมดาเผื่อรันบน Desktop ทั่วไปที่ไม่มี SW
+                fallbackStandardNotification(title, options);
+            }
+        } else {
+            fallbackStandardNotification(title, options);
         }
+    }
+}
 
-        // ฟังก์ชันเมื่อกดปุ่มส่งแจ้งเตือน
-        async function sendNotificationToUnvoted() {
-            const count = unvotedStudents.length;
-            if (count === 0) {
-                showToast("ไม่มี นชท. ที่ยังไม่ทำรายการในขณะนี้", "info");
-                return;
-            }
-
-            // ปรับข้อความยืนยันให้ชัดเจนว่าส่งไปเตือนรายบุคคล
-            if (!confirm(`ยืนยันการส่งข้อความ "คุณยังไม่ได้ทำรายการ" ไปยัง นชท. จำนวน ${count} นาย?`)) {
-                return;
-            }
-
-            // ตรวจสอบระบบ Browser Web Notification
-            if (!("Notification" in window)) {
-                showToast(`ส่งแจ้งเตือนแล้ว (เบราว์เซอร์ไม่รองรับ Web Notification)`, "info");
-                return;
-            }
-
-            let permission = Notification.permission;
-
-            if (permission === "default") {
-                permission = await Notification.requestPermission();
-            }
-
-            if (permission === "granted") {
-                triggerWebNotification();
-                showToast(`ส่งการแจ้งเตือนสำเร็จ! แจ้งให้ นชท. ทราบแล้วว่ายังไม่ได้ทำรายการ`, "success");
-            } else if (permission === "denied") {
-                showToast(`ส่งแจ้งเตือนผ่าน Toast แล้ว *การแจ้งเตือนของเบราว์เซอร์ถูกบล็อกอยู่*`, "warning");
-            } else {
-                showToast(`ดำเนินการส่งการแจ้งเตือนเรียบร้อยแล้ว`, "success");
-            }
-        }
-
-        // ยิงคำสั่งแจ้งเตือนไปยัง Desktop/Mobile Browser Notification
-        function triggerWebNotification() {
-            if ("Notification" in window && Notification.permission === "granted") {
-                const notif = new Notification("ระบบแจ้งเตือน นชท.", {
-                    // ปรับข้อความเป็นแจ้งเตือนผู้ใช้งานตรงๆ
-                    body: `คุณยังไม่ได้ทำรายการ ประจำวันที่ ${targetDateFormatted} กรุณาเข้ามาดำเนินการให้เรียบร้อย`,
-                    icon: "https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg",
-                    tag: "unvoted-reminder",
-                    requireInteraction: true
-                });
-
-                notif.onclick = function(event) {
-                    event.preventDefault();
-                    window.focus();
-                    notif.close();
-                };
-            }
-        }
+// ฟังก์ชันสำรองกรณีไม่มี Service Worker
+function fallbackStandardNotification(title, options) {
+    const notif = new Notification(title, options);
+    notif.onclick = function(event) {
+        event.preventDefault();
+        window.focus();
+        notif.close();
+    };
+}
     </script>
 </body>
 </html>
