@@ -12,8 +12,8 @@ if (!$data || !isset($data['endpoint'])) {
     exit;
 }
 
-// ระบุรหัสนักเรียนจาก Session ปัจจุบัน (ปรับชื่อตัวแปรให้ตรงกับระบบของคุณ)
-$student_id = isset($_SESSION['student_id']) ? $_SESSION['student_id'] : 'unknown';
+// ดึงค่า student_code จาก Session (พร้อมตัวดักรองรับทั้งสองชื่อ)
+$student_id = $_SESSION['student_code'] ?? $_SESSION['student_id'] ?? 'unknown';
 
 $endpoint = $data['endpoint'];
 $p256dh = $data['keys']['p256dh'];
