@@ -189,6 +189,35 @@ if ($total_students > 0) {
     }
 }
 
+// ==============================================================
+// [ส่วนที่เพิ่มใหม่] ตรวจสอบว่ามีเวรในอีก 1-3 วันข้างหน้า หรือ วันนี้ หรือไม่
+// ==============================================================
+$upcoming_alerts = [];
+$today_date = date('Y-m-d');
+$today_ts = strtotime($today_date);
+
+foreach ($my_monthly_duties as $duty) {
+    $duty_ts = strtotime($duty['date']);
+    $diff_days = floor(($duty_ts - $today_ts) / 86400);
+
+    // แจ้งเตือนถ้าเป็น วันนี้ (0) ถึง อีก 3 วันข้างหน้า
+    if ($diff_days >= 0 && $diff_days <= 3) {
+        $time_text = "";
+        if ($diff_days == 0) $time_text = "วันนี้!";
+        else if ($diff_days == 1) $time_text = "พรุ่งนี้";
+        else $time_text = "ในอีก {$diff_days} วัน";
+
+        $upcoming_alerts[] = [
+            'time_text' => $time_text,
+            'full_date' => $duty['day_num'] . " " . $month_display_text,
+            'shift' => $duty['shift'],
+            'location' => $duty['location']
+        ];
+    }
+}
+$upcoming_alerts_json = json_encode($upcoming_alerts);
+// ==============================================================
+
 // ปุ่มเปลี่ยนเดือนก่อนหน้า / ถัดไป
 $prev_month = date('Y-m', strtotime($first_day_of_month . ' -1 month'));
 $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
@@ -688,6 +717,110 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
     .nav-link i {
       font-size: 1.3rem;
     }
+
+    /* ========================================= */
+    /* [ส่วนที่เพิ่มใหม่] CSS สำหรับ Modal แจ้งเตือนเวร */
+    /* ========================================= */
+    .alert-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(3px);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+    }
+    .alert-overlay.show {
+      opacity: 1;
+      visibility: visible;
+    }
+    .alert-modal {
+      background: white;
+      width: 85%;
+      max-width: 350px;
+      border-radius: 20px;
+      padding: 25px 20px;
+      text-align: center;
+      box-shadow: 0 15px 30px rgba(0,0,0,0.2);
+      transform: scale(0.8);
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .alert-overlay.show .alert-modal {
+      transform: scale(1);
+    }
+    .alert-icon-container {
+      width: 60px;
+      height: 60px;
+      background: #ffe4e6;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 15px;
+    }
+    .alert-icon-container i {
+      font-size: 1.8rem;
+      color: var(--secondary);
+      animation: ring 2s infinite ease-in-out;
+    }
+    @keyframes ring {
+      0%, 100% { transform: rotate(0); }
+      10%, 30%, 50% { transform: rotate(-15deg); }
+      20%, 40% { transform: rotate(15deg); }
+    }
+    .alert-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--text-dark);
+      margin-bottom: 15px;
+    }
+    .alert-content {
+      text-align: left;
+      background: #f8fafc;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+      margin-bottom: 20px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .alert-item {
+      padding: 8px 0;
+      border-bottom: 1px dashed #cbd5e1;
+    }
+    .alert-item:last-child {
+      border-bottom: none;
+    }
+    .alert-time {
+      color: var(--secondary);
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+    .alert-detail {
+      font-size: 0.85rem;
+      color: var(--text-dark);
+      margin-top: 4px;
+    }
+    .alert-btn {
+      background: var(--primary);
+      color: white;
+      border: none;
+      width: 100%;
+      padding: 12px;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(90, 66, 160, 0.3);
+    }
+    .alert-btn:active {
+      transform: scale(0.98);
+    }
   </style>
 </head>
 <body>
@@ -813,19 +946,77 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
 
   </div>
 
-  <!-- Javascript สำหรับจัดการ Loading Screen -->
+  <!-- ========================================= -->
+  <!-- [ส่วนที่เพิ่มใหม่] HTML สำหรับ Modal แจ้งเตือนเวร -->
+  <!-- ========================================= -->
+  <div id="dutyAlertOverlay" class="alert-overlay">
+    <div class="alert-modal">
+      <div class="alert-icon-container">
+        <i class="fas fa-bell"></i>
+      </div>
+      <div class="alert-title">เตรียมตัวเข้าเวร!</div>
+      <div id="alertContentBox" class="alert-content">
+        <!-- ข้อมูลเวรจะถูกแทรกที่นี่ด้วย JS -->
+      </div>
+      <button class="alert-btn" onclick="closeDutyAlert()">รับทราบ</button>
+    </div>
+  </div>
+
+  <!-- Javascript -->
   <script>
+    // ตัวแปรเก็บข้อมูลเวรที่ได้จาก PHP
+    const upcomingAlerts = <?= $upcoming_alerts_json; ?>;
+
     document.addEventListener("DOMContentLoaded", function() {
       const loader = document.getElementById('page-loader');
+      
+      // ฟังก์ชันเช็คและแสดง Alert หลังโหลดเสร็จ
+      function checkAndShowAlert() {
+        // เช็คว่ามีข้อมูลแจ้งเตือน และยังไม่เคยแสดงใน session นี้ (ป้องกันการขึ้นซ้ำเวลารีเฟรช)
+        if (upcomingAlerts && upcomingAlerts.length > 0 && !sessionStorage.getItem('duty_alert_shown')) {
+          
+          let contentHtml = '';
+          upcomingAlerts.forEach(alert => {
+            contentHtml += `
+              <div class="alert-item">
+                <div class="alert-time"><i class="fas fa-exclamation-circle"></i> ${alert.time_text}</div>
+                <div class="alert-detail">
+                  <b>${alert.full_date}</b><br>
+                  ${alert.shift} - ${alert.location}
+                </div>
+              </div>
+            `;
+          });
+
+          document.getElementById('alertContentBox').innerHTML = contentHtml;
+          
+          // โชว์ Modal แจ้งเตือน
+          setTimeout(() => {
+            document.getElementById('dutyAlertOverlay').classList.add('show');
+          }, 500);
+        }
+      }
+
       if (loader) {
         setTimeout(function() {
           loader.classList.add('hidden');
           setTimeout(function() {
             loader.remove();
+            checkAndShowAlert(); // เรียกใช้หลังจากซ่อน loader
           }, 100);
         }, 1200);
+      } else {
+        // ถ้าไม่มีหน้าโหลด (เข้าครั้งที่ 2 เป็นต้นไป)
+        checkAndShowAlert();
       }
     });
+
+    // ฟังก์ชันปิด Modal แจ้งเตือน
+    function closeDutyAlert() {
+      document.getElementById('dutyAlertOverlay').classList.remove('show');
+      // บันทึกไว้ว่าแสดงไปแล้วใน session นี้ จะได้ไม่เด้งอีกถ้ารีเฟรช
+      sessionStorage.setItem('duty_alert_shown', 'true');
+    }
   </script>
 </body>
 </html>
