@@ -899,7 +899,7 @@ if (isset($_POST['action']) && $_POST['action'] == 'export_csv') {
             }
         }
 
-        // ==========================================
+// ==========================================
         // ระบบแจ้งเตือน (Notification System)
         // ==========================================
         
@@ -937,13 +937,14 @@ if (isset($_POST['action']) && $_POST['action'] == 'export_csv') {
                 return;
             }
 
-            if (!confirm(`ยืนยันการส่งการแจ้งเตือนไปยัง นชท. ที่ยังไม่ทำรายการจำนวน ${count} นาย?`)) {
+            // ปรับข้อความยืนยันให้ชัดเจนว่าส่งไปเตือนรายบุคคล
+            if (!confirm(`ยืนยันการส่งข้อความ "คุณยังไม่ได้ทำรายการ" ไปยัง นชท. จำนวน ${count} นาย?`)) {
                 return;
             }
 
             // ตรวจสอบระบบ Browser Web Notification
             if (!("Notification" in window)) {
-                showToast(`ส่งแจ้งเตือนแล้ว: มี นชท. ยังไม่ทำรายการ ${count} นาย (เบราว์เซอร์ไม่รองรับ Web Notification)`, "info");
+                showToast(`ส่งแจ้งเตือนแล้ว (เบราว์เซอร์ไม่รองรับ Web Notification)`, "info");
                 return;
             }
 
@@ -954,20 +955,21 @@ if (isset($_POST['action']) && $_POST['action'] == 'export_csv') {
             }
 
             if (permission === "granted") {
-                triggerWebNotification(count);
-                showToast(`ส่งการแจ้งเตือนสำเร็จ! ส่งไปยัง นชท. ทั้งหมด ${count} นายเรียบร้อยแล้ว`, "success");
+                triggerWebNotification();
+                showToast(`ส่งการแจ้งเตือนสำเร็จ! แจ้งให้ นชท. ทราบแล้วว่ายังไม่ได้ทำรายการ`, "success");
             } else if (permission === "denied") {
-                showToast(`ส่งแจ้งเตือนผ่าน Toast แล้ว (${count} นาย) *การแจ้งเตือนของเบราว์เซอร์ถูกบล็อกอยู่*`, "warning");
+                showToast(`ส่งแจ้งเตือนผ่าน Toast แล้ว *การแจ้งเตือนของเบราว์เซอร์ถูกบล็อกอยู่*`, "warning");
             } else {
-                showToast(`ส่งการแจ้งเตือนไปยัง นชท. ทั้งหมด ${count} นายเรียบร้อยแล้ว`, "success");
+                showToast(`ดำเนินการส่งการแจ้งเตือนเรียบร้อยแล้ว`, "success");
             }
         }
 
         // ยิงคำสั่งแจ้งเตือนไปยัง Desktop/Mobile Browser Notification
-        function triggerWebNotification(count) {
+        function triggerWebNotification() {
             if ("Notification" in window && Notification.permission === "granted") {
-                const notif = new Notification("ระบบแจ้งเตือนโหวตประสงค์กลับบ้าน นชท.", {
-                    body: `มี นชท. ยังไม่ได้แจ้งยอดจำนวน ${count} นาย ประจำวันที่ ${targetDateFormatted}`,
+                const notif = new Notification("ระบบแจ้งเตือน นชท.", {
+                    // ปรับข้อความเป็นแจ้งเตือนผู้ใช้งานตรงๆ
+                    body: `คุณยังไม่ได้ทำรายการ ประจำวันที่ ${targetDateFormatted} กรุณาเข้ามาดำเนินการให้เรียบร้อย`,
                     icon: "https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg",
                     tag: "unvoted-reminder",
                     requireInteraction: true
