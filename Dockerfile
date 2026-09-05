@@ -1,5 +1,5 @@
-# ใช้ Image PHP 7.4 พร้อม Apache
-FROM php:7.4-apache
+# ใช้ Image PHP 8.2 พร้อม Apache (อัปเกรดเพื่อรองรับ Web Push)
+FROM php:8.2-apache
 
 # 1. ติดตั้ง Extension สำหรับ MySQL และ Curl
 RUN apt-get update && apt-get install -y \
