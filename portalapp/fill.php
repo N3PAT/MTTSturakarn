@@ -1,6 +1,15 @@
 <?php
 session_start(); // 1. เปิดใช้งาน Session สำหรับ CSRF Token
 
+// -------------------------------------------------------------
+// เช็คว่าเคยแสดงหน้า Loading ไปหรือยังใน Session นี้ สำหรับหน้า fill
+// -------------------------------------------------------------
+$show_loading = false;
+if (!isset($_SESSION['has_seen_loading_fill'])) {
+    $show_loading = true;
+    $_SESSION['has_seen_loading_fill'] = true; // เซ็ตค่าไว้ว่าเห็นแล้ว ครั้งหน้าจะได้ไม่โชว์ซ้ำ
+}
+
 // ตั้งค่า Timezone ให้เป็นเวลาประเทศไทย
 date_default_timezone_set('Asia/Bangkok');
 
@@ -200,35 +209,108 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       min-height: 100vh;
     }
 
+    /* -------------------------------------------------------------
+       CSS สำหรับ Loading Screen & Animations
+       ------------------------------------------------------------- */
+    #page-loader {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #ffffff;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      transition: opacity 0.5s ease, visibility 0.5s ease;
+    }
+    #page-loader.hidden {
+      opacity: 0;
+      visibility: hidden;
+    }
+    .loader-logo {
+      width: 80px;
+      height: 80px;
+      border-radius: 15px;
+      animation: pulse 1.5s infinite ease-in-out;
+    }
+    .loader-spinner {
+      margin-top: 20px;
+      width: 40px;
+      height: 40px;
+      border: 4px solid rgba(90, 66, 160, 0.2);
+      border-top: 4px solid var(--primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    .loader-text {
+      margin-top: 15px;
+      color: var(--primary);
+      font-weight: 600;
+      font-size: 0.9rem;
+      letter-spacing: 1px;
+      animation: flash 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(90, 66, 160, 0.4); }
+      50% { transform: scale(1.05); box-shadow: 0 0 20px 0 rgba(90, 66, 160, 0); }
+      100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(90, 66, 160, 0); }
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    @keyframes flash {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .fade-in-up {
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    @keyframes fadeInUp {
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .delay-1 { animation-delay: 0.1s; }
+    .delay-2 { animation-delay: 0.2s; }
+    .delay-3 { animation-delay: 0.3s; }
+    .delay-4 { animation-delay: 0.4s; }
+    /* ------------------------------------------------------------- */
+
     .app-container {
-  width: 100%;
-  max-width: 430px;
-  background-color: var(--bg-color);
-  min-height: 100vh;
-  position: relative;
-  padding-bottom: 90px; /* เว้นพื้นที่ด้านล่างไม่ให้เนื้อหาถูกบัง */
-  box-shadow: 0 0 20px rgba(0,0,0,0.1);
-}
+      width: 100%;
+      max-width: 430px;
+      background-color: var(--bg-color);
+      min-height: 100vh;
+      position: relative;
+      padding-bottom: 90px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.1);
+    }
 
-.bottom-nav {
-  position: fixed; /* ล็อกให้อยู่กับที่ติดหน้าจอ */
-  bottom: 0;
-  width: 100%;
-  max-width: 430px; /* จำกัดความกว้างให้ตรงกับตัวแอป */
-  left: 50%;
-  transform: translateX(-50%); /* จัดให้อยู่กึ่งกลางพอดีกรณีเปิดบนจอใหญ่ */
-  height: 70px;
-  background: white;
-  border-top-left-radius: 25px;
-  border-top-right-radius: 25px;
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-  box-shadow: 0 -5px 20px rgba(0,0,0,0.03);
-  padding: 0 10px;
-  z-index: 1000; /* ให้ลอยอยู่บนสุดเสมอ */
-}
-
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      width: 100%;
+      max-width: 430px;
+      left: 50%;
+      transform: translateX(-50%);
+      height: 70px;
+      background: white;
+      border-top-left-radius: 25px;
+      border-top-right-radius: 25px;
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      box-shadow: 0 -5px 20px rgba(0,0,0,0.03);
+      padding: 0 10px;
+      z-index: 1000;
+    }
 
     .top-header {
       display: flex;
@@ -239,7 +321,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
 
     .header-left { display: flex; align-items: center; gap: 12px; }
-    .school-logo { width: 45px; height: 45px; object-fit: contain; }
+    .school-logo { width: 45px; height: 45px; object-fit: contain; border-radius: 10px; }
     .school-name h1 { font-size: 1rem; font-weight: 700; color: var(--text-dark); margin: 0 0 2px 0; }
     .school-name p { font-size: 0.75rem; color: var(--text-gray); margin: 0; }
     
@@ -323,7 +405,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       background: none; border: none; color: var(--primary); font-size: 0.85rem; font-weight: 600; cursor: pointer; margin-top: 20px; font-family: 'Prompt', sans-serif;
     }
 
-
     .nav-link {
       display: flex; flex-direction: column; align-items: center; text-decoration: none;
       color: #94a3b8; font-size: 0.7rem; font-weight: 600; width: 30%; gap: 4px;
@@ -336,10 +417,19 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 </head>
 <body>
 
+  <!-- Loading Screen (จะทำงานต่อเมื่อ $show_loading เป็น true) -->
+  <?php if ($show_loading): ?>
+  <div id="page-loader">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg?utm_source=th.wikipedia.org&utm_campaign=index&utm_content=thumbnail_unscaled" alt="Loading Logo" class="loader-logo">
+    <div class="loader-spinner"></div>
+    <div class="loader-text">กำลังโหลดข้อมูล...</div>
+  </div>
+  <?php endif; ?>
+
   <div class="app-container">
     
     <!-- Header -->
-    <div class="top-header">
+    <div class="top-header fade-in-up delay-1">
       <div class="header-left">
         <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg?utm_source=th.wikipedia.org&utm_campaign=index&utm_content=thumbnail_unscaled" alt="Logo" class="school-logo">
         <div class="school-name">
@@ -349,18 +439,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       </div>
     </div>
 
-    <div class="section-title">
+    <div class="section-title fade-in-up delay-2">
       <div class="section-pill"></div>
       <h3>โหวตประสงค์กลับบ้าน</h3>
     </div>
     
-    <div class="date-badge">
+    <div class="date-badge fade-in-up delay-2">
       <i class="far fa-calendar-alt"></i> วันศุกร์ที่ <?php echo date('d/m/Y', strtotime($target_date)); ?>
     </div>
 
     <!-- Main Content Area -->
     <?php if ($is_voting_open): ?>
-      <div class="form-card">
+      <div class="form-card fade-in-up delay-3">
         <form id="statusForm" method="POST" action="">
           <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
           
@@ -423,7 +513,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       </div>
 
     <?php else: ?>
-      <div class="closed-state">
+      <div class="closed-state fade-in-up delay-3">
         <div class="closed-icon"><i class="fas fa-lock"></i></div>
         <h3>ระบบปิดรับข้อมูล</h3>
         <p>ระบบเปิดให้ทำรายการเฉพาะช่วงเวลา</p>
@@ -449,6 +539,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     </div>
 
   </div>
+
+<!-- Javascript สำหรับซ่อน Loading Screen -->
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    const loader = document.getElementById('page-loader');
+    if (loader) {
+      setTimeout(function() {
+        loader.classList.add('hidden');
+        setTimeout(function() {
+          loader.remove();
+        }, 500);
+      }, 1200);
+    }
+  });
+</script>
 
 <script>
 <?php if ($alert_type == 'success'): ?>
