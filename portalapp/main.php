@@ -596,9 +596,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
     </div>
 
   </div>
-<!-- ปรับแก้สคริปต์ JavaScript ด้านล่างสุดของ main.php -->
 <script>
-  // ฟังก์ชันแปลง VAPID Public Key ให้เป็น Uint8Array
   function urlBase64ToUint8Array(base64String) {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
     const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
@@ -610,14 +608,12 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
     return outputArray;
   }
 
-  // ลงทะเบียน Service Worker เมื่อโหลดหน้าเว็บ
   if ('serviceWorker' in navigator && 'PushManager' in window) {
     navigator.serviceWorker.register('sw.js')
-      .then(reg => console.log('Service Worker Registered'))
-      .catch(err => console.error('SW Registration Error:', err));
+      .then(reg => console.log('SW Registered'))
+      .catch(err => console.error('SW Error:', err));
   }
 
-  // ผูกการเปิดใช้งานเมื่อ "คลิกที่รูปกระดิ่ง"
   document.getElementById('notiBellBtn').addEventListener('click', async function() {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
       alert('เบราว์เซอร์ของคุณไม่รองรับการแจ้งเตือนเด้งเข้าตัวเครื่อง');
@@ -629,33 +625,43 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       if (permission === 'granted') {
         const registration = await navigator.serviceWorker.ready;
         
-        // ใส่ VAPID Public Key ของคุณตรงนี้ (สร้างได้จากเว็บ web-push-codelab.glitch.me หรือ Composer)
         const publicVapidKey = 'BDcVYH88lfTwHxM-yyzWmQzIc6_orJpWxXr156VsSppe-srH4z1gYGz0W6z9I67JHkBkcnnbrwqoLuBZLAzC7HA'; 
         
+        // 1. ลองสร้าง Subscription
         const subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
         });
 
-        // ส่งข้อมูล Subscription ไปเซฟเข้าตาราง push_subscriptions
+        // 2. ส่งไปที่ PHP
         const res = await fetch('save_subscription.php', {
           method: 'POST',
           body: JSON.stringify(subscription),
           headers: { 'Content-Type': 'application/json' }
         });
 
-        const data = await res.json();
-        if (data.success) {
-          alert('เปิดการแจ้งเตือนสำเร็จแล้ว!');
-        } else {
-          alert('เกิดข้อผิดพลาดในการบันทึกข้อมูลการแจ้งเตือน');
+        // 3. อ่านค่าที่ PHP ตอบกลับมาเป็นข้อความธรรมดาก่อน (เพื่อป้องกัน Error JSON)
+        const text = await res.text();
+        
+        try {
+            // ลองแปลงเป็น JSON
+            const data = JSON.parse(text);
+            if (data.success) {
+              alert('เปิดการแจ้งเตือนสำเร็จแล้ว!');
+            } else {
+              alert('เซิร์ฟเวอร์แจ้งข้อผิดพลาด: ' + (data.error || 'ไม่ทราบสาเหตุ'));
+            }
+        } catch (parseError) {
+            // ถ้าแปลง JSON ไม่ได้ แสดงว่า PHP มี Error พ่นออกมา
+            alert('PHP Error (ไม่ใช่ JSON): ' + text.substring(0, 150));
         }
+
       } else if (permission === 'denied') {
-        alert('คุณได้ปฏิเสธการแจ้งเตือน โปรดเปิดสิทธิ์การแจ้งเตือนในการตั้งค่าของเบราว์เซอร์');
+        alert('คุณได้ปฏิเสธการแจ้งเตือน โปรดเปิดสิทธิ์ในการตั้งค่าของเบราว์เซอร์');
       }
     } catch (err) {
-      console.error('Subscription error:', err);
-      alert('เกิดข้อผิดพลาดในการลงทะเบียนรับแจ้งเตือน');
+      // ดักจับ Error อื่นๆ เช่น มือถือไม่รองรับ, Vapid Key ผิด, ไม่ใช่ HTTPS
+      alert('เกิดข้อผิดพลาดของระบบ: ' + err.message);
     }
   });
 </script>
