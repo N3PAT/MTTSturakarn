@@ -2,6 +2,9 @@
 // บังคับให้ไฟล์นี้ตอบกลับเป็น JSON เท่านั้น
 header('Content-Type: application/json; charset=utf-8');
 
+// ปิดการแสดง Error บนหน้าเว็บ ป้องกันไม่ให้มี HTML หรือข้อความแปลกๆ หลุดไปปนกับ JSON
+ini_set('display_errors', 0);
+
 // 1. รับค่า JSON ที่ส่งมาจาก JavaScript
 $json = file_get_contents('php://input');
 $data = json_decode($json, true);
@@ -17,20 +20,25 @@ $endpoint = $data['endpoint'];
 $p256dh = $data['keys']['p256dh'];
 $auth = $data['keys']['auth'];
 
-// 4. ดึงข้อมูลเชื่อมต่อฐานข้อมูลจาก Environment Variables
+// 3. ดึงข้อมูลเชื่อมต่อฐานข้อมูลจาก Environment Variables
 $host   = getenv('Host');
-$port   = (int)getenv('Port'); // แปลงเป็นตัวเลขเผื่อไว้
+$port   = (int)getenv('Port');
 $user   = getenv('User');
 $pass   = getenv('Password');
 $dbname = getenv('Databasename');
 
 try {
-    // เชื่อมต่อฐานข้อมูลด้วย PDO
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8", $user, $pass);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    // 4. เชื่อมต่อฐานข้อมูลด้วย PDO พร้อมตั้งค่า Port และ SSL (สำหรับ Aiven)
+    $dsn = "mysql:host={$host};port={$port};dbname={$dbname};charset=utf8mb4";
+    $options = [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        // สำคัญมากสำหรับ Aiven: ป้องกัน Error การเชื่อมต่อ SSL
+        PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false,
+    ];
+    
+    $pdo = new PDO($dsn, $user, $pass, $options);
 
-    // 4. บันทึกข้อมูลลง Table (สมมติว่าชื่อ table คือ push_subscribers)
-    // เปลี่ยนชื่อ table และชื่อคอลัมน์ให้ตรงกับฐานข้อมูลของคุณ
+    // 5. บันทึกข้อมูลลง Table (แก้ไขชื่อ table push_subscribers ให้ตรงกับของคุณ)
     $stmt = $pdo->prepare("INSERT INTO push_subscribers (endpoint, p256dh, auth) VALUES (:endpoint, :p256dh, :auth)");
     $stmt->execute([
         ':endpoint' => $endpoint,
@@ -46,8 +54,11 @@ try {
     if ($e->getCode() == 23000) {
         echo json_encode(['success' => true, 'message' => 'มีข้อมูลนี้ในระบบแล้ว']);
     } else {
-        // ตอบกลับ error ของฐานข้อมูลกลับไป
-        echo json_encode(['success' => false, 'error' => 'Database Error: ' . $e->getMessage()]);
+        // บันทึก Error ลงระบบของ Render จะได้เข้ามาเช็คได้
+        error_log("Database Error: " . $e->getMessage());
+        
+        // ตอบกลับ error ไปยัง JavaScript
+        echo json_encode(['success' => false, 'error' => 'เชื่อมต่อหรือบันทึกข้อมูลไม่สำเร็จ กรุณาเช็ค Log']);
     }
 }
 ?>
