@@ -614,7 +614,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       .catch(err => console.error('SW Error:', err));
   }
 
-document.getElementById('notiBellBtn').addEventListener('click', async function() {
+  document.getElementById('notiBellBtn').addEventListener('click', async function() {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
       alert('เบราว์เซอร์ของคุณไม่รองรับการแจ้งเตือนเด้งเข้าตัวเครื่อง');
       return;
@@ -627,28 +627,28 @@ document.getElementById('notiBellBtn').addEventListener('click', async function(
         
         const publicVapidKey = 'BDcVYH88lfTwHxM-yyzWmQzIc6_orJpWxXr156VsSppe-srH4z1gYGz0W6z9I67JHkBkcnnbrwqoLuBZLAzC7HA'; 
         
-        // 1. ลองสร้าง Subscription
+        // 1. สร้าง Subscription
         const subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
         });
 
-        // แปลงข้อมูล Subscription ให้อยู่ในรูปแบบ JSON Object ที่สมบูรณ์ก่อน
         const subData = subscription.toJSON();
-        console.log("ข้อมูลที่เตรียมส่งไป PHP:", subData); // (เปิด F12 ดูได้ว่าข้อมูลมาครบไหม)
+        
+        // 2. แปลงข้อมูลเป็น FormData (เพื่อให้ PHP ใช้ $_POST รับค่าได้ง่ายๆ)
+        const formData = new FormData();
+        formData.append('endpoint', subData.endpoint);
+        formData.append('p256dh', subData.keys.p256dh);
+        formData.append('auth', subData.keys.auth);
 
-        // 2. ส่งไปที่ PHP
+        // 3. ส่งไปที่ PHP
         const res = await fetch('save_subscription.php', {
           method: 'POST',
-          body: JSON.stringify(subData),
-          headers: { 
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          credentials: 'same-origin' // <--- เพิ่มบรรทัดนี้เพื่อให้แนบ Session ของนักเรียนไปด้วย
+          body: formData,
+          credentials: 'same-origin' // แนบ Session ไปด้วย
         });
 
-        // 3. อ่านค่าที่ PHP ตอบกลับมา
+        // 4. อ่านค่าที่ PHP ตอบกลับมา
         const text = await res.text();
         
         try {
@@ -659,7 +659,8 @@ document.getElementById('notiBellBtn').addEventListener('click', async function(
               alert('เซิร์ฟเวอร์แจ้งข้อผิดพลาด: ' + (data.error || 'ไม่ทราบสาเหตุ'));
             }
         } catch (parseError) {
-            alert('PHP Error (ไม่ใช่ JSON): ' + text.substring(0, 150));
+            console.error('PHP ตอบกลับมาผิดปกติ:', text);
+            alert('บันทึกไม่สำเร็จ: PHP มี Error (ดูรายละเอียดใน Console)');
         }
 
       } else if (permission === 'denied') {
