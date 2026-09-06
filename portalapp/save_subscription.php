@@ -17,15 +17,16 @@ $endpoint = $data['endpoint'];
 $p256dh = $data['keys']['p256dh'];
 $auth = $data['keys']['auth'];
 
-// 3. ตั้งค่าการเชื่อมต่อฐานข้อมูล (เปลี่ยนให้ตรงกับเซิร์ฟเวอร์ของคุณ)
-$db_host = 'localhost';
-$db_name = 'ชื่อฐานข้อมูลของคุณ';
-$db_user = 'ชื่อผู้ใช้ฐานข้อมูล';
-$db_pass = 'รหัสผ่านฐานข้อมูล';
+// 4. ดึงข้อมูลเชื่อมต่อฐานข้อมูลจาก Environment Variables
+$host   = getenv('Host');
+$port   = (int)getenv('Port'); // แปลงเป็นตัวเลขเผื่อไว้
+$user   = getenv('User');
+$pass   = getenv('Password');
+$dbname = getenv('Databasename');
 
 try {
     // เชื่อมต่อฐานข้อมูลด้วย PDO
-    $pdo = new PDO("mysql:host=$db_host;dbname=$db_name;charset=utf8", $db_user, $db_pass);
+    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8", $user, $pass);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     // 4. บันทึกข้อมูลลง Table (สมมติว่าชื่อ table คือ push_subscribers)
