@@ -38,7 +38,7 @@ try {
     $pdo = new PDO($dsn, $user, $pass, $options);
 
     // 5. บันทึกข้อมูลลง Table (ต้องมี Table ชื่อ push_subscribers ในฐานข้อมูลแล้ว)
-    $stmt = $pdo->prepare("INSERT INTO push_subscribers (endpoint, p256dh, auth) VALUES (:endpoint, :p256dh, :auth)");
+    $stmt = $pdo->prepare("INSERT INTO push_subscriptions (endpoint, p256dh, auth) VALUES (:endpoint, :p256dh, :auth)");
     $stmt->execute([
         ':endpoint' => $endpoint,
         ':p256dh' => $p256dh,
