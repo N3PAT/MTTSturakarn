@@ -1,13 +1,7 @@
 const CACHE_NAME = 'mtts-app-v1';
 
-// ไฟล์พื้นฐานที่ต้องการแคชไว้เพื่อให้แอปโหลดเร็วขึ้นและรองรับตอนออฟไลน์
-const urlsToCache = [
-  '/',
-  '/login.php',
-  '/manifest.json',
-  '/icon-192x192.png',
-  '/icon-512x512.png'
-];
+// ลบรายชื่อไฟล์ออกชั่วคราว เพื่อแก้ปัญหา cache.addAll พังจากไฟล์ที่หาไม่เจอ (404)
+const urlsToCache = [];
 
 // 1. Install Service Worker และทำการ Caching ไฟล์
 self.addEventListener('install', event => {
