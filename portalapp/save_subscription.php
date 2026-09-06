@@ -1,24 +1,23 @@
 <?php
+// เริ่ม Session (สำคัญถ้าคุณต้องการแนบ Session นักเรียนในอนาคต)
+session_start();
+
 // บังคับให้ไฟล์นี้ตอบกลับเป็น JSON เท่านั้น
 header('Content-Type: application/json; charset=utf-8');
 
-// ปิดการแสดง Error บนหน้าเว็บ ป้องกันไม่ให้มี HTML หรือข้อความแปลกๆ หลุดไปปนกับ JSON
+// ปิดการแสดง Error บนหน้าเว็บ ป้องกันไม่ให้มี HTML หลุดไปปนกับ JSON
 ini_set('display_errors', 0);
 
-// 1. รับค่า JSON ที่ส่งมาจาก JavaScript
-$json = file_get_contents('php://input');
-$data = json_decode($json, true);
-
-// ตรวจสอบว่ามีข้อมูลส่งมาหรือไม่
-if (!$data || !isset($data['endpoint'])) {
+// 1. ตรวจสอบว่ามีข้อมูลส่งมาจาก FormData หรือไม่
+if (!isset($_POST['endpoint']) || empty($_POST['endpoint'])) {
     echo json_encode(['success' => false, 'error' => 'ไม่พบข้อมูล Subscription']);
     exit();
 }
 
 // 2. ดึงค่าที่ต้องใช้บันทึกลงฐานข้อมูล
-$endpoint = $data['endpoint'];
-$p256dh = $data['keys']['p256dh'];
-$auth = $data['keys']['auth'];
+$endpoint = $_POST['endpoint'];
+$p256dh = $_POST['p256dh'];
+$auth = $_POST['auth'];
 
 // 3. ดึงข้อมูลเชื่อมต่อฐานข้อมูลจาก Environment Variables
 $host   = getenv('Host');
@@ -38,7 +37,7 @@ try {
     
     $pdo = new PDO($dsn, $user, $pass, $options);
 
-    // 5. บันทึกข้อมูลลง Table (แก้ไขชื่อ table push_subscribers ให้ตรงกับของคุณ)
+    // 5. บันทึกข้อมูลลง Table (ต้องมี Table ชื่อ push_subscribers ในฐานข้อมูลแล้ว)
     $stmt = $pdo->prepare("INSERT INTO push_subscribers (endpoint, p256dh, auth) VALUES (:endpoint, :p256dh, :auth)");
     $stmt->execute([
         ':endpoint' => $endpoint,
@@ -50,15 +49,15 @@ try {
     echo json_encode(['success' => true]);
 
 } catch (PDOException $e) {
-    // หากเคยบันทึก endpoint นี้ไปแล้ว (Duplicate entry) ถือว่าสำเร็จเช่นกัน
+    // หากเคยบันทึก endpoint นี้ไปแล้ว (Duplicate entry - Error 23000) ถือว่าสำเร็จเช่นกัน
     if ($e->getCode() == 23000) {
         echo json_encode(['success' => true, 'message' => 'มีข้อมูลนี้ในระบบแล้ว']);
     } else {
-        // บันทึก Error ลงระบบของ Render จะได้เข้ามาเช็คได้
+        // บันทึก Error ลงระบบของ Render
         error_log("Database Error: " . $e->getMessage());
         
-        // ตอบกลับ error ไปยัง JavaScript
-        echo json_encode(['success' => false, 'error' => 'เชื่อมต่อหรือบันทึกข้อมูลไม่สำเร็จ กรุณาเช็ค Log']);
+        // ตอบกลับ Error ไปแสดงผลที่ Alert (แก้ไขให้แสดง Error ฐานข้อมูลให้เห็นชัดเจนตอนทดสอบ)
+        echo json_encode(['success' => false, 'error' => 'DB Error: ' . $e->getMessage()]);
     }
 }
 ?>
