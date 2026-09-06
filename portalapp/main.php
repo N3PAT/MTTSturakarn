@@ -614,7 +614,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       .catch(err => console.error('SW Error:', err));
   }
 
-  document.getElementById('notiBellBtn').addEventListener('click', async function() {
+document.getElementById('notiBellBtn').addEventListener('click', async function() {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
       alert('เบราว์เซอร์ของคุณไม่รองรับการแจ้งเตือนเด้งเข้าตัวเครื่อง');
       return;
@@ -633,18 +633,25 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
           applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
         });
 
+        // แปลงข้อมูล Subscription ให้อยู่ในรูปแบบ JSON Object ที่สมบูรณ์ก่อน
+        const subData = subscription.toJSON();
+        console.log("ข้อมูลที่เตรียมส่งไป PHP:", subData); // (เปิด F12 ดูได้ว่าข้อมูลมาครบไหม)
+
         // 2. ส่งไปที่ PHP
         const res = await fetch('save_subscription.php', {
           method: 'POST',
-          body: JSON.stringify(subscription),
-          headers: { 'Content-Type': 'application/json' }
+          body: JSON.stringify(subData),
+          headers: { 
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          credentials: 'same-origin' // <--- เพิ่มบรรทัดนี้เพื่อให้แนบ Session ของนักเรียนไปด้วย
         });
 
-        // 3. อ่านค่าที่ PHP ตอบกลับมาเป็นข้อความธรรมดาก่อน (เพื่อป้องกัน Error JSON)
+        // 3. อ่านค่าที่ PHP ตอบกลับมา
         const text = await res.text();
         
         try {
-            // ลองแปลงเป็น JSON
             const data = JSON.parse(text);
             if (data.success) {
               alert('เปิดการแจ้งเตือนสำเร็จแล้ว!');
@@ -652,7 +659,6 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
               alert('เซิร์ฟเวอร์แจ้งข้อผิดพลาด: ' + (data.error || 'ไม่ทราบสาเหตุ'));
             }
         } catch (parseError) {
-            // ถ้าแปลง JSON ไม่ได้ แสดงว่า PHP มี Error พ่นออกมา
             alert('PHP Error (ไม่ใช่ JSON): ' + text.substring(0, 150));
         }
 
@@ -660,7 +666,6 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
         alert('คุณได้ปฏิเสธการแจ้งเตือน โปรดเปิดสิทธิ์ในการตั้งค่าของเบราว์เซอร์');
       }
     } catch (err) {
-      // ดักจับ Error อื่นๆ เช่น มือถือไม่รองรับ, Vapid Key ผิด, ไม่ใช่ HTTPS
       alert('เกิดข้อผิดพลาดของระบบ: ' + err.message);
     }
   });
