@@ -319,11 +319,11 @@ try {
         <div class="icon-box bg-green"><i class="fas fa-poll"></i></div>
         <span class="menu-text">สรุปผล<br>การโหวต</span>
       </a>
-      <a href="admin_send_push.php" class="menu-item">
+      <a href="send_push.php" class="menu-item">
         <div class="icon-box bg-red"><i class="fas fa-paper-plane"></i></div>
         <span class="menu-text">ส่งแจ้งเตือน<br>(Push Noti)</span>
       </a>
-      <a href="admin_reports.php" class="menu-item">
+      <a href="reports.php" class="menu-item">
         <div class="icon-box bg-yellow"><i class="fas fa-file-alt"></i></div>
         <span class="menu-text">รายงาน<br>เอกสาร</span>
       </a>
