@@ -576,6 +576,10 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
         <div class="icon-box bg-orange"><i class="fas fa-vote-yea"></i></div>
         <span class="menu-text">โหวตประสงค์กลับบ้าน</span>
       </a>
+        <a href="reqdoc.php" class="menu-item">
+        <div class="icon-box bg-orange"><i class="fas fa-vote-yea"></i></div>
+        <span class="menu-text">คำร้องขอเอกสาร</span>
+        </a>
     </div>
 
     <div class="bottom-nav">
