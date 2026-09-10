@@ -3,12 +3,12 @@ session_start();
 require_once 'db.php';
 
 // ตรวจสอบการเข้าสู่ระบบ
-if (empty($_SESSION['student_code'])) {
-    header("Location: login.php");
+if (empty($_SESSION['admin_id'])) {
+    header("Location: turakarn.php");
     exit();
 }
 
-$studentCode = $_SESSION['student_code'];
+$studentCode = $_SESSION['admin_id'];
 
 // ------------------------------------------------------------------
 // ระบบ Export Database (ดาวน์โหลดไฟล์ .sql)
