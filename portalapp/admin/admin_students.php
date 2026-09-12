@@ -90,7 +90,7 @@ $result = $conn->query($query);
   <div class="app-container">
     
     <div class="top-header">
-      <a href="admin_dashboard.php" class="back-btn"><i class="fas fa-chevron-left"></i></a>
+      <a href="turakarn.php" class="back-btn"><i class="fas fa-chevron-left"></i></a>
       <div class="page-title">
         <h1>จัดการข้อมูลนักเรียน</h1>
       </div>
