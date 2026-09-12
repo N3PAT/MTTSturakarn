@@ -20,7 +20,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $password = trim($_POST['password']);
 
     if (!empty($username) && !empty($password)) {
-        // ใช้ mysqli ตรวจสอบข้อมูลในตาราง admins
         $stmt = $conn->prepare("SELECT id, username, password FROM admins WHERE username = ?");
         if ($stmt) {
             $stmt->bind_param("s", $username);
@@ -28,13 +27,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $result = $stmt->get_result();
             $admin = $result->fetch_assoc();
 
-            // ตรวจสอบรหัสผ่านที่ถูกแฮชไว้ด้วย password_verify
             if ($admin && password_verify($password, $admin['password'])) {
                 $_SESSION['admin_id'] = $admin['id'];
                 $_SESSION['admin_username'] = $admin['username'];
                 $_SESSION['admin_name'] = 'ผู้ดูแลระบบ MTTS'; 
                 
-                // รีเฟรชหน้าเพื่อล้างค่า POST
                 header("Location: " . $_SERVER['PHP_SELF']);
                 exit();
             } else {
@@ -62,27 +59,36 @@ if (empty($_SESSION['admin_id'])) {
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
     <style>
         :root {
-            --primary: #1e293b;
-            --bg-color: #e2e8f0;
+            --primary: #0f172a;
+            --primary-light: #1e293b;
+            --accent: #3b82f6;
+            --bg-color: #f1f5f9;
         }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body { font-family: 'Prompt', sans-serif; display: flex; justify-content: center; background-color: var(--bg-color); margin: 0; min-height: 100vh; }
         
-        .app-container { width: 100%; max-width: 430px; background-color: #f6f8fc; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; padding: 20px; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
-        .login-box { background: #fff; padding: 2rem 1.5rem; border-radius: 16px; box-shadow: 0 10px 20px rgba(30,41,59,0.05); }
+        .app-container { width: 100%; max-width: 430px; display: flex; flex-direction: column; justify-content: center; padding: 24px; }
+        .login-box { background: #ffffff; padding: 2.5rem 2rem; border-radius: 24px; box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08); position: relative; overflow: hidden; }
+        .login-box::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 6px; background: linear-gradient(90deg, var(--accent), #60a5fa); }
+        
         .logo-box { text-align: center; margin-bottom: 1.5rem; }
-        .logo-box img { width: 80px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        .login-box h2 { text-align: center; color: var(--primary); margin: 0 0 1.5rem 0; font-weight: 700; font-size: 1.4rem; }
+        .logo-box img { width: 85px; border-radius: 20px; box-shadow: 0 8px 16px rgba(0,0,0,0.1); }
+        .login-box h2 { text-align: center; color: var(--primary); margin: 0 0 0.5rem 0; font-weight: 700; font-size: 1.5rem; }
+        .login-box p.subtitle { text-align: center; color: #64748b; font-size: 0.9rem; margin: 0 0 2rem 0; }
         
-        .form-group { margin-bottom: 1.2rem; }
-        label { display: block; margin-bottom: 0.5rem; color: #64748b; font-size: 0.85rem; font-weight: 500; }
-        input[type="text"], input[type="password"] { width: 100%; padding: 0.85rem; border: 1px solid #cbd5e1; border-radius: 10px; font-family: 'Prompt', sans-serif; font-size: 0.95rem; background: #f8fafc; }
-        input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(30,41,59,0.1); background: #fff; }
-        button { width: 100%; padding: 0.85rem; background-color: var(--primary); color: white; border: none; border-radius: 10px; cursor: pointer; font-size: 1rem; font-family: 'Prompt', sans-serif; font-weight: 600; margin-top: 10px; transition: 0.2s; box-shadow: 0 4px 12px rgba(30,41,59,0.2); }
-        button:hover { background-color: #0f172a; transform: translateY(-2px); }
-        .error { color: #dc2626; background: #fef2f2; border: 1px solid #fecaca; padding: 0.75rem; border-radius: 10px; margin-bottom: 1.2rem; text-align: center; font-size: 0.85rem; font-weight: 500; }
+        .form-group { margin-bottom: 1.5rem; position: relative; }
+        .form-group i { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 1.1rem; transition: 0.3s; }
+        input[type="text"], input[type="password"] { width: 100%; padding: 1rem 1rem 1rem 45px; border: 2px solid #e2e8f0; border-radius: 14px; font-family: 'Prompt', sans-serif; font-size: 0.95rem; background: #f8fafc; transition: all 0.3s ease; }
+        input:focus { outline: none; border-color: var(--accent); background: #ffffff; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1); }
+        input:focus + i { color: var(--accent); }
         
-        .fade-in-up { opacity: 0; transform: translateY(20px); animation: fadeInUp 0.6s forwards; }
+        button { width: 100%; padding: 1rem; background: linear-gradient(135deg, var(--primary), var(--primary-light)); color: white; border: none; border-radius: 14px; cursor: pointer; font-size: 1.05rem; font-family: 'Prompt', sans-serif; font-weight: 600; transition: all 0.2s; box-shadow: 0 8px 15px rgba(15, 23, 42, 0.2); display: flex; justify-content: center; align-items: center; gap: 8px; }
+        button:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(15, 23, 42, 0.3); }
+        button:active { transform: translateY(0); }
+        
+        .error { color: #dc2626; background: #fef2f2; border-left: 4px solid #dc2626; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; font-size: 0.85rem; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+        
+        .fade-in-up { opacity: 0; transform: translateY(20px); animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         @keyframes fadeInUp { to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
@@ -92,7 +98,8 @@ if (empty($_SESSION['admin_id'])) {
             <div class="logo-box">
                 <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg" alt="Logo">
             </div>
-            <h2>ระบบจัดการหลังบ้าน</h2>
+            <h2>เข้าสู่ระบบผู้ดูแล</h2>
+            <p class="subtitle">ระบบจัดการหลังบ้าน MTTS</p>
             
             <?php if ($login_error): ?>
                 <div class="error"><i class="fas fa-exclamation-circle"></i> <?= htmlspecialchars($login_error) ?></div>
@@ -101,14 +108,14 @@ if (empty($_SESSION['admin_id'])) {
             <form method="POST" action="">
                 <input type="hidden" name="action" value="login">
                 <div class="form-group">
-                    <label for="username">ชื่อผู้ใช้งาน (Username)</label>
-                    <input type="text" id="username" name="username" placeholder="กรอกชื่อผู้ใช้งาน" required>
+                    <input type="text" id="username" name="username" placeholder="ชื่อผู้ใช้งาน (Username)" required>
+                    <i class="fas fa-user"></i>
                 </div>
                 <div class="form-group">
-                    <label for="password">รหัสผ่าน (Password)</label>
-                    <input type="password" id="password" name="password" placeholder="กรอกรหัสผ่าน" required>
+                    <input type="password" id="password" name="password" placeholder="รหัสผ่าน (Password)" required>
+                    <i class="fas fa-lock"></i>
                 </div>
-                <button type="submit">เข้าสู่ระบบ <i class="fas fa-sign-in-alt ml-1"></i></button>
+                <button type="submit">เข้าสู่ระบบ <i class="fas fa-arrow-right"></i></button>
             </form>
         </div>
     </div>
@@ -165,139 +172,96 @@ try {
   
   <style>
     :root {
-      var(--primary): #1e293b; /* ใช้สีหลักเดิมของ Admin (Slate) */
-      --primary: #1e293b; 
-      --bg-color: #f6f8fc;
+      var(--primary): #0f172a; 
+      --primary: #0f172a; 
+      --bg-color: #f8fafc;
       --text-dark: #1e293b;
       --text-gray: #64748b;
     }
 
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    
-    body {
-      font-family: 'Prompt', sans-serif;
-      background-color: #e2e8f0;
-      margin: 0;
-      display: flex;
-      justify-content: center;
-      user-select: none;
-    }
+    body { font-family: 'Prompt', sans-serif; background-color: #e2e8f0; margin: 0; display: flex; justify-content: center; user-select: none; }
 
-    /* -------------------------------------------------------------
-       CSS สำหรับ Loading Screen & Animations (เหมือน main.php)
-       ------------------------------------------------------------- */
-    #page-loader {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background-color: #ffffff; z-index: 9999; display: flex;
-      flex-direction: column; justify-content: center; align-items: center;
-      transition: opacity 0.5s ease, visibility 0.5s ease;
-    }
+    /* Loading Screen */
+    #page-loader { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #ffffff; z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 0.4s ease, visibility 0.4s ease; }
     #page-loader.hidden { opacity: 0; visibility: hidden; }
-    .loader-logo {
-      width: 80px; height: 80px; border-radius: 15px;
-      animation: pulse 1.5s infinite ease-in-out;
-    }
-    .loader-spinner {
-      margin-top: 20px; width: 40px; height: 40px;
-      border: 4px solid rgba(30, 41, 59, 0.2);
-      border-top: 4px solid var(--primary);
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-    .loader-text {
-      margin-top: 15px; color: var(--primary); font-weight: 600;
-      font-size: 0.9rem; letter-spacing: 1px;
-      animation: flash 1.5s infinite;
-    }
-
-    @keyframes pulse {
-      0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(30, 41, 59, 0.4); }
-      50% { transform: scale(1.05); box-shadow: 0 0 20px 0 rgba(30, 41, 59, 0); }
-      100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(30, 41, 59, 0); }
-    }
+    .loader-logo { width: 80px; height: 80px; border-radius: 18px; animation: pulse 1.5s infinite ease-in-out; }
+    .loader-spinner { margin-top: 24px; width: 40px; height: 40px; border: 3px solid #e2e8f0; border-top: 3px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(15, 23, 42, 0.2); } 50% { transform: scale(1.05); box-shadow: 0 0 20px 0 rgba(15, 23, 42, 0); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(15, 23, 42, 0); } }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    @keyframes flash { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
     .fade-in-up { opacity: 0; transform: translateY(20px); animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
     @keyframes fadeInUp { to { opacity: 1; transform: translateY(0); } }
+    .delay-1 { animation-delay: 0.1s; } .delay-2 { animation-delay: 0.2s; } .delay-3 { animation-delay: 0.3s; } .delay-4 { animation-delay: 0.4s; }
+
+    /* App Container */
+    .app-container { width: 100%; max-width: 430px; background-color: var(--bg-color); min-height: 100vh; position: relative; padding-bottom: 100px; box-shadow: 0 0 30px rgba(0,0,0,0.05); overflow-x: hidden; }
+
+    /* Header */
+    .top-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 10px; background: transparent; }
+    .header-left { display: flex; align-items: center; gap: 14px; }
+    .school-logo { width: 48px; height: 48px; object-fit: contain; border-radius: 14px; box-shadow: 0 4px 10px rgba(0,0,0,0.08); }
+    .school-name h1 { font-size: 1.1rem; font-weight: 700; color: var(--text-dark); margin: 0 0 2px 0; }
+    .school-name p { font-size: 0.8rem; color: var(--text-gray); margin: 0; }
     
-    .delay-1 { animation-delay: 0.1s; }
-    .delay-2 { animation-delay: 0.2s; }
-    .delay-3 { animation-delay: 0.3s; }
-    .delay-4 { animation-delay: 0.4s; }
+    .noti-btn { position: relative; background: #ffffff; border: none; font-size: 1.2rem; color: var(--text-dark); cursor: pointer; width: 42px; height: 42px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: center; }
+    .noti-badge { position: absolute; top: -2px; right: -2px; background: #ef4444; color: white; font-size: 0.65rem; font-weight: 700; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid #ffffff; }
 
-    /* -------------------------------------------------------------
-       โครงสร้าง Layout หลัก
-       ------------------------------------------------------------- */
-    .app-container {
-      width: 100%; max-width: 430px; background-color: var(--bg-color);
-      min-height: 100vh; position: relative; padding-bottom: 90px;
-      box-shadow: 0 0 20px rgba(0,0,0,0.1);
-    }
+    /* Admin Card */
+    .admin-card { background: linear-gradient(135deg, #0f172a, #1e293b); border-radius: 20px; padding: 24px; margin: 15px 24px 24px; color: white; box-shadow: 0 15px 30px rgba(15, 23, 42, 0.2); position: relative; overflow: hidden; }
+    .admin-card::after { content: '\f3ed'; font-family: 'Font Awesome 6 Free'; font-weight: 900; position: absolute; right: -15px; bottom: -25px; font-size: 8rem; opacity: 0.05; transform: rotate(-15deg); }
+    .badges { display: flex; gap: 8px; margin-bottom: 14px; }
+    .badge-item { background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.2); padding: 4px 14px; border-radius: 20px; font-size: 0.75rem; font-weight: 500; backdrop-filter: blur(8px); }
+    .admin-card h2 { font-size: 1.4rem; font-weight: 600; margin: 0 0 6px 0; letter-spacing: 0.5px; }
+    .admin-card p { font-size: 0.85rem; margin: 0; color: #cbd5e1; display: flex; align-items: center; gap: 6px; }
 
-    .top-header { display: flex; align-items: center; justify-content: space-between; padding: 15px 20px; background: var(--bg-color); }
-    .header-left { display: flex; align-items: center; gap: 12px; }
-    .school-logo { width: 45px; height: 45px; object-fit: contain; border-radius: 10px; }
-    .school-name h1 { font-size: 1rem; font-weight: 700; color: var(--text-dark); margin: 0 0 2px 0; }
-    .school-name p { font-size: 0.75rem; color: var(--text-gray); margin: 0; }
-    
-    .noti-btn { position: relative; background: none; border: none; font-size: 1.4rem; color: #94a3b8; cursor: pointer; }
-    .noti-badge { position: absolute; top: -2px; right: -2px; background: #ef4444; color: white; font-size: 0.65rem; font-weight: 700; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid var(--bg-color); }
-
-    /* Admin Card (โครงสร้างเดียวกับ student-card) */
-    .admin-card {
-      background: var(--primary); border-radius: 16px; padding: 20px;
-      margin: 5px 20px 20px; color: white;
-      box-shadow: 0 10px 20px rgba(30, 41, 59, 0.2);
-    }
-    .badges { display: flex; gap: 8px; margin-bottom: 12px; }
-    .badge-item { background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.4); padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 500; backdrop-filter: blur(4px); }
-    .admin-card h2 { font-size: 1.3rem; font-weight: 600; margin: 0 0 4px 0; }
-    .admin-card p { font-size: 0.85rem; margin: 0; opacity: 0.9; }
-
-    .section-title { display: flex; align-items: center; gap: 10px; margin: 0 20px 15px; }
-    .section-pill { width: 5px; height: 24px; background: var(--primary); border-radius: 4px; }
+    /* Section Title */
+    .section-title { display: flex; align-items: center; justify-content: space-between; margin: 0 24px 16px; }
     .section-title h3 { font-size: 1.1rem; font-weight: 700; color: var(--text-dark); margin: 0; }
+    .section-title a { font-size: 0.8rem; color: #3b82f6; text-decoration: none; font-weight: 600; }
 
-    /* Stats Grid (สำหรับ Admin) */
-    .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 0 20px 25px; }
-    .stat-box { background: white; padding: 15px; border-radius: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border-left: 4px solid var(--primary); }
-    .stat-box.green { border-left-color: #10b981; }
-    .stat-box.orange { border-left-color: #f59e0b; }
-    .stat-box.red { border-left-color: #ef4444; }
-    .stat-box h3 { font-size: 1.5rem; font-weight: 700; margin: 0 0 5px 0; color: var(--text-dark); }
-    .stat-box p { margin: 0; font-size: 0.75rem; color: var(--text-gray); font-weight: 600; }
-
-    /* Menu Grid 3 ช่อง (เหมือน main.php) */
-    .menu-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 0 20px 25px; }
-    .menu-item { background: white; border-radius: 16px; padding: 18px 5px; text-decoration: none; color: var(--text-dark); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.03); transition: transform 0.2s, box-shadow 0.2s; }
-    .menu-item:active { transform: scale(0.95); }
+    /* Stats Grid */
+    .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin: 0 24px 28px; }
+    .stat-box { background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.03); display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #f1f5f9; }
+    .stat-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1rem; margin-bottom: 12px; }
+    .stat-box h3 { font-size: 1.8rem; font-weight: 700; margin: 0 0 4px 0; color: var(--text-dark); line-height: 1; }
+    .stat-box p { margin: 0; font-size: 0.8rem; color: var(--text-gray); font-weight: 500; }
     
-    .icon-box { width: 52px; height: 52px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin-bottom: 10px; }
-    .menu-text { font-size: 0.75rem; font-weight: 600; line-height: 1.2; }
+    .c-blue { background: #eff6ff; color: #3b82f6; }
+    .c-green { background: #f0fdf4; color: #10b981; }
+    .c-orange { background: #fffbeb; color: #f59e0b; }
+    .c-red { background: #fef2f2; color: #ef4444; }
 
-    /* สีพื้นหลัง Icon แบบเดียวกับ main.php */
-    .bg-blue { background: #e0f2fe; color: #0284c7; }
-    .bg-green { background: #dcfce7; color: #16a34a; }
-    .bg-purple { background: #f3e8ff; color: #9333ea; }
-    .bg-orange { background: #ffedd5; color: #ea580c; }
-    .bg-red { background: #fee2e2; color: #dc2626; }
+    /* App Icons Grid (Menu) */
+    .app-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px 12px; margin: 0 24px 28px; }
+    .app-btn { display: flex; flex-direction: column; align-items: center; text-decoration: none; gap: 8px; cursor: pointer; }
+    .app-icon { width: 58px; height: 58px; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: white; box-shadow: 0 8px 16px rgba(0,0,0,0.1); transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+    .app-btn:hover .app-icon { transform: translateY(-4px) scale(1.05); box-shadow: 0 12px 20px rgba(0,0,0,0.15); }
+    .app-btn:active .app-icon { transform: scale(0.95); }
+    .app-btn span { font-size: 0.75rem; color: var(--text-dark); font-weight: 500; text-align: center; line-height: 1.2; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-    /* Bottom Nav */
-    .bottom-nav { position: fixed; bottom: 0; width: 100%; max-width: 430px; left: 50%; transform: translateX(-50%); height: 70px; background: white; border-top-left-radius: 25px; border-top-right-radius: 25px; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 -5px 20px rgba(0,0,0,0.03); padding: 0 10px; z-index: 1000; }
-    .nav-link { display: flex; flex-direction: column; align-items: center; text-decoration: none; color: #94a3b8; font-size: 0.7rem; font-weight: 600; width: 30%; gap: 4px; }
-    .nav-link.active { color: var(--primary); }
-    .nav-link i { font-size: 1.3rem; }
+    /* App Colors */
+    .bg-grad-blue { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+    .bg-grad-purple { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+    .bg-grad-green { background: linear-gradient(135deg, #10b981, #059669); }
+    .bg-grad-orange { background: linear-gradient(135deg, #f59e0b, #d97706); }
+    .bg-grad-red { background: linear-gradient(135deg, #ef4444, #dc2626); }
+
+    /* Bottom Navigation */
+    .bottom-nav { position: fixed; bottom: 0; width: 100%; max-width: 430px; left: 50%; transform: translateX(-50%); height: 80px; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); border-top: 1px solid #f1f5f9; display: flex; justify-content: space-around; align-items: center; padding: 0 10px 10px; z-index: 1000; }
+    .nav-link { display: flex; flex-direction: column; align-items: center; justify-content: center; text-decoration: none; color: #94a3b8; font-size: 0.75rem; font-weight: 500; width: 33%; gap: 6px; height: 100%; transition: 0.3s; }
+    .nav-link i { font-size: 1.4rem; transition: transform 0.3s; }
+    .nav-link.active { color: var(--primary); font-weight: 600; }
+    .nav-link.active i { transform: translateY(-2px); }
+    .nav-link:hover { color: var(--primary); }
   </style>
 </head>
 <body>
 
-  <!-- Loading Screen -->
   <?php if ($show_loading): ?>
   <div id="page-loader">
     <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg" alt="Loading Logo" class="loader-logo">
     <div class="loader-spinner"></div>
-    <div class="loader-text">กำลังโหลดระบบหลังบ้าน...</div>
   </div>
   <?php endif; ?>
 
@@ -307,90 +271,100 @@ try {
       <div class="header-left">
         <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg" alt="Logo" class="school-logo">
         <div class="school-name">
-          <h1>ส่วนผู้ดูแลระบบ (Admin)</h1>
+          <h1>แผงควบคุมระบบ</h1>
           <p>โรงเรียนช่างฝีมือทหาร</p>
         </div>
       </div>
-      <button class="noti-btn" title="การแจ้งเตือน">
+      <button class="noti-btn">
         <i class="far fa-bell"></i>
+        <div class="noti-badge">2</div>
       </button>
     </div>
 
     <!-- Admin Profile Card -->
     <div class="admin-card fade-in-up delay-2">
       <div class="badges">
-        <div class="badge-item"><i class="fas fa-shield-alt"></i> สิทธิ์แอดมิน</div>
-        <div class="badge-item">ระบบจัดการ</div>
+        <div class="badge-item"><i class="fas fa-crown"></i> สิทธิ์ผู้ดูแลระบบ</div>
       </div>
       <h2><?= htmlspecialchars($admin_name) ?></h2>
-      <p><i class="fas fa-circle" style="color: #4ade80; font-size: 0.6rem; margin-right: 4px;"></i> สถานะระบบ: ทำงานปกติ (Online)</p>
+      <p><i class="fas fa-circle" style="color: #4ade80; font-size: 0.6rem;"></i> สถานะระบบ: ทำงานปกติ (Online)</p>
     </div>
 
     <div class="section-title fade-in-up delay-3">
-      <div class="section-pill"></div>
       <h3>ภาพรวมวันนี้</h3>
     </div>
     
     <!-- Stats Grid -->
     <div class="stats-grid fade-in-up delay-3">
       <div class="stat-box">
-        <h3><?= number_format($total_students) ?></h3>
-        <p>นักเรียนทั้งหมด</p>
+        <div class="stat-icon c-blue"><i class="fas fa-users"></i></div>
+        <div>
+            <h3><?= number_format($total_students) ?></h3>
+            <p>นักเรียนทั้งหมด</p>
+        </div>
       </div>
-      <div class="stat-box green">
-        <h3><?= number_format($voted_count) ?></h3>
-        <p>โหวตสัปดาห์นี้แล้ว</p>
+      <div class="stat-box">
+        <div class="stat-icon c-green"><i class="fas fa-check-circle"></i></div>
+        <div>
+            <h3><?= number_format($voted_count) ?></h3>
+            <p>โหวตสัปดาห์นี้</p>
+        </div>
       </div>
-      <div class="stat-box orange">
-        <h3><?= number_format($today_duties) ?></h3>
-        <p>เข้าเวรวันนี้</p>
+      <div class="stat-box">
+        <div class="stat-icon c-orange"><i class="fas fa-user-shield"></i></div>
+        <div>
+            <h3><?= number_format($today_duties) ?></h3>
+            <p>เข้าเวรวันนี้</p>
+        </div>
       </div>
-      <div class="stat-box red">
-        <h3><?= number_format(max(0, $total_students - $voted_count)) ?></h3>
-        <p>ยังไม่ทำการโหวต</p>
+      <div class="stat-box">
+        <div class="stat-icon c-red"><i class="fas fa-exclamation-circle"></i></div>
+        <div>
+            <h3><?= number_format(max(0, $total_students - $voted_count)) ?></h3>
+            <p>ยังไม่โหวต</p>
+        </div>
       </div>
     </div>
 
     <div class="section-title fade-in-up delay-4">
-      <div class="section-pill"></div>
-      <h3>เครื่องมือจัดการ</h3>
+      <h3>แอปพลิเคชัน</h3>
     </div>
 
-    <!-- Menu Grid -->
-    <div class="menu-grid fade-in-up delay-4">
-      <a href="admin_students.php" class="menu-item">
-        <div class="icon-box bg-blue"><i class="fas fa-users"></i></div>
-        <span class="menu-text">จัดการ<br>นักเรียน</span>
+    <!-- App Grid Menu -->
+    <div class="app-grid fade-in-up delay-4">
+      <a href="admin_students.php" class="app-btn">
+        <div class="app-icon bg-grad-blue"><i class="fas fa-user-edit"></i></div>
+        <span>นร.ชท.</span>
       </a>
-      <a href="admin_duties.php" class="menu-item">
-        <div class="icon-box bg-purple"><i class="fas fa-calendar-check"></i></div>
-        <span class="menu-text">จัดตาราง<br>เวรยาม</span>
+      <a href="admin_duties.php" class="app-btn">
+        <div class="app-icon bg-grad-purple"><i class="fas fa-calendar-alt"></i></div>
+        <span>จัดเวร</span>
       </a>
-      <a href="admin_votes.php" class="menu-item">
-        <div class="icon-box bg-green"><i class="fas fa-poll"></i></div>
-        <span class="menu-text">สรุปผล<br>การโหวต</span>
+      <a href="admin_votes.php" class="app-btn">
+        <div class="app-icon bg-grad-green"><i class="fas fa-chart-bar"></i></div>
+        <span>ผลโหวต</span>
       </a>
-      <a href="send_push.php" class="menu-item">
-        <div class="icon-box bg-orange"><i class="fas fa-paper-plane"></i></div>
-        <span class="menu-text">แจ้งเตือน<br>(Push)</span>
+      <a href="send_push.php" class="app-btn">
+        <div class="app-icon bg-grad-orange"><i class="fas fa-broadcast-tower"></i></div>
+        <span>แจ้งเตือน</span>
       </a>
-      <a href="reports.php" class="menu-item">
-        <div class="icon-box bg-red"><i class="fas fa-file-alt"></i></div>
-        <span class="menu-text">รายงาน<br>เอกสาร</span>
+      <a href="reports.php" class="app-btn">
+        <div class="app-icon bg-grad-red"><i class="fas fa-file-pdf"></i></div>
+        <span>รายงาน</span>
       </a>
     </div>
 
     <!-- Bottom Navigation -->
     <div class="bottom-nav">
       <a href="#" class="nav-link active">
-        <i class="fas fa-chart-pie"></i>
+        <i class="fas fa-home"></i>
         <span>หน้าหลัก</span>
       </a>
       <a href="admin_students.php" class="nav-link">
-        <i class="fas fa-user-graduate"></i>
+        <i class="fas fa-users"></i>
         <span>นักเรียน</span>
       </a>
-      <a href="?logout=1" class="nav-link" onclick="return confirm('ยืนยันการออกจากระบบ?');">
+      <a href="?logout=1" class="nav-link" style="color: #ef4444;" onclick="return confirm('ยืนยันการออกจากระบบ?');">
         <i class="fas fa-sign-out-alt"></i>
         <span>ออกระบบ</span>
       </a>
@@ -406,8 +380,8 @@ try {
           loader.classList.add('hidden');
           setTimeout(function() {
             loader.remove();
-          }, 500);
-        }, 1200);
+          }, 400);
+        }, 1000);
       }
     });
   </script>
