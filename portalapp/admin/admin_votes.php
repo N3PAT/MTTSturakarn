@@ -2,159 +2,440 @@
 session_start();
 require_once 'db.php';
 
-// สมมติว่าตรวจสอบสิทธิ์ Admin แล้ว
-// if (empty($_SESSION['admin_id'])) { header("Location: admin_login.php"); exit(); }
+// ตรวจสอบสิทธิ์ Admin
+if (empty($_SESSION['admin_id'])) {
+    header("Location: index.php");
+    exit();
+}
 
-// ดึงข้อมูลสรุปผลโหวตในสัปดาห์ปัจจุบัน
-$stats_query = "
-    SELECT 
-        COUNT(*) as total_votes,
-        SUM(CASE WHEN status = 'ประสงค์กลับบ้าน' THEN 1 ELSE 0 END) as return_home,
-        SUM(CASE WHEN status = 'ไม่ประสงค์กลับบ้าน' THEN 1 ELSE 0 END) as stay_school
-    FROM weekly_votes 
-    WHERE YEARWEEK(vote_date, 1) = YEARWEEK(CURDATE(), 1)
-";
-$stats_result = $conn->query($stats_query);
-$stats = $stats_result ? $stats_result->fetch_assoc() : ['total_votes' => 0, 'return_home' => 0, 'stay_school' => 0];
+$admin_name = $_SESSION['admin_name'] ?? 'ผู้ดูแลระบบ';
+$votes = [];
+$total_go_home = 0;
+$total_stay = 0;
+$total_duty = 0; // เพิ่มตัวแปรนับยอดเข้าเวร
 
-// ดึงรายการโหวต พร้อมข้อมูลนักเรียน
-$list_query = "
-    SELECT v.*, s.prefix, s.first_name, s.last_name, s.battalion, s.company, s.platoon 
-    FROM weekly_votes v
-    LEFT JOIN students s ON v.student_code = s.student_code
-    WHERE YEARWEEK(v.vote_date, 1) = YEARWEEK(CURDATE(), 1)
-    ORDER BY v.created_at DESC
-";
-$list_result = $conn->query($list_query);
+try {
+    if (!isset($conn) || !($conn instanceof mysqli)) {
+        throw new Exception("Database connection error");
+    }
+    $conn->set_charset("utf8mb4");
+
+    // ดึงข้อมูลโหวตของสัปดาห์นี้ พร้อม Join ชื่อนักเรียน
+    $sql = "
+        SELECT v.*, s.prefix, s.first_name, s.last_name, s.company, s.platoon 
+        FROM weekly_votes v 
+        LEFT JOIN students s ON v.student_code = s.student_code 
+        WHERE YEARWEEK(v.vote_date, 1) = YEARWEEK(CURDATE(), 1)
+        ORDER BY v.created_at DESC
+    ";
+    
+    $result = $conn->query($sql);
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $votes[] = $row;
+            $status_val = trim($row['status']);
+            // ตรวจสอบตามค่า String ที่บันทึกลงฐานข้อมูลจริง
+            if ($status_val === 'home') {
+                $total_go_home++;
+            } elseif ($status_val === 'duty') {
+                $total_duty++;
+            } else {
+                $total_stay++; // restrict หรือสถานะอื่นๆ
+            }
+        }
+    }
+} catch (Throwable $e) {
+    error_log("Admin Votes error: " . $e->getMessage());
+}
 ?>
 <!DOCTYPE html>
 <html lang="th">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>ผลการโหวตประจำสัปดาห์ - MTTS</title>
+  <title>ผลโหวตประสงค์กลับบ้าน - MTTS</title>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
   
   <style>
     :root {
-      --primary: #5a42a0;
-      --bg-color: #f6f8fc;
+      --primary: #0f172a; 
+      --bg-color: #f8fafc;
       --text-dark: #1e293b;
       --text-gray: #64748b;
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    body { font-family: 'Prompt', sans-serif; background-color: #e2e8f0; margin: 0; display: flex; justify-content: center; user-select: none; }
+    body { font-family: 'Prompt', sans-serif; background-color: #e2e8f0; margin: 0; display: flex; justify-content: center; }
 
-    .app-container { width: 100%; max-width: 430px; background-color: var(--bg-color); min-height: 100vh; position: relative; padding-bottom: 90px; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
-
-    .top-header { display: flex; align-items: center; gap: 15px; padding: 20px; background: white; box-shadow: 0 2px 10px rgba(0,0,0,0.02); position: sticky; top: 0; z-index: 10; }
-    .back-btn { font-size: 1.2rem; color: var(--text-dark); text-decoration: none; }
-    .page-title h1 { font-size: 1.1rem; font-weight: 700; color: var(--text-dark); margin: 0; }
-    .page-title p { font-size: 0.75rem; color: var(--text-gray); margin: 0; }
-
-    .summary-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 15px 20px; }
-    .summary-card { background: white; padding: 15px; border-radius: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); text-align: center; }
-    .summary-card.full { grid-column: span 2; background: var(--primary); color: white; }
-    .summary-card h3 { font-size: 1.5rem; font-weight: 700; margin: 0; }
-    .summary-card p { font-size: 0.75rem; margin: 5px 0 0; font-weight: 500; opacity: 0.9; }
-    
-    .text-green { color: #10b981; }
-    .text-gray { color: #64748b; }
-
-    .list-header { display: flex; justify-content: space-between; align-items: center; padding: 0 20px 10px; }
-    .list-header h3 { font-size: 0.95rem; font-weight: 600; color: var(--text-dark); margin: 0; }
-    
-    .vote-list { padding: 0 20px; display: flex; flex-direction: column; gap: 10px; }
-    .vote-item { background: white; border-radius: 14px; padding: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
-    .vote-item-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 10px; }
-    
-    .student-info h4 { margin: 0; font-size: 0.9rem; font-weight: 600; color: var(--text-dark); }
-    .student-info p { margin: 2px 0 0 0; font-size: 0.75rem; color: var(--text-gray); }
-    
-    .status-badge { padding: 4px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; }
-    .status-badge.home { background: #dcfce7; color: #16a34a; }
-    .status-badge.stay { background: #f1f5f9; color: #64748b; }
-
-    .vote-details { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.75rem; color: var(--text-dark); }
-    .detail-col i { color: var(--primary); margin-right: 5px; width: 14px; text-align: center; }
-
-    .fade-in-up { opacity: 0; transform: translateY(20px); animation: fadeInUp 0.5s forwards; }
+    .fade-in-up { opacity: 0; transform: translateY(20px); animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
     @keyframes fadeInUp { to { opacity: 1; transform: translateY(0); } }
+    .delay-1 { animation-delay: 0.1s; } .delay-2 { animation-delay: 0.2s; } .delay-3 { animation-delay: 0.3s; }
+
+    .app-container { width: 100%; max-width: 430px; background-color: var(--bg-color); min-height: 100vh; padding-bottom: 90px; box-shadow: 0 0 20px rgba(0,0,0,0.05); }
+
+    /* Header */
+    .top-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 10px; }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .back-btn { font-size: 1.2rem; color: var(--text-dark); text-decoration: none; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 12px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+    .page-title h1 { font-size: 1.1rem; font-weight: 700; color: var(--text-dark); margin: 0; }
+
+    /* Summary Card */
+    .summary-card { background: linear-gradient(135deg, var(--primary), #1e293b); border-radius: 18px; padding: 20px; margin: 10px 24px 20px; color: white; box-shadow: 0 10px 25px rgba(15, 23, 42, 0.2); }
+    .summary-card h2 { font-size: 1.2rem; font-weight: 600; margin: 0 0 15px 0; }
+    .stats-row { display: flex; justify-content: space-between; gap: 8px; }
+    .stat-item { background: rgba(255,255,255,0.1); padding: 10px 5px; border-radius: 12px; flex: 1; text-align: center; border: 1px solid rgba(255,255,255,0.15); }
+    .stat-item h3 { margin: 0; font-size: 1.3rem; font-weight: 700; }
+    .stat-item p { margin: 0; font-size: 0.7rem; opacity: 0.8; white-space: nowrap; }
+
+    /* List Container */
+    .section-title { display: flex; align-items: center; gap: 10px; margin: 0 24px 15px; }
+    .section-pill { width: 5px; height: 24px; background: var(--primary); border-radius: 4px; }
+    .section-title h3 { font-size: 1.1rem; font-weight: 700; color: var(--text-dark); margin: 0; }
+
+    .vote-list { margin: 0 24px 20px; display: flex; flex-direction: column; gap: 12px; }
+    .vote-card { background: white; border-radius: 14px; padding: 15px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); border: 1px solid #f1f5f9; }
+    .vote-header { display: flex; justify-content: space-between; align-items: center; }
+    .student-info h4 { margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--text-dark); }
+    .student-info p { margin: 0; font-size: 0.75rem; color: var(--text-gray); }
+    
+    .status-badge { padding: 4px 10px; border-radius: 8px; font-size: 0.7rem; font-weight: 600; }
+    .status-home { background: #dcfce7; color: #166534; }
+    .status-stay { background: #fef3c7; color: #92400e; }
+    .status-duty { background: #fee2e2; color: #991b1b; } /* เพิ่มสีสำหรับเวร */
+    
+    .vote-details { font-size: 0.8rem; color: #475569; background: #f8fafc; padding: 10px; border-radius: 8px; display: flex; flex-direction: column; gap: 4px; }
+
+    /* Bottom Nav */
+    .bottom-nav { position: fixed; bottom: 0; width: 100%; max-width: 430px; left: 50%; transform: translateX(-50%); height: 70px; background: white; border-top-left-radius: 20px; border-top-right-radius: 20px; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 -5px 20px rgba(0,0,0,0.03); z-index: 1000; }
+    .nav-link { display: flex; flex-direction: column; align-items: center; text-decoration: none; color: #94a3b8; font-size: 0.7rem; font-weight: 600; gap: 4px; }
+    .nav-link.active { color: var(--primary); }
+    .nav-link i { font-size: 1.3rem; }
   </style>
 </head>
 <body>
+
   <div class="app-container">
-    
-    <div class="top-header">
-      <a href="admin_dashboard.php" class="back-btn"><i class="fas fa-chevron-left"></i></a>
-      <div class="page-title">
-        <h1>ผลการโหวตประจำสัปดาห์</h1>
-        <p>สัปดาห์ที่ <?= date('W') ?> / ปี <?= date('Y') + 543 ?></p>
+    <div class="top-header fade-in-up delay-1">
+      <div class="header-left">
+        <a href="turakarn.php" class="back-btn"><i class="fas fa-chevron-left"></i></a>
+        <div class="page-title">
+          <h1>ผลโหวตสัปดาห์นี้</h1>
+        </div>
       </div>
     </div>
 
-    <!-- สรุปผล -->
-    <div class="summary-grid fade-in-up">
-      <div class="summary-card full">
-        <h3><?= number_format($stats['total_votes'] ?? 0) ?></h3>
-        <p>จำนวนผู้โหวตทั้งหมด (คน)</p>
-      </div>
-      <div class="summary-card">
-        <h3 class="text-green"><?= number_format($stats['return_home'] ?? 0) ?></h3>
-        <p class="text-gray">ประสงค์กลับบ้าน</p>
-      </div>
-      <div class="summary-card">
-        <h3 class="text-gray"><?= number_format($stats['stay_school'] ?? 0) ?></h3>
-        <p class="text-gray">ไม่ประสงค์กลับ</p>
+    <!-- Summary Card -->
+    <div class="summary-card fade-in-up delay-2">
+      <h2>ภาพรวมประจำสัปดาห์</h2>
+      <div class="stats-row">
+        <div class="stat-item">
+          <h3><?= count($votes) ?></h3>
+          <p>ทั้งหมด</p>
+        </div>
+        <div class="stat-item">
+          <h3 style="color: #4ade80;"><?= $total_go_home ?></h3>
+          <p>กลับบ้าน</p>
+        </div>
+        <div class="stat-item">
+          <h3 style="color: #facc15;"><?= $total_stay ?></h3>
+          <p>กักบริเวณ</p>
+        </div>
+        <div class="stat-item">
+          <h3 style="color: #f87171;"><?= $total_duty ?></h3>
+          <p>เข้าเวร</p>
+        </div>
       </div>
     </div>
 
-    <div class="list-header fade-in-up" style="animation-delay: 0.1s;">
-      <h3>รายการโหวตล่าสุด</h3>
-      <a href="export_votes.php" style="font-size: 0.75rem; color: var(--primary); text-decoration: none;"><i class="fas fa-download"></i> ส่งออก Excel</a>
+    <div class="section-title fade-in-up delay-3">
+      <div class="section-pill"></div>
+      <h3>รายการผู้ลงข้อมูล</h3>
     </div>
 
-    <!-- รายการโหวต -->
-    <div class="vote-list fade-in-up" style="animation-delay: 0.2s;">
-      <?php if ($list_result && $list_result->num_rows > 0): ?>
-        <?php while($row = $list_result->fetch_assoc()): ?>
+    <div class="vote-list fade-in-up delay-3">
+      <?php if (empty($votes)): ?>
+        <div style="text-align:center; color:#64748b; font-size:0.9rem; padding: 20px;">
+          ยังไม่มีข้อมูลการโหวตในสัปดาห์นี้
+        </div>
+      <?php else: ?>
+        <?php foreach ($votes as $v): ?>
           <?php 
-            $fullname = ($row['prefix'] ?? '') . ($row['first_name'] ?? 'ไม่พบชื่อ') . ' ' . ($row['last_name'] ?? '');
-            $unit = "พัน.{$row['battalion']} ร้อย.{$row['company']}";
-            $is_returning = ($row['status'] === 'ประสงค์กลับบ้าน');
+            $full_name = (!empty($v['first_name'])) ? trim($v['prefix'].$v['first_name'].' '.$v['last_name']) : 'ไม่พบชื่อ (รหัส: '.$v['student_code'].')';
+            $unit = (!empty($v['company']) ? 'ร้อย.'.$v['company'] : '') . (!empty($v['platoon']) ? ' หมวด '.$v['platoon'] : '');
+            
+            // ตรวจสอบและแปลงค่าสถานะเพื่อแสดงผล
+            $status_raw = trim($v['status']);
+            $is_home = false;
+            $status_text = 'ไม่ระบุ';
+            $badge_class = 'status-stay';
+
+            if ($status_raw === 'home') {
+                $is_home = true;
+                $status_text = 'กลับบ้าน';
+                $badge_class = 'status-home';
+            } elseif ($status_raw === 'duty') {
+                $status_text = 'เข้าเวร';
+                $badge_class = 'status-duty';
+            } elseif ($status_raw === 'restrict') {
+                $status_text = 'กักบริเวณ/อยู่ รร.';
+                $badge_class = 'status-stay';
+            }
           ?>
-          <div class="vote-item">
-            <div class="vote-item-header">
+          <div class="vote-card">
+            <div class="vote-header">
               <div class="student-info">
-                <h4><?= htmlspecialchars($fullname) ?></h4>
-                <p>รหัส: <?= htmlspecialchars($row['student_code']) ?> | <?= htmlspecialchars($unit) ?></p>
+                <h4><?= htmlspecialchars($full_name) ?></h4>
+                <p><?= htmlspecialchars($unit) ?></p>
               </div>
-              <div class="status-badge <?= $is_returning ? 'home' : 'stay' ?>">
-                <?= htmlspecialchars($row['status']) ?>
+              <div class="status-badge <?= $badge_class ?>">
+                <?= htmlspecialchars($status_text) ?>
               </div>
             </div>
             
-            <?php if ($is_returning): ?>
+            <!-- แสดงรายละเอียดเพิ่มเติมเฉพาะคนที่กลับบ้าน -->
+            <?php if ($is_home): ?>
             <div class="vote-details">
-              <div class="detail-col"><i class="fas fa-map-marker-alt"></i> <?= htmlspecialchars($row['province'] ?? '-') ?></div>
-              <div class="detail-col"><i class="fas fa-bus"></i> <?= htmlspecialchars($row['travel_method'] ?? '-') ?></div>
-              <div class="detail-col" style="grid-column: span 2;"><i class="fas fa-calendar-check"></i> กลับเข้ากองพัน: <?= htmlspecialchars($row['return_day'] ?? '-') ?></div>
+              <div><i class="fas fa-map-marker-alt" style="color:#ef4444; width:16px;"></i> <b>จังหวัด:</b> <?= htmlspecialchars($v['province'] ?? '-') ?></div>
+              <div><i class="fas fa-bus" style="color:#3b82f6; width:16px;"></i> <b>การเดินทาง:</b> <?= htmlspecialchars($v['travel_method'] ?? '-') ?></div>
+              <div><i class="fas fa-calendar-check" style="color:#10b981; width:16px;"></i> <b>วันกลับ:</b> <?= htmlspecialchars($v['return_day'] ?? '-') ?></div>
             </div>
             <?php endif; ?>
-            <div style="font-size: 0.65rem; color: #94a3b8; text-align: right; margin-top: 8px;">
-              โหวตเมื่อ: <?= date('d/m/Y H:i', strtotime($row['created_at'])) ?>
-            </div>
           </div>
-        <?php endwhile; ?>
-      <?php else: ?>
-        <div style="text-align: center; padding: 40px 20px; color: var(--text-gray);">
-          <i class="fas fa-box-open" style="font-size: 2rem; margin-bottom: 10px; color: #cbd5e1;"></i>
-          <p>ยังไม่มีข้อมูลการโหวตในสัปดาห์นี้</p>
-        </div>
+        <?php endforeach; ?>
       <?php endif; ?>
     </div>
 
+    <div class="bottom-nav">
+      <a href="turakarn.php" class="nav-link">
+        <i class="fas fa-home"></i>
+        <span>หน้าหลัก</span>
+      </a>
+      <a href="admin_votes.php" class="nav-link active">
+        <i class="fas fa-vote-yea"></i>
+        <span>ผลโหวต</span>
+      </a>
+    </div>
   </div>
+
+</body>
+</html><?php
+session_start();
+require_once 'db.php';
+
+// ตรวจสอบสิทธิ์ Admin
+if (empty($_SESSION['admin_id'])) {
+    header("Location: index.php");
+    exit();
+}
+
+$admin_name = $_SESSION['admin_name'] ?? 'ผู้ดูแลระบบ';
+$votes = [];
+$total_go_home = 0;
+$total_stay = 0;
+$total_duty = 0; // เพิ่มตัวแปรนับยอดเข้าเวร
+
+try {
+    if (!isset($conn) || !($conn instanceof mysqli)) {
+        throw new Exception("Database connection error");
+    }
+    $conn->set_charset("utf8mb4");
+
+    // ดึงข้อมูลโหวตของสัปดาห์นี้ พร้อม Join ชื่อนักเรียน
+    $sql = "
+        SELECT v.*, s.prefix, s.first_name, s.last_name, s.company, s.platoon 
+        FROM weekly_votes v 
+        LEFT JOIN students s ON v.student_code = s.student_code 
+        WHERE YEARWEEK(v.vote_date, 1) = YEARWEEK(CURDATE(), 1)
+        ORDER BY v.created_at DESC
+    ";
+    
+    $result = $conn->query($sql);
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $votes[] = $row;
+            $status_val = trim($row['status']);
+            // ตรวจสอบตามค่า String ที่บันทึกลงฐานข้อมูลจริง
+            if ($status_val === 'home') {
+                $total_go_home++;
+            } elseif ($status_val === 'duty') {
+                $total_duty++;
+            } else {
+                $total_stay++; // restrict หรือสถานะอื่นๆ
+            }
+        }
+    }
+} catch (Throwable $e) {
+    error_log("Admin Votes error: " . $e->getMessage());
+}
+?>
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>ผลโหวตประสงค์กลับบ้าน - MTTS</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  
+  <style>
+    :root {
+      --primary: #0f172a; 
+      --bg-color: #f8fafc;
+      --text-dark: #1e293b;
+      --text-gray: #64748b;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { font-family: 'Prompt', sans-serif; background-color: #e2e8f0; margin: 0; display: flex; justify-content: center; }
+
+    .fade-in-up { opacity: 0; transform: translateY(20px); animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    @keyframes fadeInUp { to { opacity: 1; transform: translateY(0); } }
+    .delay-1 { animation-delay: 0.1s; } .delay-2 { animation-delay: 0.2s; } .delay-3 { animation-delay: 0.3s; }
+
+    .app-container { width: 100%; max-width: 430px; background-color: var(--bg-color); min-height: 100vh; padding-bottom: 90px; box-shadow: 0 0 20px rgba(0,0,0,0.05); }
+
+    /* Header */
+    .top-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 10px; }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .back-btn { font-size: 1.2rem; color: var(--text-dark); text-decoration: none; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 12px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+    .page-title h1 { font-size: 1.1rem; font-weight: 700; color: var(--text-dark); margin: 0; }
+
+    /* Summary Card */
+    .summary-card { background: linear-gradient(135deg, var(--primary), #1e293b); border-radius: 18px; padding: 20px; margin: 10px 24px 20px; color: white; box-shadow: 0 10px 25px rgba(15, 23, 42, 0.2); }
+    .summary-card h2 { font-size: 1.2rem; font-weight: 600; margin: 0 0 15px 0; }
+    .stats-row { display: flex; justify-content: space-between; gap: 8px; }
+    .stat-item { background: rgba(255,255,255,0.1); padding: 10px 5px; border-radius: 12px; flex: 1; text-align: center; border: 1px solid rgba(255,255,255,0.15); }
+    .stat-item h3 { margin: 0; font-size: 1.3rem; font-weight: 700; }
+    .stat-item p { margin: 0; font-size: 0.7rem; opacity: 0.8; white-space: nowrap; }
+
+    /* List Container */
+    .section-title { display: flex; align-items: center; gap: 10px; margin: 0 24px 15px; }
+    .section-pill { width: 5px; height: 24px; background: var(--primary); border-radius: 4px; }
+    .section-title h3 { font-size: 1.1rem; font-weight: 700; color: var(--text-dark); margin: 0; }
+
+    .vote-list { margin: 0 24px 20px; display: flex; flex-direction: column; gap: 12px; }
+    .vote-card { background: white; border-radius: 14px; padding: 15px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); border: 1px solid #f1f5f9; }
+    .vote-header { display: flex; justify-content: space-between; align-items: center; }
+    .student-info h4 { margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--text-dark); }
+    .student-info p { margin: 0; font-size: 0.75rem; color: var(--text-gray); }
+    
+    .status-badge { padding: 4px 10px; border-radius: 8px; font-size: 0.7rem; font-weight: 600; }
+    .status-home { background: #dcfce7; color: #166534; }
+    .status-stay { background: #fef3c7; color: #92400e; }
+    .status-duty { background: #fee2e2; color: #991b1b; } /* เพิ่มสีสำหรับเวร */
+    
+    .vote-details { font-size: 0.8rem; color: #475569; background: #f8fafc; padding: 10px; border-radius: 8px; display: flex; flex-direction: column; gap: 4px; }
+
+    /* Bottom Nav */
+    .bottom-nav { position: fixed; bottom: 0; width: 100%; max-width: 430px; left: 50%; transform: translateX(-50%); height: 70px; background: white; border-top-left-radius: 20px; border-top-right-radius: 20px; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 -5px 20px rgba(0,0,0,0.03); z-index: 1000; }
+    .nav-link { display: flex; flex-direction: column; align-items: center; text-decoration: none; color: #94a3b8; font-size: 0.7rem; font-weight: 600; gap: 4px; }
+    .nav-link.active { color: var(--primary); }
+    .nav-link i { font-size: 1.3rem; }
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    <div class="top-header fade-in-up delay-1">
+      <div class="header-left">
+        <a href="turakarn.php" class="back-btn"><i class="fas fa-chevron-left"></i></a>
+        <div class="page-title">
+          <h1>ผลโหวตสัปดาห์นี้</h1>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary Card -->
+    <div class="summary-card fade-in-up delay-2">
+      <h2>ภาพรวมประจำสัปดาห์</h2>
+      <div class="stats-row">
+        <div class="stat-item">
+          <h3><?= count($votes) ?></h3>
+          <p>ทั้งหมด</p>
+        </div>
+        <div class="stat-item">
+          <h3 style="color: #4ade80;"><?= $total_go_home ?></h3>
+          <p>กลับบ้าน</p>
+        </div>
+        <div class="stat-item">
+          <h3 style="color: #facc15;"><?= $total_stay ?></h3>
+          <p>กักบริเวณ</p>
+        </div>
+        <div class="stat-item">
+          <h3 style="color: #f87171;"><?= $total_duty ?></h3>
+          <p>เข้าเวร</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title fade-in-up delay-3">
+      <div class="section-pill"></div>
+      <h3>รายการผู้ลงข้อมูล</h3>
+    </div>
+
+    <div class="vote-list fade-in-up delay-3">
+      <?php if (empty($votes)): ?>
+        <div style="text-align:center; color:#64748b; font-size:0.9rem; padding: 20px;">
+          ยังไม่มีข้อมูลการโหวตในสัปดาห์นี้
+        </div>
+      <?php else: ?>
+        <?php foreach ($votes as $v): ?>
+          <?php 
+            $full_name = (!empty($v['first_name'])) ? trim($v['prefix'].$v['first_name'].' '.$v['last_name']) : 'ไม่พบชื่อ (รหัส: '.$v['student_code'].')';
+            $unit = (!empty($v['company']) ? 'ร้อย.'.$v['company'] : '') . (!empty($v['platoon']) ? ' หมวด '.$v['platoon'] : '');
+            
+            // ตรวจสอบและแปลงค่าสถานะเพื่อแสดงผล
+            $status_raw = trim($v['status']);
+            $is_home = false;
+            $status_text = 'ไม่ระบุ';
+            $badge_class = 'status-stay';
+
+            if ($status_raw === 'home') {
+                $is_home = true;
+                $status_text = 'กลับบ้าน';
+                $badge_class = 'status-home';
+            } elseif ($status_raw === 'duty') {
+                $status_text = 'เข้าเวร';
+                $badge_class = 'status-duty';
+            } elseif ($status_raw === 'restrict') {
+                $status_text = 'กักบริเวณ/อยู่ รร.';
+                $badge_class = 'status-stay';
+            }
+          ?>
+          <div class="vote-card">
+            <div class="vote-header">
+              <div class="student-info">
+                <h4><?= htmlspecialchars($full_name) ?></h4>
+                <p><?= htmlspecialchars($unit) ?></p>
+              </div>
+              <div class="status-badge <?= $badge_class ?>">
+                <?= htmlspecialchars($status_text) ?>
+              </div>
+            </div>
+            
+            <!-- แสดงรายละเอียดเพิ่มเติมเฉพาะคนที่กลับบ้าน -->
+            <?php if ($is_home): ?>
+            <div class="vote-details">
+              <div><i class="fas fa-map-marker-alt" style="color:#ef4444; width:16px;"></i> <b>จังหวัด:</b> <?= htmlspecialchars($v['province'] ?? '-') ?></div>
+              <div><i class="fas fa-bus" style="color:#3b82f6; width:16px;"></i> <b>การเดินทาง:</b> <?= htmlspecialchars($v['travel_method'] ?? '-') ?></div>
+              <div><i class="fas fa-calendar-check" style="color:#10b981; width:16px;"></i> <b>วันกลับ:</b> <?= htmlspecialchars($v['return_day'] ?? '-') ?></div>
+            </div>
+            <?php endif; ?>
+          </div>
+        <?php endforeach; ?>
+      <?php endif; ?>
+    </div>
+
+    <div class="bottom-nav">
+      <a href="turakarn.php" class="nav-link">
+        <i class="fas fa-home"></i>
+        <span>หน้าหลัก</span>
+      </a>
+      <a href="admin_votes.php" class="nav-link active">
+        <i class="fas fa-vote-yea"></i>
+        <span>ผลโหวต</span>
+      </a>
+    </div>
+  </div>
+
 </body>
 </html>
