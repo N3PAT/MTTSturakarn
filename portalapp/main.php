@@ -80,26 +80,20 @@ try {
         $stmt_vote->close();
     }
 
-    // 4. ดึงข้อมูลข่าวสาร/ประกาศ (พร้อมระบบ Fallback หากตารางไม่มีคอลัมน์ status)
-    $stmt_news = $conn->prepare("SELECT title, content, created_at FROM announcements WHERE status = 'active' ORDER BY created_at DESC LIMIT 5");
+ // 4. ดึงข้อมูลข่าวสาร/ประกาศที่เปิดใช้งาน (ใช้ $conn->query เพื่อความเสถียรบนทุก Server)
+    $sql_news = "SELECT title, content, created_at 
+                 FROM announcements 
+                 WHERE status = 'active' 
+                 ORDER BY created_at DESC 
+                 LIMIT 3";
+                 
+    $res_news = $conn->query($sql_news);
     
-    // หากสคริปต์แรกเตรียมไม่ผ่าน (อาจเพราะไม่มีคอลัมน์ status) ให้ใช้คิวรีดึงทั้งหมดตามลำดับเวลาแทน
-    if (!$stmt_news) {
-        $stmt_news = $conn->prepare("SELECT title, content, created_at FROM announcements ORDER BY created_at DESC LIMIT 5");
-    }
-
-    if ($stmt_news) {
-        $stmt_news->execute();
-        $res_news = $stmt_news->get_result();
+    if ($res_news && $res_news->num_rows > 0) {
         while ($row = $res_news->fetch_assoc()) {
             $announcements[] = $row;
         }
-        $stmt_news->close();
     }
-
-} catch (Throwable $e) {
-    error_log("System error: " . $e->getMessage());
-}
 
 $name = trim(($student['prefix'] ?? '') . $student['first_name'] . ' ' . $student['last_name']);
 $student_code_display = "รหัสนักเรียน " . $student['student_code'];
