@@ -80,7 +80,7 @@ try {
         $stmt_vote->close();
     }
 
- // 4. ดึงข้อมูลข่าวสาร/ประกาศที่เปิดใช้งาน (ใช้ $conn->query เพื่อความเสถียรบนทุก Server)
+    // 4. ดึงข้อมูลข่าวสาร/ประกาศที่เปิดใช้งาน (ใช้ $conn->query เพื่อความเสถียรบนทุก Server)
     $sql_news = "SELECT title, content, created_at 
                  FROM announcements 
                  WHERE status = 'active' 
@@ -94,6 +94,11 @@ try {
             $announcements[] = $row;
         }
     }
+
+} catch (Throwable $e) {
+    // ปิดบล็อก try และเพิ่ม catch เพื่อดักจับ Error
+    error_log("System error: " . $e->getMessage());
+}
 
 $name = trim(($student['prefix'] ?? '') . $student['first_name'] . ' ' . $student['last_name']);
 $student_code_display = "รหัสนักเรียน " . $student['student_code'];
