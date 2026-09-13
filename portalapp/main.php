@@ -18,6 +18,7 @@ if (!isset($_SESSION['has_seen_loading'])) {
 
 $studentCode = $_SESSION['student_code'];
 $duty_notifications = [];
+$announcements = []; // ตัวแปรเก็บข่าวสาร
 $has_voted = true; // สมมติว่าโหวตแล้วเป็นค่าเริ่มต้น
 
 try {
@@ -61,7 +62,6 @@ try {
     }
 
     // 3. ตรวจสอบว่า "โหวตประสงค์กลับบ้าน" หรือยังในสัปดาห์นี้
-    // *** หมายเหตุ: เปลี่ยนชื่อตาราง 'votes' และคอลัมน์ 'vote_date' ให้ตรงกับฐานข้อมูลจริงของคุณ ***
     $stmt_vote = $conn->prepare("
         SELECT COUNT(*) as vote_count 
         FROM votes 
@@ -78,6 +78,23 @@ try {
             }
         }
         $stmt_vote->close();
+    }
+
+    // 4. ดึงข้อมูลข่าวสาร/ประกาศที่เปิดใช้งาน (จำกัด 3 รายการล่าสุด)
+    $stmt_news = $conn->prepare("
+        SELECT title, content, created_at 
+        FROM announcements 
+        WHERE status = 'active' 
+        ORDER BY created_at DESC 
+        LIMIT 3
+    ");
+    if ($stmt_news) {
+        $stmt_news->execute();
+        $res_news = $stmt_news->get_result();
+        while ($row = $res_news->fetch_assoc()) {
+            $announcements[] = $row;
+        }
+        $stmt_news->close();
     }
 
 } catch (Throwable $e) {
@@ -311,7 +328,45 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       gap: 10px;
       margin: 0 20px 15px;
     }
-
+/* ประกาศ / ข่าวสาร (Announcement Card) */
+    .announcement-card {
+      background: #ffffff;
+      border-left: 4px solid #3b82f6;
+      border-radius: 12px;
+      padding: 15px;
+      margin: 0 20px 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+      display: flex;
+      gap: 15px;
+      align-items: flex-start;
+    }
+    
+    .announcement-icon {
+      color: #3b82f6;
+      font-size: 1.5rem;
+      margin-top: 2px;
+    }
+    
+    .announcement-content h4 {
+      margin: 0 0 5px 0;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text-dark);
+    }
+    
+    .announcement-content p {
+      margin: 0;
+      font-size: 0.8rem;
+      color: var(--text-gray);
+      line-height: 1.4;
+    }
+    
+    .announcement-date {
+      display: block;
+      font-size: 0.7rem;
+      color: #94a3b8;
+      margin-top: 8px;
+    }
     .section-pill {
       width: 5px;
       height: 24px;
@@ -581,7 +636,28 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
         <span class="menu-text">คำร้องขอเอกสาร</span>
         </a>
     </div>
-
+<!-- ส่วนแสดงประกาศ / ข่าวสาร จากฐานข้อมูล -->
+    <?php if (!empty($announcements)): ?>
+      <div class="section-title fade-in-up delay-2">
+        <div class="section-pill" style="background: #3b82f6;"></div>
+        <h3>ประกาศ / ข่าวสาร</h3>
+      </div>
+      
+      <?php foreach ($announcements as $news): ?>
+        <div class="announcement-card fade-in-up delay-2">
+          <div class="announcement-icon">
+            <i class="fas fa-bullhorn"></i>
+          </div>
+          <div class="announcement-content">
+            <h4><?= htmlspecialchars($news['title']) ?></h4>
+            <p><?= nl2br(htmlspecialchars($news['content'])) ?></p>
+            <span class="announcement-date">
+              <i class="far fa-clock"></i> <?= date('d/m/Y H:i', strtotime($news['created_at'])) ?>
+            </span>
+          </div>
+        </div>
+      <?php endforeach; ?>
+    <?php endif; ?>
     <div class="bottom-nav">
       <a href="main.php" class="nav-link active">
         <i class="fas fa-home"></i>
