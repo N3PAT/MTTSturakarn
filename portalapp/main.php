@@ -13,13 +13,13 @@ if (empty($_SESSION['student_code'])) {
 $show_loading = false;
 if (!isset($_SESSION['has_seen_loading'])) {
     $show_loading = true;
-    $_SESSION['has_seen_loading'] = true; // เซ็ตค่าไว้ว่าเห็นแล้ว ครั้งหน้าจะได้ไม่โชว์ซ้ำ
+    $_SESSION['has_seen_loading'] = true;
 }
 
 $studentCode = $_SESSION['student_code'];
 $duty_notifications = [];
-$announcements = []; // ตัวแปรเก็บข่าวสาร
-$has_voted = true; // สมมติว่าโหวตแล้วเป็นค่าเริ่มต้น
+$announcements = []; 
+$has_voted = true; 
 
 try {
     if (!isset($conn) || !($conn instanceof mysqli)) {
@@ -74,20 +74,20 @@ try {
         $res_vote = $stmt_vote->get_result();
         if ($row_vote = $res_vote->fetch_assoc()) {
             if ($row_vote['vote_count'] == 0) {
-                $has_voted = false; // ถ้ายังไม่พบข้อมูลการโหวตในสัปดาห์นี้
+                $has_voted = false;
             }
         }
         $stmt_vote->close();
     }
 
-    // 4. ดึงข้อมูลข่าวสาร/ประกาศที่เปิดใช้งาน (จำกัด 3 รายการล่าสุด)
-    $stmt_news = $conn->prepare("
-        SELECT title, content, created_at 
-        FROM announcements 
-        WHERE status = 'active' 
-        ORDER BY created_at DESC 
-        LIMIT 3
-    ");
+    // 4. ดึงข้อมูลข่าวสาร/ประกาศ (พร้อมระบบ Fallback หากตารางไม่มีคอลัมน์ status)
+    $stmt_news = $conn->prepare("SELECT title, content, created_at FROM announcements WHERE status = 'active' ORDER BY created_at DESC LIMIT 5");
+    
+    // หากสคริปต์แรกเตรียมไม่ผ่าน (อาจเพราะไม่มีคอลัมน์ status) ให้ใช้คิวรีดึงทั้งหมดตามลำดับเวลาแทน
+    if (!$stmt_news) {
+        $stmt_news = $conn->prepare("SELECT title, content, created_at FROM announcements ORDER BY created_at DESC LIMIT 5");
+    }
+
     if ($stmt_news) {
         $stmt_news->execute();
         $res_news = $stmt_news->get_result();
@@ -116,7 +116,6 @@ if (empty($profile_image) || $profile_image === "default_student.png" || $profil
     $profile_image = "https://ui-avatars.com/api/?name=" . urlencode($name) . "&background=5a42a0&color=fff&size=128";
 }
 
-// นับจำนวนแจ้งเตือนทั้งหมด (รวมเวร + สถานะยังไม่ได้โหวต)
 $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
 ?>
 <!DOCTYPE html>
