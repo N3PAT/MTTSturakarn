@@ -535,6 +535,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
     .nav-link i {
       font-size: 1.3rem;
     }
+    .bg-blue { background: #dbeafe; color: #2563eb; }
   </style>
 </head>
 <body>
@@ -620,7 +621,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       <h3>เมนูหลัก</h3>
     </div>
 
-    <!-- เมนูหลัก 3 ปุ่ม -->
+   <!-- เมนูหลัก 3 ปุ่ม -->
     <div class="menu-grid fade-in-up delay-4">
       <a href="duty.php" class="menu-item">
         <div class="icon-box bg-purple"><i class="fas fa-user-clock"></i></div>
@@ -631,10 +632,12 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
         <div class="icon-box bg-orange"><i class="fas fa-vote-yea"></i></div>
         <span class="menu-text">โหวตประสงค์กลับบ้าน</span>
       </a>
-        <a href="reqdoc.php" class="menu-item">
-        <div class="icon-box bg-orange"><i class="fas fa-vote-yea"></i></div>
+
+      <!-- เปลี่ยนไอคอนเป็น fa-file-alt และเพิ่มคลาสสีใหม่ (เช่น bg-blue) -->
+      <a href="reqdoc.php" class="menu-item">
+        <div class="icon-box bg-blue"><i class="fas fa-file-alt"></i></div>
         <span class="menu-text">คำร้องขอเอกสาร</span>
-        </a>
+      </a>
     </div>
 <!-- ส่วนแสดงประกาศ / ข่าวสาร จากฐานข้อมูล -->
     <?php if (!empty($announcements)): ?>
