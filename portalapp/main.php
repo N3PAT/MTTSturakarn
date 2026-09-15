@@ -80,15 +80,21 @@ try {
         $stmt_vote->close();
     }
 
-    // 4. ดึงข้อมูลข่าวสาร/ประกาศที่เปิดใช้งาน (ใช้ $conn->query เพื่อความเสถียรบนทุก Server)
+    // 4. ดึงข้อมูลข่าวสาร/ประกาศที่เปิดใช้งาน (พร้อม Fallback)
     $sql_news = "SELECT title, content, created_at 
                  FROM announcements 
                  WHERE status = 'active' 
                  ORDER BY created_at DESC 
-                 LIMIT 3";
+                 LIMIT 5";
                  
     $res_news = $conn->query($sql_news);
     
+    // หากดึงแบบ active ไม่เจอ ลองดึงข้อมูลล่าสุดโดยไม่กรอง status
+    if (!$res_news || $res_news->num_rows === 0) {
+        $sql_news = "SELECT title, content, created_at FROM announcements ORDER BY created_at DESC LIMIT 5";
+        $res_news = $conn->query($sql_news);
+    }
+
     if ($res_news && $res_news->num_rows > 0) {
         while ($row = $res_news->fetch_assoc()) {
             $announcements[] = $row;
@@ -96,7 +102,6 @@ try {
     }
 
 } catch (Throwable $e) {
-    // ปิดบล็อก try และเพิ่ม catch เพื่อดักจับ Error
     error_log("System error: " . $e->getMessage());
 }
 
@@ -145,9 +150,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       user-select: none;
     }
 
-    /* -------------------------------------------------------------
-       CSS สำหรับ Loading Screen & Animations
-       ------------------------------------------------------------- */
+    /* Loading Screen */
     #page-loader {
       position: fixed;
       top: 0;
@@ -190,7 +193,6 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       animation: flash 1.5s infinite;
     }
 
-    /* Keyframes */
     @keyframes pulse {
       0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(90, 66, 160, 0.4); }
       50% { transform: scale(1.05); box-shadow: 0 0 20px 0 rgba(90, 66, 160, 0); }
@@ -205,7 +207,6 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       50% { opacity: 0.5; }
     }
 
-    /* แอนิเมชันเลื่อนขึ้น (Fade In Up) สำหรับเนื้อหาในหน้า */
     .fade-in-up {
       opacity: 0;
       transform: translateY(20px);
@@ -215,13 +216,10 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       to { opacity: 1; transform: translateY(0); }
     }
     
-    /* หน่วงเวลา (Stagger) ให้แอนิเมชันขึ้นทีละอัน */
     .delay-1 { animation-delay: 0.1s; }
     .delay-2 { animation-delay: 0.2s; }
     .delay-3 { animation-delay: 0.3s; }
     .delay-4 { animation-delay: 0.4s; }
-    /* ------------------------------------------------------------- */
-
 
     .top-header {
       display: flex;
@@ -326,45 +324,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       gap: 10px;
       margin: 0 20px 15px;
     }
-/* ประกาศ / ข่าวสาร (Announcement Card) */
-    .announcement-card {
-      background: #ffffff;
-      border-left: 4px solid #3b82f6;
-      border-radius: 12px;
-      padding: 15px;
-      margin: 0 20px 20px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-      display: flex;
-      gap: 15px;
-      align-items: flex-start;
-    }
-    
-    .announcement-icon {
-      color: #3b82f6;
-      font-size: 1.5rem;
-      margin-top: 2px;
-    }
-    
-    .announcement-content h4 {
-      margin: 0 0 5px 0;
-      font-size: 0.95rem;
-      font-weight: 600;
-      color: var(--text-dark);
-    }
-    
-    .announcement-content p {
-      margin: 0;
-      font-size: 0.8rem;
-      color: var(--text-gray);
-      line-height: 1.4;
-    }
-    
-    .announcement-date {
-      display: block;
-      font-size: 0.7rem;
-      color: #94a3b8;
-      margin-top: 8px;
-    }
+
     .section-pill {
       width: 5px;
       height: 24px;
@@ -377,6 +337,53 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       font-weight: 700;
       color: var(--text-dark);
       margin: 0;
+    }
+
+    /* ประกาศ / ข่าวสาร (Announcement Card) */
+    .announcement-card {
+      background: #ffffff;
+      border-left: 4px solid #3b82f6;
+      border-radius: 12px;
+      padding: 15px;
+      margin: 0 20px 15px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+      display: flex;
+      gap: 15px;
+      align-items: flex-start;
+    }
+    
+    .announcement-icon {
+      color: #3b82f6;
+      font-size: 1.5rem;
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+    
+    .announcement-content {
+      flex: 1;
+      min-width: 0;
+      word-wrap: break-word;
+    }
+
+    .announcement-content h4 {
+      margin: 0 0 5px 0;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text-dark);
+    }
+    
+    .announcement-content p {
+      margin: 0;
+      font-size: 0.825rem;
+      color: var(--text-gray);
+      line-height: 1.45;
+    }
+    
+    .announcement-date {
+      display: block;
+      font-size: 0.7rem;
+      color: #94a3b8;
+      margin-top: 8px;
     }
 
     /* กล่องการแจ้งเตือน */
@@ -408,25 +415,10 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       color: #9a3412;
     }
 
-    .alert-icon {
-      font-size: 1.5rem;
-    }
-
-    .alert-info {
-      flex: 1;
-    }
-
-    .alert-info h4 {
-      margin: 0 0 2px 0;
-      font-size: 0.9rem;
-      font-weight: 700;
-    }
-
-    .alert-info p {
-      margin: 0;
-      font-size: 0.8rem;
-      opacity: 0.85;
-    }
+    .alert-icon { font-size: 1.5rem; }
+    .alert-info { flex: 1; }
+    .alert-info h4 { margin: 0 0 2px 0; font-size: 0.9rem; font-weight: 700; }
+    .alert-info p { margin: 0; font-size: 0.8rem; opacity: 0.85; }
 
     .btn-action-alert {
       background-color: #dc2626;
@@ -440,7 +432,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       box-shadow: 0 2px 4px rgba(220, 38, 38, 0.2);
     }
 
-    /* ปรับ Menu Grid เป็น 3 ช่อง */
+    /* Menu Grid */
     .menu-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -484,6 +476,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
 
     .bg-purple { background: #f3e8ff; color: #9333ea; }
     .bg-orange { background: #ffedd5; color: #ea580c; }
+    .bg-blue { background: #dbeafe; color: #2563eb; }
 
     .app-container {
       width: 100%;
@@ -526,19 +519,12 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       gap: 4px;
     }
 
-    .nav-link.active {
-      color: var(--primary);
-    }
-
-    .nav-link i {
-      font-size: 1.3rem;
-    }
-    .bg-blue { background: #dbeafe; color: #2563eb; }
+    .nav-link.active { color: var(--primary); }
+    .nav-link i { font-size: 1.3rem; }
   </style>
 </head>
 <body>
 
-  <!-- Loading Screen (จะทำงานต่อเมื่อ $show_loading เป็น true) -->
   <?php if ($show_loading): ?>
   <div id="page-loader">
     <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg?utm_source=th.wikipedia.org&utm_campaign=index&utm_content=thumbnail_unscaled" alt="Loading Logo" class="loader-logo">
@@ -558,12 +544,12 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
         </div>
       </div>
 
-<button class="noti-btn" id="notiBellBtn" title="เปิดใช้งานการแจ้งเตือน">
-  <i class="far fa-bell"></i>
-  <?php if ($noti_count > 0): ?>
-    <span class="noti-badge"><?= $noti_count ?></span>
-  <?php endif; ?>
-</button>
+      <button class="noti-btn" id="notiBellBtn" title="เปิดใช้งานการแจ้งเตือน">
+        <i class="far fa-bell"></i>
+        <?php if ($noti_count > 0): ?>
+          <span class="noti-badge"><?= $noti_count ?></span>
+        <?php endif; ?>
+      </button>
     </div>
 
     <div class="student-card fade-in-up delay-2">
@@ -575,15 +561,13 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       <p><?= htmlspecialchars($student_code_display) ?></p>
     </div>
 
-    <!-- ส่วนแสดงการแจ้งเตือน (เวร + สถานะการโหวต) -->
+    <!-- ส่วนแสดงการแจ้งเตือน -->
     <?php if (!empty($duty_notifications) || !$has_voted): ?>
       <div class="section-title fade-in-up delay-3">
         <div class="section-pill"></div>
         <h3>การแจ้งเตือน</h3>
       </div>
       <div class="duty-alert-container fade-in-up delay-3">
-        
-        <!-- แจ้งเตือนกรณีที่ยังไม่ได้โหวต -->
         <?php if (!$has_voted): ?>
           <div class="duty-alert-card urgent">
             <div class="alert-icon"><i class="fas fa-exclamation-triangle"></i></div>
@@ -595,7 +579,6 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
           </div>
         <?php endif; ?>
 
-        <!-- แจ้งเตือนเข้าเวร -->
         <?php foreach ($duty_notifications as $noti): ?>
           <?php 
             $is_urgent = ($noti['days_left'] == 1);
@@ -619,7 +602,6 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       <h3>เมนูหลัก</h3>
     </div>
 
-   <!-- เมนูหลัก 3 ปุ่ม -->
     <div class="menu-grid fade-in-up delay-4">
       <a href="duty.php" class="menu-item">
         <div class="icon-box bg-purple"><i class="fas fa-user-clock"></i></div>
@@ -631,21 +613,21 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
         <span class="menu-text">โหวตประสงค์กลับบ้าน</span>
       </a>
 
-      <!-- เปลี่ยนไอคอนเป็น fa-file-alt และเพิ่มคลาสสีใหม่ (เช่น bg-blue) -->
       <a href="reqdoc.php" class="menu-item">
         <div class="icon-box bg-blue"><i class="fas fa-file-alt"></i></div>
         <span class="menu-text">คำร้องขอเอกสาร</span>
       </a>
     </div>
-<!-- ส่วนแสดงประกาศ / ข่าวสาร จากฐานข้อมูล -->
+
+    <!-- ส่วนแสดงประกาศ / ข่าวสาร -->
+    <div class="section-title fade-in-up delay-4">
+      <div class="section-pill" style="background: #3b82f6;"></div>
+      <h3>ประกาศ / ข่าวสาร</h3>
+    </div>
+
     <?php if (!empty($announcements)): ?>
-      <div class="section-title fade-in-up delay-2">
-        <div class="section-pill" style="background: #3b82f6;"></div>
-        <h3>ประกาศ / ข่าวสาร</h3>
-      </div>
-      
       <?php foreach ($announcements as $news): ?>
-        <div class="announcement-card fade-in-up delay-2">
+        <div class="announcement-card fade-in-up delay-4">
           <div class="announcement-icon">
             <i class="fas fa-bullhorn"></i>
           </div>
@@ -658,7 +640,18 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
           </div>
         </div>
       <?php endforeach; ?>
+    <?php else: ?>
+      <div class="announcement-card fade-in-up delay-4" style="border-left-color: #94a3b8;">
+        <div class="announcement-icon" style="color: #94a3b8;">
+          <i class="fas fa-info-circle"></i>
+        </div>
+        <div class="announcement-content">
+          <h4>ไม่มีข่าวสารในขณะนี้</h4>
+          <p>ยังไม่มีการประชาสัมพันธ์เพิ่มเติมจากผู้ดูแลระบบ</p>
+        </div>
+      </div>
     <?php endif; ?>
+
     <div class="bottom-nav">
       <a href="main.php" class="nav-link active">
         <i class="fas fa-home"></i>
@@ -677,6 +670,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
     </div>
 
   </div>
+
 <script>
   function urlBase64ToUint8Array(base64String) {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
@@ -705,33 +699,26 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       const permission = await Notification.requestPermission();
       if (permission === 'granted') {
         const registration = await navigator.serviceWorker.ready;
-        
         const publicVapidKey = 'BDcVYH88lfTwHxM-yyzWmQzIc6_orJpWxXr156VsSppe-srH4z1gYGz0W6z9I67JHkBkcnnbrwqoLuBZLAzC7HA'; 
         
-        // 1. สร้าง Subscription
         const subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
         });
 
         const subData = subscription.toJSON();
-        
-        // 2. แปลงข้อมูลเป็น FormData (เพื่อให้ PHP ใช้ $_POST รับค่าได้ง่ายๆ)
         const formData = new FormData();
         formData.append('endpoint', subData.endpoint);
         formData.append('p256dh', subData.keys.p256dh);
         formData.append('auth', subData.keys.auth);
 
-        // 3. ส่งไปที่ PHP
         const res = await fetch('save_subscription.php', {
           method: 'POST',
           body: formData,
-          credentials: 'same-origin' // แนบ Session ไปด้วย
+          credentials: 'same-origin'
         });
 
-        // 4. อ่านค่าที่ PHP ตอบกลับมา
         const text = await res.text();
-        
         try {
             const data = JSON.parse(text);
             if (data.success) {
@@ -751,20 +738,18 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       alert('เกิดข้อผิดพลาดของระบบ: ' + err.message);
     }
   });
-</script>
-  <!-- Javascript สำหรับซ่อน Loading Screen -->
-  <script>
-    document.addEventListener("DOMContentLoaded", function() {
-      const loader = document.getElementById('page-loader');
-      if (loader) {
+
+  document.addEventListener("DOMContentLoaded", function() {
+    const loader = document.getElementById('page-loader');
+    if (loader) {
+      setTimeout(function() {
+        loader.classList.add('hidden');
         setTimeout(function() {
-          loader.classList.add('hidden');
-          setTimeout(function() {
-            loader.remove();
-          }, 500);
-        }, 1200);
-      }
-    });
-  </script>
+          loader.remove();
+        }, 500);
+      }, 1200);
+    }
+  });
+</script>
 </body>
 </html>
