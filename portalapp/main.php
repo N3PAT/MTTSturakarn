@@ -20,6 +20,7 @@ $studentCode = $_SESSION['student_code'];
 $duty_notifications = [];
 $announcements = []; 
 $has_voted = true; 
+$news_error = ""; // ตัวแปรสำหรับเก็บ Error ของประกาศ
 
 try {
     if (!isset($conn) || !($conn instanceof mysqli)) {
@@ -89,7 +90,10 @@ try {
                  
     $res_news = $conn->query($sql_news);
     
-    if ($res_news && $res_news->num_rows > 0) {
+    if (!$res_news) {
+        // หาก Query พัง ให้เก็บ Error ไปแสดงหน้าเว็บ
+        $news_error = $conn->error;
+    } else {
         while ($row = $res_news->fetch_assoc()) {
             $announcements[] = $row;
         }
@@ -609,14 +613,22 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
     </div>
 
     <!-- ส่วนแสดงประกาศ / ข่าวสาร จากตาราง announcements -->
+    <!-- ดักจับ Error แจ้งเตือนขึ้นจอ -->
+    <?php if (!empty($news_error)): ?>
+      <div style="margin: 0 20px 15px; padding: 15px; background: #fee2e2; border: 1px solid #ef4444; border-radius: 8px; color: #b91c1c;">
+        <strong><i class="fas fa-exclamation-circle"></i> เกิดข้อผิดพลาดในการโหลดประกาศ:</strong><br>
+        <?= htmlspecialchars($news_error) ?>
+      </div>
+    <?php endif; ?>
+
     <?php if (!empty($announcements)): ?>
-      <div class="section-title fade-in-up delay-2">
+      <div class="section-title"> <!-- เอา fade-in-up ออกเพื่อทดสอบ -->
         <div class="section-pill" style="background: #3b82f6;"></div>
         <h3>ประกาศ / ข่าวสาร</h3>
       </div>
       
       <?php foreach ($announcements as $news): ?>
-        <div class="announcement-card fade-in-up delay-2">
+        <div class="announcement-card"> <!-- เอา fade-in-up ออกเพื่อทดสอบ -->
           <div class="announcement-icon">
             <i class="fas fa-bullhorn"></i>
           </div>
@@ -629,6 +641,13 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
           </div>
         </div>
       <?php endforeach; ?>
+    <?php else: ?>
+      <?php if(empty($news_error)): ?>
+        <!-- เพื่อให้รู้ว่าโค้ดทำงานมาถึงตรงนี้ แต่ไม่มีข้อมูลใน Array -->
+        <div style="text-align: center; color: #94a3b8; padding: 20px;">
+          ( ไม่มีประกาศหรือข่าวสารในขณะนี้ )
+        </div>
+      <?php endif; ?>
     <?php endif; ?>
 
     <div class="bottom-nav">
