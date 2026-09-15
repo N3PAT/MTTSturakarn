@@ -80,8 +80,8 @@ try {
         $stmt_vote->close();
     }
 
-    // 4. ดึงข้อมูลข่าวสาร/ประกาศที่เปิดใช้งาน (พร้อม Fallback)
-    $sql_news = "SELECT title, content, created_at 
+    // 4. ดึงข้อมูลข่าวสาร/ประกาศที่เปิดใช้งาน (status = 'active')
+    $sql_news = "SELECT id, title, content, created_at 
                  FROM announcements 
                  WHERE status = 'active' 
                  ORDER BY created_at DESC 
@@ -89,12 +89,6 @@ try {
                  
     $res_news = $conn->query($sql_news);
     
-    // หากดึงแบบ active ไม่เจอ ลองดึงข้อมูลล่าสุดโดยไม่กรอง status
-    if (!$res_news || $res_news->num_rows === 0) {
-        $sql_news = "SELECT title, content, created_at FROM announcements ORDER BY created_at DESC LIMIT 5";
-        $res_news = $conn->query($sql_news);
-    }
-
     if ($res_news && $res_news->num_rows > 0) {
         while ($row = $res_news->fetch_assoc()) {
             $announcements[] = $row;
@@ -150,7 +144,6 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       user-select: none;
     }
 
-    /* Loading Screen */
     #page-loader {
       position: fixed;
       top: 0;
@@ -325,21 +318,6 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       margin: 0 20px 15px;
     }
 
-    .section-pill {
-      width: 5px;
-      height: 24px;
-      background: var(--primary);
-      border-radius: 4px;
-    }
-
-    .section-title h3 {
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: var(--text-dark);
-      margin: 0;
-    }
-
-    /* ประกาศ / ข่าวสาร (Announcement Card) */
     .announcement-card {
       background: #ffffff;
       border-left: 4px solid #3b82f6;
@@ -356,13 +334,10 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       color: #3b82f6;
       font-size: 1.5rem;
       margin-top: 2px;
-      flex-shrink: 0;
     }
     
     .announcement-content {
       flex: 1;
-      min-width: 0;
-      word-wrap: break-word;
     }
 
     .announcement-content h4 {
@@ -374,9 +349,10 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
     
     .announcement-content p {
       margin: 0;
-      font-size: 0.825rem;
+      font-size: 0.8rem;
       color: var(--text-gray);
-      line-height: 1.45;
+      line-height: 1.4;
+      word-break: break-word;
     }
     
     .announcement-date {
@@ -386,7 +362,20 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       margin-top: 8px;
     }
 
-    /* กล่องการแจ้งเตือน */
+    .section-pill {
+      width: 5px;
+      height: 24px;
+      background: var(--primary);
+      border-radius: 4px;
+    }
+
+    .section-title h3 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text-dark);
+      margin: 0;
+    }
+
     .duty-alert-container {
       margin: 0 20px 20px;
       display: flex;
@@ -432,7 +421,6 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       box-shadow: 0 2px 4px rgba(220, 38, 38, 0.2);
     }
 
-    /* Menu Grid */
     .menu-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -561,13 +549,14 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       <p><?= htmlspecialchars($student_code_display) ?></p>
     </div>
 
-    <!-- ส่วนแสดงการแจ้งเตือน -->
+    <!-- ส่วนแสดงการแจ้งเตือน (เวร + สถานะการโหวต) -->
     <?php if (!empty($duty_notifications) || !$has_voted): ?>
       <div class="section-title fade-in-up delay-3">
         <div class="section-pill"></div>
         <h3>การแจ้งเตือน</h3>
       </div>
       <div class="duty-alert-container fade-in-up delay-3">
+        
         <?php if (!$has_voted): ?>
           <div class="duty-alert-card urgent">
             <div class="alert-icon"><i class="fas fa-exclamation-triangle"></i></div>
@@ -619,15 +608,15 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       </a>
     </div>
 
-    <!-- ส่วนแสดงประกาศ / ข่าวสาร -->
-    <div class="section-title fade-in-up delay-4">
-      <div class="section-pill" style="background: #3b82f6;"></div>
-      <h3>ประกาศ / ข่าวสาร</h3>
-    </div>
-
+    <!-- ส่วนแสดงประกาศ / ข่าวสาร จากตาราง announcements -->
     <?php if (!empty($announcements)): ?>
+      <div class="section-title fade-in-up delay-2">
+        <div class="section-pill" style="background: #3b82f6;"></div>
+        <h3>ประกาศ / ข่าวสาร</h3>
+      </div>
+      
       <?php foreach ($announcements as $news): ?>
-        <div class="announcement-card fade-in-up delay-4">
+        <div class="announcement-card fade-in-up delay-2">
           <div class="announcement-icon">
             <i class="fas fa-bullhorn"></i>
           </div>
@@ -640,16 +629,6 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
           </div>
         </div>
       <?php endforeach; ?>
-    <?php else: ?>
-      <div class="announcement-card fade-in-up delay-4" style="border-left-color: #94a3b8;">
-        <div class="announcement-icon" style="color: #94a3b8;">
-          <i class="fas fa-info-circle"></i>
-        </div>
-        <div class="announcement-content">
-          <h4>ไม่มีข่าวสารในขณะนี้</h4>
-          <p>ยังไม่มีการประชาสัมพันธ์เพิ่มเติมจากผู้ดูแลระบบ</p>
-        </div>
-      </div>
     <?php endif; ?>
 
     <div class="bottom-nav">
@@ -699,6 +678,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       const permission = await Notification.requestPermission();
       if (permission === 'granted') {
         const registration = await navigator.serviceWorker.ready;
+        
         const publicVapidKey = 'BDcVYH88lfTwHxM-yyzWmQzIc6_orJpWxXr156VsSppe-srH4z1gYGz0W6z9I67JHkBkcnnbrwqoLuBZLAzC7HA'; 
         
         const subscription = await registration.pushManager.subscribe({
@@ -707,6 +687,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
         });
 
         const subData = subscription.toJSON();
+        
         const formData = new FormData();
         formData.append('endpoint', subData.endpoint);
         formData.append('p256dh', subData.keys.p256dh);
@@ -719,6 +700,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
         });
 
         const text = await res.text();
+        
         try {
             const data = JSON.parse(text);
             if (data.success) {
