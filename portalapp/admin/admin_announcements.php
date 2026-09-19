@@ -2,7 +2,7 @@
 session_start();
 require_once 'db.php';
 
-// สมมติว่ามีระบบเช็คสิทธิ์ Admin (ถ้ามี Session Admin ของตัวเอง ให้เปลี่ยนตรงนี้ครับ)
+// สมมติว่ามีระบบเช็คสิทธิ์ Admin
 // if (empty($_SESSION['admin_id'])) {
 //     header("Location: admin_login.php");
 //     exit();
@@ -18,14 +18,87 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     if (!empty($title) && !empty($content)) {
         try {
+            // 1.1 บันทึกลงตาราง announcements
             $stmt = $conn->prepare("INSERT INTO announcements (title, content, status) VALUES (?, ?, ?)");
             $stmt->bind_param("sss", $title, $content, $status);
             $stmt->execute();
             $stmt->close();
             
+            // 1.2 บันทึกลงตาราง notifications เพื่อให้ไปโชว์ในระบบการแจ้งเตือนบนหน้าเว็บ
+            $noti_stmt = $conn->prepare("INSERT INTO notifications (title, message, type, alert_level) VALUES (?, ?, 'news', 'info')");
+            $noti_stmt->bind_param("ss", $title, $content);
+            $noti_stmt->execute();
+            $noti_stmt->close();
+
+            // 1.3 ถ้าสถานะเป็น Active ให้ส่ง Web Push Notification เข้ามือถือผู้ใช้ทุกคน
+            if ($status === 'active') {
+                // ค้นหาไฟล์ vendor/autoload.php สำหรับ WebPush
+                $autoloadPath = __DIR__ . '/../../vendor/autoload.php';
+                if (!file_exists($autoloadPath)) {
+                    $autoloadPath = __DIR__ . '/../vendor/autoload.php';
+                }
+                if (!file_exists($autoloadPath)) {
+                    $autoloadPath = __DIR__ . '/vendor/autoload.php';
+                }
+
+                if (file_exists($autoloadPath)) {
+                    require_once $autoloadPath;
+
+                    if (class_exists('Minishlink\WebPush\WebPush')) {
+                        $auth = [
+                            'VAPID' => [
+                                'subject'    => 'mailto:natthapatinsangchan@gmail.com',
+                                'publicKey'  => 'BDcVYH88lfTwHxM-yyzWmQzIc6_orJpWxXr156VsSppe-srH4z1gYGz0W6z9I67JHkBkcnnbrwqoLuBZLAzC7HA',
+                                'privateKey' => 'w86Ccb6pIc6w6EMWun3uVj9zfDe0Q-44hA2asE_RUSs',
+                            ],
+                        ];
+
+                        $webPush = new \Minishlink\WebPush\WebPush($auth);
+
+                        // ดึง Token ผู้รับทั้งหมดจาก push_subscriptions
+                        $sub_res = $conn->query("SELECT id, endpoint, p256dh, auth FROM push_subscriptions");
+                        if ($sub_res && $sub_res->num_rows > 0) {
+                            
+                            // จัดเตรียมข้อมูลแจ้งเตือน (ตัดข้อความเนื้อหาไม่ให้ยาวเกินไปบนหน้าจอโทรศัพท์)
+                            $short_content = mb_substr($content, 0, 90, 'UTF-8') . (mb_strlen($content, 'UTF-8') > 90 ? '...' : '');
+                            
+                            $payload = json_encode([
+                                'title' => '📢 ' . $title,
+                                'body'  => $short_content,
+                                'icon'  => 'https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg',
+                                'url'   => '/portalapp/main.php'
+                            ], JSON_UNESCAPED_UNICODE);
+
+                            $failedIds = [];
+                            while ($sub_row = $sub_res->fetch_assoc()) {
+                                $subscription = \Minishlink\WebPush\Subscription::create([
+                                    'endpoint'  => $sub_row['endpoint'],
+                                    'publicKey' => $sub_row['p256dh'],
+                                    'authToken' => $sub_row['auth'],
+                                ]);
+
+                                $report = $webPush->sendOneNotification($subscription, $payload);
+                                
+                                // หาก Token หมดอายุ ให้เก็บ ID ไว้ลบออก
+                                if (!$report->isSuccess() && $report->isSubscriptionExpired()) {
+                                    $failedIds[] = $sub_row['id'];
+                                }
+                            }
+
+                            // ลบ Token ที่หมดอายุออกจาก DB
+                            if (!empty($failedIds)) {
+                                $idsList = implode(',', array_map('intval', $failedIds));
+                                $conn->query("DELETE FROM push_subscriptions WHERE id IN ($idsList)");
+                            }
+                        }
+                    }
+                }
+            }
+
             // รีเฟรชหน้าเพื่อป้องกันการส่งฟอร์มซ้ำ
             header("Location: admin_announcements.php?success=1");
             exit();
+
         } catch (Exception $e) {
             $error_msg = "เกิดข้อผิดพลาด: " . $e->getMessage();
         }
@@ -335,7 +408,7 @@ try {
 
     <!-- แสดงแจ้งเตือนเมื่อเพิ่ม/ลบสำเร็จ -->
     <?php if (isset($_GET['success'])): ?>
-      <div class="alert alert-success fade-in-up"><i class="fas fa-check-circle"></i> เพิ่มประกาศเรียบร้อยแล้ว</div>
+      <div class="alert alert-success fade-in-up"><i class="fas fa-check-circle"></i> เผยแพร่ประกาศและส่งแจ้งเตือนเรียบร้อยแล้ว</div>
     <?php endif; ?>
     <?php if (isset($_GET['deleted'])): ?>
       <div class="alert alert-success fade-in-up"><i class="fas fa-trash-alt"></i> ลบประกาศเรียบร้อยแล้ว</div>
@@ -367,7 +440,7 @@ try {
         <div class="form-group">
           <label class="form-label">สถานะการแสดงผล</label>
           <select name="status" class="form-control">
-            <option value="active">🟢 แสดงผล (Active)</option>
+            <option value="active">🟢 แสดงผลและส่งแจ้งเตือน (Active)</option>
             <option value="inactive">⚪ ซ่อน (Inactive)</option>
           </select>
         </div>
@@ -421,7 +494,6 @@ try {
 
     <!-- เมนูด้านล่างสำหรับ Admin -->
     <div class="bottom-nav">
-      <!-- เปลี่ยนลิงก์ให้ตรงกับหน้าแดชบอร์ด Admin ของคุณ -->
       <a href="turakarn.php" class="nav-link">
         <i class="fas fa-chart-line"></i>
         <span>ภาพรวม</span>
