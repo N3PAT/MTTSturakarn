@@ -8,8 +8,8 @@ header('Content-Type: application/json; charset=utf-8');
 // ปิดการแสดง Error บนหน้าเว็บ ป้องกันไม่ให้มี HTML หลุดไปปนกับ JSON
 ini_set('display_errors', 0);
 
-// 1. ดึงรหัสนักเรียนจาก Session (เปลี่ยน 'student_id' ในวงเล็บให้ตรงกับชื่อ SESSION ที่ระบบล็อกอินของคุณตั้งไว้)
-$student_id = isset($_SESSION['student_id']) ? $_SESSION['student_id'] : '00000';
+// 1. ดึงรหัสนักเรียนจาก Session (เปลี่ยนเป็น student_code ตามระบบของคุณ)
+$student_id = isset($_SESSION['student_code']) ? $_SESSION['student_code'] : '00000';
 
 // 2. ตรวจสอบว่ามีข้อมูลส่งมาจาก FormData หรือไม่
 if (!isset($_POST['endpoint']) || empty($_POST['endpoint'])) {
