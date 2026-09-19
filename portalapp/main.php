@@ -259,6 +259,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       font-size: 1.4rem;
       color: #94a3b8;
       cursor: pointer;
+      text-decoration: none;
     }
 
     .noti-badge {
@@ -536,12 +537,13 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
         </div>
       </div>
 
-      <button class="noti-btn" id="notiBellBtn" title="เปิดใช้งานการแจ้งเตือน">
+      <!-- ปรับจาก button เป็นแท็ก a เพื่อให้คลิกแล้วนำทางไปที่หน้า nofitication.php -->
+      <a href="nofitication.php" class="noti-btn" id="notiBellBtn" title="ดูการแจ้งเตือน">
         <i class="far fa-bell"></i>
         <?php if ($noti_count > 0): ?>
           <span class="noti-badge"><?= $noti_count ?></span>
         <?php endif; ?>
-      </button>
+      </a>
     </div>
 
     <div class="student-card fade-in-up delay-2">
@@ -755,5 +757,6 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
     }
   });
 </script>
+    
 </body>
 </html>
