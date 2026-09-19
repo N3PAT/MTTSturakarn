@@ -10,19 +10,24 @@ if (empty($_SESSION['student_code'])) {
 $studentCode = $_SESSION['student_code'];
 $duty_notifications = [];
 $announcements = []; 
-$system_notifications = []; // เพิ่มตัวแปรเก็บแจ้งเตือนจากระบบ
+$system_notifications = []; 
 $has_voted = true; 
 $error_message = ""; 
 
 try {
     if (!isset($conn) || !($conn instanceof mysqli)) {
-        throw new Exception("Database connection error");
+        throw new Exception("ไม่พบการเชื่อมต่อฐานข้อมูล (Database connection error) หรือไฟล์ db.php ไม่ได้ใช้ MySQLi");
     }
 
     $conn->set_charset("utf8mb4");
 
     // 1. ดึงข้อมูลนักเรียน
     $stmt = $conn->prepare("SELECT student_code, prefix, first_name, last_name, platoon, company, battalion, section, image FROM students WHERE student_code = ? LIMIT 1");
+    
+    if (!$stmt) {
+        throw new Exception("Query ข้อมูลนักเรียนผิดพลาด: " . $conn->error);
+    }
+
     $stmt->bind_param("s", $studentCode);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -51,6 +56,8 @@ try {
             $duty_notifications[] = $row;
         }
         $stmt_duty->close();
+    } else {
+        error_log("Query student_duties ผิดพลาด: " . $conn->error);
     }
 
     // 3. ตรวจสอบโหวตประสงค์กลับบ้าน
@@ -70,6 +77,8 @@ try {
             }
         }
         $stmt_vote->close();
+    } else {
+        error_log("Query votes ผิดพลาด: " . $conn->error);
     }
 
     // 4. ดึงประกาศ/ข่าวสาร
@@ -83,9 +92,11 @@ try {
         while ($row = $res_news->fetch_assoc()) {
             $announcements[] = $row;
         }
+    } else {
+        error_log("Query announcements ผิดพลาด: " . $conn->error);
     }
 
-    // 5. ดึงการแจ้งเตือนจากตาราง notifications (เพิ่มใหม่)
+    // 5. ดึงการแจ้งเตือนจากตาราง notifications
     $stmt_noti = $conn->prepare("
         SELECT * FROM notifications 
         WHERE student_code = ? 
@@ -101,15 +112,17 @@ try {
             $system_notifications[] = $row;
         }
         $stmt_noti->close();
+    } else {
+        error_log("Query notifications ผิดพลาด: " . $conn->error);
     }
 
 } catch (Throwable $e) {
-    error_log("System error: " . $e->getMessage());
-    $error_message = "เกิดข้อผิดพลาดของระบบฐานข้อมูล";
+    // แสดง Error ที่แท้จริงบนหน้าจอเพื่อการดีบัก
+    $error_message = "System Error: " . htmlspecialchars($e->getMessage());
 }
 
-$name = trim(($student['prefix'] ?? '') . $student['first_name'] . ' ' . $student['last_name']);
-$student_code_display = "รหัสนักเรียน " . $student['student_code'];
+$name = trim(($student['prefix'] ?? '') . ($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''));
+$student_code_display = "รหัสนักเรียน " . ($student['student_code'] ?? $studentCode);
 
 $unit_parts = [];
 if (!empty($student['battalion'])) $unit_parts[] = "พัน." . $student['battalion'];
@@ -118,7 +131,7 @@ if (!empty($student['platoon']))   $unit_parts[] = "หมวด " . $student['p
 if (!empty($student['section']))   $unit_parts[] = "ตอนเรียนที่ " . $student['section'];
 $student_unit = !empty($unit_parts) ? implode(" ", $unit_parts) : "นักเรียนทหาร";
 
-// นับจำนวนรายการแจ้งเตือนทั้งหมด (รวมจากตาราง notifications ด้วย)
+// นับจำนวนรายการแจ้งเตือนทั้งหมด
 $total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + count($announcements) + count($system_notifications);
 ?>
 <!DOCTYPE html>
@@ -131,7 +144,6 @@ $total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + coun
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
   
   <style>
-    /* สไตล์เดิมทั้งหมด (ไม่เปลี่ยนแปลง) */
     :root {
       --primary: #5a42a0;
       --bg-color: #f6f8fc;
@@ -241,7 +253,7 @@ $total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + coun
     <div class="noti-list fade-in-up delay-4">
 
       <?php if (!empty($error_message)): ?>
-        <div style="padding: 12px 15px; background-color: #fef2f2; border: 1px solid #fecaca; color: #dc2626; border-radius: 10px; font-size: 0.85rem;">
+        <div style="padding: 12px 15px; background-color: #fef2f2; border: 1px solid #fecaca; color: #dc2626; border-radius: 10px; font-size: 0.85rem; margin-bottom: 12px;">
           <i class="fas fa-exclamation-circle"></i> <?= $error_message ?>
         </div>
       <?php endif; ?>
@@ -263,10 +275,9 @@ $total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + coun
         </div>
       <?php endif; ?>
 
-      <!-- 2. แจ้งเตือนจากตาราง Notifications (แจ้งเตือนระบบที่สร้างใหม่) -->
+      <!-- 2. แจ้งเตือนจากตาราง Notifications -->
       <?php foreach ($system_notifications as $sys_noti): ?>
         <?php 
-          // จัดการสีและไอคอนตามระดับความสำคัญใน DB
           $level = $sys_noti['alert_level'] ?? 'info';
           if ($level === 'urgent') {
               $card_type = 'urgent'; $icon_class = 'fa-exclamation-circle';
@@ -275,16 +286,15 @@ $total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + coun
           } else {
               $card_type = 'info'; $icon_class = 'fa-bell';
           }
-          
-          $noti_date = $sys_noti['created_at'] ? date('d/m/Y H:i', strtotime($sys_noti['created_at'])) : date('d/m/Y H:i');
+          $noti_date = !empty($sys_noti['created_at']) ? date('d/m/Y H:i', strtotime($sys_noti['created_at'])) : date('d/m/Y H:i');
         ?>
         <div class="noti-item <?= $card_type ?>">
           <div class="noti-icon">
             <i class="fas <?= $icon_class ?>"></i>
           </div>
           <div class="noti-content">
-            <h4><?= htmlspecialchars($sys_noti['title']) ?></h4>
-            <p><?= nl2br(htmlspecialchars($sys_noti['message'])) ?></p>
+            <h4><?= htmlspecialchars($sys_noti['title'] ?? '') ?></h4>
+            <p><?= nl2br(htmlspecialchars($sys_noti['message'] ?? '')) ?></p>
             <div class="noti-time">
               <i class="far fa-clock"></i> <?= $noti_date ?> น.
             </div>
@@ -295,7 +305,7 @@ $total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + coun
       <!-- 3. แจ้งเตือนการเข้าเวร -->
       <?php foreach ($duty_notifications as $duty): ?>
         <?php 
-          $days = (int)$duty['days_left'];
+          $days = (int)($duty['days_left'] ?? 0);
           if ($days === 0) {
               $card_type = 'urgent'; $icon_class = 'fa-exclamation-triangle'; $time_text = 'วันนี้';
           } elseif ($days === 1) {
@@ -303,7 +313,7 @@ $total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + coun
           } else {
               $card_type = 'info'; $icon_class = 'fa-calendar-alt'; $time_text = "อีก {$days} วัน";
           }
-          $duty_date_fmt = date('d/m/Y', strtotime($duty['duty_date']));
+          $duty_date_fmt = !empty($duty['duty_date']) ? date('d/m/Y', strtotime($duty['duty_date'])) : '';
         ?>
         <div class="noti-item <?= $card_type ?>">
           <div class="noti-icon">
