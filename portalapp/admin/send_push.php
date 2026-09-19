@@ -67,16 +67,42 @@ try {
         exit;
     }
 
-    // 5. เตรียมข้อความแจ้งเตือน
+        // 5. เตรียมข้อความแจ้งเตือน (ปรับปรุงหน้าตา)
     $inputData = json_decode(file_get_contents('php://input'), true);
     $targetDate = isset($inputData['target_date']) ? $inputData['target_date'] : date('d/m/Y');
 
     $payload = json_encode([
-        'title' => 'ระบบแจ้งเตือน นชท.',
-        'body'  => "คุณยังไม่ได้ทำรายการ ประจำวันที่ {$targetDate} กรุณาเข้ามาดำเนินการให้เรียบร้อย",
-        'icon'  => 'https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg',
-        'url'   => '/portalapp/main.php'
+        // หัวข้อหลัก: กระชับ เป็นทางการ
+        'title' => 'ประกาศ: ยังไม่ได้ทำรายการ',
+        
+        // เนื้อหา: ใช้ \n เพื่อเว้นบรรทัดให้อ่านง่าย ดูสบายตา
+        'body'  => "ระบบตรวจสอบพบว่าคุณยังไม่ได้ทำรายการประจำวันที่ {$targetDate}\n\nกรุณาเข้าสู่ระบบเพื่อดำเนินการให้เรียบร้อย",
+        
+        // โลโก้แอป (แสดงด้านซ้าย)
+        'icon'  => 'https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg?utm_source=th.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled',
+        
+        // รูปภาพแบนเนอร์ใหญ่ (แสดงด้านล่างเนื้อหา - รองรับบน Android และ Windows)
+        // แนะนำให้เปลี่ยน URL เป็นรูปลานโรงเรียน หรือรูปพื้นหลังสวยๆ ของโรงเรียนช่างฝีมือทหาร
+        'image' => 'https://taothetutor.wordpress.com/wp-content/uploads/2026/09/wp-17898328944611784106779603276252.jpg',
+        
+        // URL ที่ต้องการให้ไปเมื่อกดที่ตัวแจ้งเตือน
+        'url'   => '/portalapp/main.php',
+        
+        // ตั้งค่าให้แจ้งเตือนค้างอยู่บนหน้าจอจนกว่าผู้ใช้จะปัดทิ้ง (เหมาะสำหรับเรื่องสำคัญ)
+        'requireInteraction' => true,
+        
+        // รูปแบบการสั่น (สั่น 2 จังหวะเตือนความจำ)
+        'vibrate' => [200, 100, 200],
+        
+        // ปุ่มลัดด้านล่างแจ้งเตือน (ดูเป็นมืออาชีพมากขึ้น)
+        'actions' => [
+            [
+                'action' => 'open_app',
+                'title'  => 'เข้าสู่ระบบเพื่อทำรายการ'
+            ]
+        ]
     ], JSON_UNESCAPED_UNICODE);
+
 
     // 6. วนลูปส่งการแจ้งเตือน
     $sentCount = 0;
