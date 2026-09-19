@@ -63,7 +63,7 @@ try {
     // 3. ตรวจสอบโหวตประสงค์กลับบ้าน
     $stmt_vote = $conn->prepare("
         SELECT COUNT(*) as vote_count 
-        FROM votes 
+        FROM weekly_votes 
         WHERE student_code = ? 
           AND YEARWEEK(vote_date, 1) = YEARWEEK(CURDATE(), 1)
     ");
