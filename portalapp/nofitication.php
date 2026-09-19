@@ -10,6 +10,7 @@ if (empty($_SESSION['student_code'])) {
 $studentCode = $_SESSION['student_code'];
 $duty_notifications = [];
 $announcements = []; 
+$system_notifications = []; // เพิ่มตัวแปรเก็บแจ้งเตือนจากระบบ
 $has_voted = true; 
 $error_message = ""; 
 
@@ -34,7 +35,7 @@ try {
         exit();
     }
 
-    // 2. ดึงข้อมูลการเข้าเวรทั้งหมดที่กำลังจะมาถึง (วันนี้เป็นต้นไป)
+    // 2. ดึงข้อมูลการเข้าเวรทั้งหมดที่กำลังจะมาถึง
     $stmt_duty = $conn->prepare("
         SELECT duty_name, duty_date, DATEDIFF(duty_date, CURDATE()) AS days_left 
         FROM student_duties 
@@ -42,7 +43,6 @@ try {
           AND duty_date >= CURDATE()
         ORDER BY duty_date ASC
     ");
-    
     if ($stmt_duty) {
         $stmt_duty->bind_param("s", $studentCode);
         $stmt_duty->execute();
@@ -53,7 +53,7 @@ try {
         $stmt_duty->close();
     }
 
-    // 3. ตรวจสอบว่า "โหวตประสงค์กลับบ้าน" หรือยังในสัปดาห์นี้
+    // 3. ตรวจสอบโหวตประสงค์กลับบ้าน
     $stmt_vote = $conn->prepare("
         SELECT COUNT(*) as vote_count 
         FROM votes 
@@ -72,19 +72,35 @@ try {
         $stmt_vote->close();
     }
 
-    // 4. ดึงประกาศ/ข่าวสารทั้งหมดล่าสุด
+    // 4. ดึงประกาศ/ข่าวสาร
     $sql_news = "SELECT * FROM announcements WHERE status = 'active' OR status = '1' ORDER BY id DESC LIMIT 10";
     $res_news = $conn->query($sql_news);
-    
     if (!$res_news) {
         $sql_fallback = "SELECT * FROM announcements ORDER BY id DESC LIMIT 10";
         $res_news = $conn->query($sql_fallback);
     }
-
     if ($res_news) {
         while ($row = $res_news->fetch_assoc()) {
             $announcements[] = $row;
         }
+    }
+
+    // 5. ดึงการแจ้งเตือนจากตาราง notifications (เพิ่มใหม่)
+    $stmt_noti = $conn->prepare("
+        SELECT * FROM notifications 
+        WHERE student_code = ? 
+           OR student_code IS NULL 
+           OR student_code = '' 
+        ORDER BY created_at DESC LIMIT 15
+    ");
+    if ($stmt_noti) {
+        $stmt_noti->bind_param("s", $studentCode);
+        $stmt_noti->execute();
+        $res_noti = $stmt_noti->get_result();
+        while ($row = $res_noti->fetch_assoc()) {
+            $system_notifications[] = $row;
+        }
+        $stmt_noti->close();
     }
 
 } catch (Throwable $e) {
@@ -102,8 +118,8 @@ if (!empty($student['platoon']))   $unit_parts[] = "หมวด " . $student['p
 if (!empty($student['section']))   $unit_parts[] = "ตอนเรียนที่ " . $student['section'];
 $student_unit = !empty($unit_parts) ? implode(" ", $unit_parts) : "นักเรียนทหาร";
 
-// นับจำนวนรายการแจ้งเตือนทั้งหมด
-$total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + count($announcements);
+// นับจำนวนรายการแจ้งเตือนทั้งหมด (รวมจากตาราง notifications ด้วย)
+$total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + count($announcements) + count($system_notifications);
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -115,15 +131,14 @@ $total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + coun
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
   
   <style>
+    /* สไตล์เดิมทั้งหมด (ไม่เปลี่ยนแปลง) */
     :root {
       --primary: #5a42a0;
       --bg-color: #f6f8fc;
       --text-dark: #1e293b;
       --text-gray: #64748b;
     }
-
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    
     body {
       font-family: 'Prompt', sans-serif;
       background-color: #e2e8f0;
@@ -132,7 +147,6 @@ $total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + coun
       justify-content: center;
       user-select: none;
     }
-
     .fade-in-up {
       opacity: 0;
       transform: translateY(20px);
@@ -141,297 +155,49 @@ $total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + coun
     @keyframes fadeInUp {
       to { opacity: 1; transform: translateY(0); }
     }
-    
     .delay-1 { animation-delay: 0.1s; }
     .delay-2 { animation-delay: 0.2s; }
     .delay-3 { animation-delay: 0.3s; }
     .delay-4 { animation-delay: 0.4s; }
-
-    .top-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 15px 20px;
-      background: var(--bg-color);
-    }
-
-    .header-left {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .school-logo {
-      width: 45px;
-      height: 45px;
-      object-fit: contain;
-      border-radius: 10px;
-    }
-
-    .school-name h1 {
-      font-size: 1rem;
-      font-weight: 700;
-      color: var(--text-dark);
-      margin: 0 0 2px 0;
-    }
-
-    .school-name p {
-      font-size: 0.75rem;
-      color: var(--text-gray);
-      margin: 0;
-    }
-
-    .back-btn {
-      background: #e2e8f0;
-      border: none;
-      font-size: 1.1rem;
-      color: var(--text-dark);
-      cursor: pointer;
-      text-decoration: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 38px;
-      height: 38px;
-      border-radius: 50%;
-      transition: background-color 0.2s;
-    }
-
-    .back-btn:active {
-      background: #cbd5e1;
-    }
-
-    .student-card {
-      background: var(--primary);
-      border-radius: 16px;
-      padding: 20px;
-      margin: 5px 20px 20px;
-      color: white;
-      box-shadow: 0 10px 20px rgba(90, 66, 160, 0.2);
-    }
-
-    .badges {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 12px;
-    }
-
-    .badge-item {
-      background: rgba(255, 255, 255, 0.2);
-      border: 1px solid rgba(255, 255, 255, 0.4);
-      padding: 4px 12px;
-      border-radius: 20px;
-      font-size: 0.75rem;
-      font-weight: 500;
-      backdrop-filter: blur(4px);
-    }
-
-    .student-card h2 {
-      font-size: 1.3rem;
-      font-weight: 600;
-      margin: 0 0 4px 0;
-    }
-
-    .student-card p {
-      font-size: 0.85rem;
-      margin: 0;
-      opacity: 0.9;
-    }
-
-    .section-title {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin: 0 20px 15px;
-    }
-
-    .section-title-left {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .section-pill {
-      width: 5px;
-      height: 24px;
-      background: var(--primary);
-      border-radius: 4px;
-    }
-
-    .section-title h3 {
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: var(--text-dark);
-      margin: 0;
-    }
-
-    .noti-count-tag {
-      background: #e2e8f0;
-      color: var(--text-dark);
-      font-size: 0.75rem;
-      font-weight: 600;
-      padding: 3px 10px;
-      border-radius: 12px;
-    }
-
-    /* สไตล์สำหรับการ์ดแจ้งเตือน */
-    .noti-list {
-      margin: 0 20px 25px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .noti-item {
-      background: white;
-      border-radius: 14px;
-      padding: 16px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.03);
-      display: flex;
-      gap: 14px;
-      align-items: flex-start;
-      position: relative;
-    }
-
-    .noti-item.urgent {
-      border-left: 4px solid #ef4444;
-      background-color: #fef2f2;
-    }
-
-    .noti-item.warning {
-      border-left: 4px solid #f97316;
-      background-color: #fff7ed;
-    }
-
-    .noti-item.info {
-      border-left: 4px solid #3b82f6;
-      background-color: #ffffff;
-    }
-
-    .noti-icon {
-      width: 40px;
-      height: 40px;
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.2rem;
-      flex-shrink: 0;
-    }
-
+    .top-header { display: flex; align-items: center; justify-content: space-between; padding: 15px 20px; background: var(--bg-color); }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .school-logo { width: 45px; height: 45px; object-fit: contain; border-radius: 10px; }
+    .school-name h1 { font-size: 1rem; font-weight: 700; color: var(--text-dark); margin: 0 0 2px 0; }
+    .school-name p { font-size: 0.75rem; color: var(--text-gray); margin: 0; }
+    .back-btn { background: #e2e8f0; border: none; font-size: 1.1rem; color: var(--text-dark); cursor: pointer; text-decoration: none; display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; transition: background-color 0.2s; }
+    .back-btn:active { background: #cbd5e1; }
+    .student-card { background: var(--primary); border-radius: 16px; padding: 20px; margin: 5px 20px 20px; color: white; box-shadow: 0 10px 20px rgba(90, 66, 160, 0.2); }
+    .badges { display: flex; gap: 8px; margin-bottom: 12px; }
+    .badge-item { background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.4); padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 500; backdrop-filter: blur(4px); }
+    .student-card h2 { font-size: 1.3rem; font-weight: 600; margin: 0 0 4px 0; }
+    .student-card p { font-size: 0.85rem; margin: 0; opacity: 0.9; }
+    .section-title { display: flex; align-items: center; justify-content: space-between; margin: 0 20px 15px; }
+    .section-title-left { display: flex; align-items: center; gap: 10px; }
+    .section-pill { width: 5px; height: 24px; background: var(--primary); border-radius: 4px; }
+    .section-title h3 { font-size: 1.1rem; font-weight: 700; color: var(--text-dark); margin: 0; }
+    .noti-count-tag { background: #e2e8f0; color: var(--text-dark); font-size: 0.75rem; font-weight: 600; padding: 3px 10px; border-radius: 12px; }
+    .noti-list { margin: 0 20px 25px; display: flex; flex-direction: column; gap: 12px; }
+    .noti-item { background: white; border-radius: 14px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); display: flex; gap: 14px; align-items: flex-start; position: relative; }
+    .noti-item.urgent { border-left: 4px solid #ef4444; background-color: #fef2f2; }
+    .noti-item.warning { border-left: 4px solid #f97316; background-color: #fff7ed; }
+    .noti-item.info { border-left: 4px solid #3b82f6; background-color: #ffffff; }
+    .noti-icon { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; }
     .noti-item.urgent .noti-icon { background: #fee2e2; color: #dc2626; }
     .noti-item.warning .noti-icon { background: #ffedd5; color: #ea580c; }
     .noti-item.info .noti-icon { background: #dbeafe; color: #2563eb; }
-
-    .noti-content {
-      flex: 1;
-    }
-
-    .noti-content h4 {
-      margin: 0 0 4px 0;
-      font-size: 0.95rem;
-      font-weight: 700;
-      color: var(--text-dark);
-    }
-
-    .noti-content p {
-      margin: 0 0 8px 0;
-      font-size: 0.82rem;
-      color: var(--text-gray);
-      line-height: 1.4;
-      word-break: break-word;
-    }
-
-    .noti-time {
-      font-size: 0.7rem;
-      color: #94a3b8;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .btn-action {
-      display: inline-block;
-      margin-top: 6px;
-      background-color: var(--primary);
-      color: white;
-      text-decoration: none;
-      padding: 6px 14px;
-      border-radius: 8px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      box-shadow: 0 2px 4px rgba(90, 66, 160, 0.2);
-    }
-
-    .empty-state {
-      text-align: center;
-      padding: 40px 20px;
-      background: white;
-      border-radius: 16px;
-      margin: 0 20px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.03);
-    }
-
-    .empty-state i {
-      font-size: 3rem;
-      color: #cbd5e1;
-      margin-bottom: 12px;
-    }
-
-    .empty-state p {
-      margin: 0;
-      color: #94a3b8;
-      font-size: 0.9rem;
-    }
-
-    .app-container {
-      width: 100%;
-      max-width: 430px;
-      background-color: var(--bg-color);
-      min-height: 100vh;
-      position: relative;
-      padding-bottom: 90px;
-      box-shadow: 0 0 20px rgba(0,0,0,0.1);
-    }
-
-    .bottom-nav {
-      position: fixed; 
-      bottom: 0;
-      width: 100%;
-      max-width: 430px; 
-      left: 50%;
-      transform: translateX(-50%); 
-      height: 70px;
-      background: white;
-      border-top-left-radius: 25px;
-      border-top-right-radius: 25px;
-      display: flex;
-      justify-content: space-around;
-      align-items: center;
-      box-shadow: 0 -5px 20px rgba(0,0,0,0.03);
-      padding: 0 10px;
-      z-index: 1000; 
-    }
-
-    .nav-link {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      text-decoration: none;
-      color: #94a3b8;
-      font-size: 0.7rem;
-      font-weight: 600;
-      width: 30%;
-      gap: 4px;
-    }
-
-    .nav-link.active {
-      color: var(--primary);
-    }
-
-    .nav-link i {
-      font-size: 1.3rem;
-    }
+    .noti-content { flex: 1; }
+    .noti-content h4 { margin: 0 0 4px 0; font-size: 0.95rem; font-weight: 700; color: var(--text-dark); }
+    .noti-content p { margin: 0 0 8px 0; font-size: 0.82rem; color: var(--text-gray); line-height: 1.4; word-break: break-word; }
+    .noti-time { font-size: 0.7rem; color: #94a3b8; display: flex; align-items: center; gap: 4px; }
+    .btn-action { display: inline-block; margin-top: 6px; background-color: var(--primary); color: white; text-decoration: none; padding: 6px 14px; border-radius: 8px; font-size: 0.75rem; font-weight: 600; box-shadow: 0 2px 4px rgba(90, 66, 160, 0.2); }
+    .empty-state { text-align: center; padding: 40px 20px; background: white; border-radius: 16px; margin: 0 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
+    .empty-state i { font-size: 3rem; color: #cbd5e1; margin-bottom: 12px; }
+    .empty-state p { margin: 0; color: #94a3b8; font-size: 0.9rem; }
+    .app-container { width: 100%; max-width: 430px; background-color: var(--bg-color); min-height: 100vh; position: relative; padding-bottom: 90px; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
+    .bottom-nav { position: fixed; bottom: 0; width: 100%; max-width: 430px; left: 50%; transform: translateX(-50%); height: 70px; background: white; border-top-left-radius: 25px; border-top-right-radius: 25px; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 -5px 20px rgba(0,0,0,0.03); padding: 0 10px; z-index: 1000; }
+    .nav-link { display: flex; flex-direction: column; align-items: center; text-decoration: none; color: #94a3b8; font-size: 0.7rem; font-weight: 600; width: 30%; gap: 4px; }
+    .nav-link.active { color: var(--primary); }
+    .nav-link i { font-size: 1.3rem; }
   </style>
 </head>
 <body>
@@ -441,7 +207,7 @@ $total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + coun
     <!-- Top Header -->
     <div class="top-header fade-in-up delay-1">
       <div class="header-left">
-        <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg?utm_source=th.wikipedia.org&utm_campaign=index&utm_content=thumbnail_unscaled" alt="Logo" class="school-logo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg" alt="Logo" class="school-logo">
         <div class="school-name">
           <h1>การแจ้งเตือน</h1>
           <p>โรงเรียนช่างฝีมือทหาร</p>
@@ -497,27 +263,46 @@ $total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + coun
         </div>
       <?php endif; ?>
 
-      <!-- 2. แจ้งเตือนการเข้าเวร -->
+      <!-- 2. แจ้งเตือนจากตาราง Notifications (แจ้งเตือนระบบที่สร้างใหม่) -->
+      <?php foreach ($system_notifications as $sys_noti): ?>
+        <?php 
+          // จัดการสีและไอคอนตามระดับความสำคัญใน DB
+          $level = $sys_noti['alert_level'] ?? 'info';
+          if ($level === 'urgent') {
+              $card_type = 'urgent'; $icon_class = 'fa-exclamation-circle';
+          } elseif ($level === 'warning') {
+              $card_type = 'warning'; $icon_class = 'fa-exclamation-triangle';
+          } else {
+              $card_type = 'info'; $icon_class = 'fa-bell';
+          }
+          
+          $noti_date = $sys_noti['created_at'] ? date('d/m/Y H:i', strtotime($sys_noti['created_at'])) : date('d/m/Y H:i');
+        ?>
+        <div class="noti-item <?= $card_type ?>">
+          <div class="noti-icon">
+            <i class="fas <?= $icon_class ?>"></i>
+          </div>
+          <div class="noti-content">
+            <h4><?= htmlspecialchars($sys_noti['title']) ?></h4>
+            <p><?= nl2br(htmlspecialchars($sys_noti['message'])) ?></p>
+            <div class="noti-time">
+              <i class="far fa-clock"></i> <?= $noti_date ?> น.
+            </div>
+          </div>
+        </div>
+      <?php endforeach; ?>
+
+      <!-- 3. แจ้งเตือนการเข้าเวร -->
       <?php foreach ($duty_notifications as $duty): ?>
         <?php 
           $days = (int)$duty['days_left'];
-          $is_today = ($days === 0);
-          $is_tomorrow = ($days === 1);
-          
-          if ($is_today) {
-              $card_type = 'urgent';
-              $icon_class = 'fa-exclamation-triangle';
-              $time_text = 'วันนี้';
-          } elseif ($is_tomorrow) {
-              $card_type = 'warning';
-              $icon_class = 'fa-clock';
-              $time_text = 'พรุ่งนี้';
+          if ($days === 0) {
+              $card_type = 'urgent'; $icon_class = 'fa-exclamation-triangle'; $time_text = 'วันนี้';
+          } elseif ($days === 1) {
+              $card_type = 'warning'; $icon_class = 'fa-clock'; $time_text = 'พรุ่งนี้';
           } else {
-              $card_type = 'info';
-              $icon_class = 'fa-calendar-alt';
-              $time_text = "อีก {$days} วัน";
+              $card_type = 'info'; $icon_class = 'fa-calendar-alt'; $time_text = "อีก {$days} วัน";
           }
-          
           $duty_date_fmt = date('d/m/Y', strtotime($duty['duty_date']));
         ?>
         <div class="noti-item <?= $card_type ?>">
@@ -534,7 +319,7 @@ $total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + coun
         </div>
       <?php endforeach; ?>
 
-      <!-- 3. แจ้งเตือนข่าวสาร/ประกาศ -->
+      <!-- 4. แจ้งเตือนข่าวสาร/ประกาศ -->
       <?php foreach ($announcements as $news): ?>
         <?php 
           $title = $news['title'] ?? $news['topic'] ?? $news['subject'] ?? 'ประกาศข่าวสาร';
