@@ -39,7 +39,17 @@ try {
     
     $pdo = new PDO($dsn, $user, $pass, $options);
 
-    // 6. เพิ่ม student_id เข้าไปในคำสั่ง INSERT INTO push_subscriptions
+    // 6. ตรวจสอบว่ามี student_id นี้ในตารางแล้วหรือไม่
+    $checkStmt = $pdo->prepare("SELECT id FROM push_subscriptions WHERE student_id = :student_id LIMIT 1");
+    $checkStmt->execute([':student_id' => $student_id]);
+
+    if ($checkStmt->rowCount() > 0) {
+        // ถ้าเจอ student_id ซ้ำ ให้ตอบกลับว่าสำเร็จไปเลย โดยไม่ต้องบันทึกใหม่
+        echo json_encode(['success' => true, 'message' => 'มีข้อมูล student_id นี้ในระบบแล้ว ไม่บันทึกซ้ำ']);
+        exit();
+    }
+
+    // 7. เพิ่ม student_id เข้าไปในคำสั่ง INSERT INTO push_subscriptions
     $stmt = $pdo->prepare("INSERT INTO push_subscriptions (student_id, endpoint, p256dh, auth) VALUES (:student_id, :endpoint, :p256dh, :auth)");
     $stmt->execute([
         ':student_id' => $student_id,
