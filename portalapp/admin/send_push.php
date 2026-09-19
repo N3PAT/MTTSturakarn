@@ -31,12 +31,14 @@ if (file_exists(__DIR__ . '/../db.php')) {
 use Minishlink\WebPush\WebPush;
 use Minishlink\WebPush\Subscription;
 
-// 3. ตั้งค่า VAPID Keys (นำ Keys ที่ได้จากเว็บหรือระบบของคุณมาใส่ที่นี่)
-$vapidSubject = 'natthapatinsangchan@gmail.com';
+// 3. ตั้งค่า VAPID Keys
+// แก้ไข: เพิ่ม mailto: ตามมาตรฐาน VAPID
+$vapidSubject = 'mailto:natthapatinsangchan@gmail.com';
 $publicKey    = 'BDcVYH88lfTwHxM-yyzWmQzIc6_orJpWxXr156VsSppe-srH4z1gYGz0W6z9I67JHkBkcnnbrwqoLuBZLAzC7HA';
 $privateKey   = 'w86Ccb6pIc6w6EMWun3uVj9zfDe0Q-44hA2asE_RUSs';
 
-if ($publicKey === 'BDcVYH88lfTwHxM-yyzWmQzIc6_orJpWxXr156VsSppe-srH4z1gYGz0W6z9I67JHkBkcnnbrwqoLuBZLAzC7HA' || $privateKey === 'w86Ccb6pIc6w6EMWun3uVj9zfDe0Q-44hA2asE_RUSs) {
+// แก้ไข: เปลี่ยนการตรวจสอบเป็นการเช็คค่าว่างแทน เพื่อไม่ให้บล็อก Key ของคุณเอง
+if (empty($publicKey) || empty($privateKey)) {
     echo json_encode(['success' => false, 'message' => 'กรุณาตั้งค่า VAPID Keys ในไฟล์ send_push.php']);
     exit;
 }
@@ -116,3 +118,4 @@ try {
         'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()
     ]);
 }
+?>
