@@ -21,8 +21,8 @@ try {
 
     $conn->set_charset("utf8mb4");
 
-    // 1. ดึงข้อมูลนักเรียน
-    $stmt = $conn->prepare("SELECT student_code, prefix, first_name, last_name, platoon, company, battalion, section, image FROM students WHERE student_code = ? LIMIT 1");
+    // 1. ดึงข้อมูลนักเรียน (เช็คว่ามีตัวตนอยู่จริงหรือไม่)
+    $stmt = $conn->prepare("SELECT student_code FROM students WHERE student_code = ? LIMIT 1");
     
     if (!$stmt) {
         throw new Exception("Query ข้อมูลนักเรียนผิดพลาด: " . $conn->error);
@@ -121,16 +121,6 @@ try {
     $error_message = "System Error: " . htmlspecialchars($e->getMessage());
 }
 
-$name = trim(($student['prefix'] ?? '') . ($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''));
-$student_code_display = "รหัสนักเรียน " . ($student['student_code'] ?? $studentCode);
-
-$unit_parts = [];
-if (!empty($student['battalion'])) $unit_parts[] = "พัน." . $student['battalion'];
-if (!empty($student['company']))   $unit_parts[] = "ร้อย." . $student['company'];
-if (!empty($student['platoon']))   $unit_parts[] = "หมวด " . $student['platoon'];
-if (!empty($student['section']))   $unit_parts[] = "ตอนเรียนที่ " . $student['section'];
-$student_unit = !empty($unit_parts) ? implode(" ", $unit_parts) : "นักเรียนทหาร";
-
 // นับจำนวนรายการแจ้งเตือนทั้งหมด
 $total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + count($announcements) + count($system_notifications);
 ?>
@@ -170,7 +160,7 @@ $total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + coun
     .delay-1 { animation-delay: 0.1s; }
     .delay-2 { animation-delay: 0.2s; }
     .delay-3 { animation-delay: 0.3s; }
-    .delay-4 { animation-delay: 0.4s; }
+    
     .top-header { display: flex; align-items: center; justify-content: space-between; padding: 15px 20px; background: var(--bg-color); }
     .header-left { display: flex; align-items: center; gap: 12px; }
     .school-logo { width: 45px; height: 45px; object-fit: contain; border-radius: 10px; }
@@ -178,16 +168,13 @@ $total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + coun
     .school-name p { font-size: 0.75rem; color: var(--text-gray); margin: 0; }
     .back-btn { background: #e2e8f0; border: none; font-size: 1.1rem; color: var(--text-dark); cursor: pointer; text-decoration: none; display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; transition: background-color 0.2s; }
     .back-btn:active { background: #cbd5e1; }
-    .student-card { background: var(--primary); border-radius: 16px; padding: 20px; margin: 5px 20px 20px; color: white; box-shadow: 0 10px 20px rgba(90, 66, 160, 0.2); }
-    .badges { display: flex; gap: 8px; margin-bottom: 12px; }
-    .badge-item { background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.4); padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 500; backdrop-filter: blur(4px); }
-    .student-card h2 { font-size: 1.3rem; font-weight: 600; margin: 0 0 4px 0; }
-    .student-card p { font-size: 0.85rem; margin: 0; opacity: 0.9; }
-    .section-title { display: flex; align-items: center; justify-content: space-between; margin: 0 20px 15px; }
+    
+    .section-title { display: flex; align-items: center; justify-content: space-between; margin: 15px 20px 15px; }
     .section-title-left { display: flex; align-items: center; gap: 10px; }
     .section-pill { width: 5px; height: 24px; background: var(--primary); border-radius: 4px; }
     .section-title h3 { font-size: 1.1rem; font-weight: 700; color: var(--text-dark); margin: 0; }
     .noti-count-tag { background: #e2e8f0; color: var(--text-dark); font-size: 0.75rem; font-weight: 600; padding: 3px 10px; border-radius: 12px; }
+    
     .noti-list { margin: 0 20px 25px; display: flex; flex-direction: column; gap: 12px; }
     .noti-item { background: white; border-radius: 14px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); display: flex; gap: 14px; align-items: flex-start; position: relative; }
     .noti-item.urgent { border-left: 4px solid #ef4444; background-color: #fef2f2; }
@@ -202,9 +189,11 @@ $total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + coun
     .noti-content p { margin: 0 0 8px 0; font-size: 0.82rem; color: var(--text-gray); line-height: 1.4; word-break: break-word; }
     .noti-time { font-size: 0.7rem; color: #94a3b8; display: flex; align-items: center; gap: 4px; }
     .btn-action { display: inline-block; margin-top: 6px; background-color: var(--primary); color: white; text-decoration: none; padding: 6px 14px; border-radius: 8px; font-size: 0.75rem; font-weight: 600; box-shadow: 0 2px 4px rgba(90, 66, 160, 0.2); }
+    
     .empty-state { text-align: center; padding: 40px 20px; background: white; border-radius: 16px; margin: 0 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
     .empty-state i { font-size: 3rem; color: #cbd5e1; margin-bottom: 12px; }
     .empty-state p { margin: 0; color: #94a3b8; font-size: 0.9rem; }
+    
     .app-container { width: 100%; max-width: 430px; background-color: var(--bg-color); min-height: 100vh; position: relative; padding-bottom: 90px; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
     .bottom-nav { position: fixed; bottom: 0; width: 100%; max-width: 430px; left: 50%; transform: translateX(-50%); height: 70px; background: white; border-top-left-radius: 25px; border-top-right-radius: 25px; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 -5px 20px rgba(0,0,0,0.03); padding: 0 10px; z-index: 1000; }
     .nav-link { display: flex; flex-direction: column; align-items: center; text-decoration: none; color: #94a3b8; font-size: 0.7rem; font-weight: 600; width: 30%; gap: 4px; }
@@ -230,18 +219,8 @@ $total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + coun
       </a>
     </div>
 
-    <!-- Student Card -->
-    <div class="student-card fade-in-up delay-2">
-      <div class="badges">
-        <div class="badge-item">ปีการศึกษา 2569</div>
-        <div class="badge-item"><?= htmlspecialchars($student_unit) ?></div>
-      </div>
-      <h2><?= htmlspecialchars($name) ?></h2>
-      <p><?= htmlspecialchars($student_code_display) ?></p>
-    </div>
-
     <!-- Section Title -->
-    <div class="section-title fade-in-up delay-3">
+    <div class="section-title fade-in-up delay-2">
       <div class="section-title-left">
         <div class="section-pill"></div>
         <h3>รายการแจ้งเตือนทั้งหมด</h3>
@@ -250,7 +229,7 @@ $total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + coun
     </div>
 
     <!-- Notification List -->
-    <div class="noti-list fade-in-up delay-4">
+    <div class="noti-list fade-in-up delay-3">
 
       <?php if (!empty($error_message)): ?>
         <div style="padding: 12px 15px; background-color: #fef2f2; border: 1px solid #fecaca; color: #dc2626; border-radius: 10px; font-size: 0.85rem; margin-bottom: 12px;">
