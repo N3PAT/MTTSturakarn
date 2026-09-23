@@ -1,45 +1,81 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 
-// 1. โหลด Composer Autoload (ปรับ Path ให้ถอยออกไปหาโฟลเดอร์ vendor)
+// ------------------------------------------------------------------
+// 1. ความปลอดภัยขั้นที่ 1: ป้องกันการกดเข้าผ่าน Web URL โดยตรง (อนุญาตเฉพาะ POST)
+// ------------------------------------------------------------------
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Method Not Allowed: ไม่อนุญาตให้เข้าถึงผ่าน URL โดยตรง (เปิดรับเฉพาะ POST Request)'
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+// ------------------------------------------------------------------
+// 2. ความปลอดภัยขั้นที่ 2: ตรวจสอบ Security Secret Key (X-API-KEY)
+// ------------------------------------------------------------------
+// กำหนด Secret Key สำหรับยืนยันตัวตน (ควรเปลี่ยนคำว่า 'YOUR_SUPER_SECRET_KEY_12345' เป็นรหัสของคุณ)
+define('SECRET_API_KEY', getenv('API_SECRET_KEY') ?: 'YOUR_SUPER_SECRET_KEY_12345');
+
+$headers = getallheaders();
+$providedKey = $headers['X-API-KEY'] ?? $headers['x-api-key'] ?? $_SERVER['HTTP_X_API_KEY'] ?? '';
+
+if (empty($providedKey) || $providedKey !== SECRET_API_KEY) {
+    http_response_code(401);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Unauthorized: สิทธิ์ไม่ถูกต้อง ไม่อนุญาตให้ส่งข้อความ'
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+// ------------------------------------------------------------------
+// 3. โหลด Composer Autoload
+// ------------------------------------------------------------------
 $autoloadPath = __DIR__ . '/../../vendor/autoload.php';
 if (!file_exists($autoloadPath)) {
-    // ลองหาในกรณีโฟลเดอร์อยู่ชั้นเดียว
     $autoloadPath = __DIR__ . '/../vendor/autoload.php';
 }
 
 if (!file_exists($autoloadPath)) {
+    http_response_code(500);
     echo json_encode([
         'success' => false, 
         'message' => 'ไม่พบโฟลเดอร์ vendor/autoload.php กรุณารัน composer install บน Render'
-    ]);
+    ], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
 require_once $autoloadPath;
 
-// 2. เชื่อมต่อฐานข้อมูล (ปรับ Path ให้ตรงกับไฟล์ db.php ของคุณ)
+// ------------------------------------------------------------------
+// 4. เชื่อมต่อฐานข้อมูล
+// ------------------------------------------------------------------
 if (file_exists(__DIR__ . '/../db.php')) {
     require_once __DIR__ . '/../db.php';
 } elseif (file_exists(__DIR__ . '/db.php')) {
     require_once __DIR__ . '/db.php';
 } else {
-    echo json_encode(['success' => false, 'message' => 'ไม่พบไฟล์ db.php']);
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'ไม่พบไฟล์ db.php'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
 use Minishlink\WebPush\WebPush;
 use Minishlink\WebPush\Subscription;
 
-// 3. ตั้งค่า VAPID Keys
-// แก้ไข: เพิ่ม mailto: ตามมาตรฐาน VAPID
-$vapidSubject = 'mailto:natthapatinsangchan@gmail.com';
-$publicKey    = 'BDcVYH88lfTwHxM-yyzWmQzIc6_orJpWxXr156VsSppe-srH4z1gYGz0W6z9I67JHkBkcnnbrwqoLuBZLAzC7HA';
-$privateKey   = 'w86Ccb6pIc6w6EMWun3uVj9zfDe0Q-44hA2asE_RUSs';
+// ------------------------------------------------------------------
+// 5. ตั้งค่า VAPID Keys
+// ------------------------------------------------------------------
+$vapidSubject = getenv('VAPID_SUBJECT') ?: 'mailto:natthapatinsangchan@gmail.com';
+$publicKey    = getenv('VAPID_PUBLIC_KEY') ?: 'BDcVYH88lfTwHxM-yyzWmQzIc6_orJpWxXr156VsSppe-srH4z1gYGz0W6z9I67JHkBkcnnbrwqoLuBZLAzC7HA';
+$privateKey   = getenv('VAPID_PRIVATE_KEY') ?: 'w86Ccb6pIc6w6EMWun3uVj9zfDe0Q-44hA2asE_RUSs';
 
-// แก้ไข: เปลี่ยนการตรวจสอบเป็นการเช็คค่าว่างแทน เพื่อไม่ให้บล็อก Key ของคุณเอง
 if (empty($publicKey) || empty($privateKey)) {
-    echo json_encode(['success' => false, 'message' => 'กรุณาตั้งค่า VAPID Keys ในไฟล์ send_push.php']);
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'กรุณาตั้งค่า VAPID Keys'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -54,7 +90,9 @@ $auth = [
 try {
     $webPush = new WebPush($auth);
 
-    // 4. ดึงข้อมูลผู้รับแจ้งเตือนจากตาราง push_subscriptions
+    // ------------------------------------------------------------------
+    // 6. ดึงข้อมูลผู้รับแจ้งเตือนจากตาราง push_subscriptions
+    // ------------------------------------------------------------------
     $stmt = $conn->prepare("SELECT id, endpoint, p256dh, auth FROM push_subscriptions");
     $stmt->execute();
     $result = $stmt->get_result();
@@ -63,38 +101,25 @@ try {
         echo json_encode([
             'success' => false, 
             'message' => 'ไม่พบข้อมูลเครื่องที่ลงทะเบียนรับแจ้งเตือนในระบบ (push_subscriptions เป็นค่าว่าง)'
-        ]);
+        ], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
-        // 5. เตรียมข้อความแจ้งเตือน (ปรับปรุงหน้าตา)
+    // ------------------------------------------------------------------
+    // 7. ดึงและทำความสะอาด Input Data (Prevent Injection/XSS)
+    // ------------------------------------------------------------------
     $inputData = json_decode(file_get_contents('php://input'), true);
-    $targetDate = isset($inputData['target_date']) ? $inputData['target_date'] : date('d/m/Y');
+    $rawDate = isset($inputData['target_date']) ? $inputData['target_date'] : date('d/m/Y');
+    $targetDate = htmlspecialchars(strip_tags($rawDate), ENT_QUOTES, 'UTF-8');
 
     $payload = json_encode([
-        // หัวข้อหลัก: กระชับ เป็นทางการ
         'title' => 'ประกาศ: ยังไม่ได้ทำรายการ',
-        
-        // เนื้อหา: ใช้ \n เพื่อเว้นบรรทัดให้อ่านง่าย ดูสบายตา
         'body'  => "ระบบตรวจสอบพบว่าคุณยังไม่ได้ทำรายการประจำวันที่ {$targetDate}\n\nกรุณาเข้าสู่ระบบเพื่อดำเนินการให้เรียบร้อย",
-        
-        // โลโก้แอป (แสดงด้านซ้าย)
         'icon'  => 'https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg?utm_source=th.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled',
-        
-        // รูปภาพแบนเนอร์ใหญ่ (แสดงด้านล่างเนื้อหา - รองรับบน Android และ Windows)
-        // แนะนำให้เปลี่ยน URL เป็นรูปลานโรงเรียน หรือรูปพื้นหลังสวยๆ ของโรงเรียนช่างฝีมือทหาร
         'image' => 'https://taothetutor.wordpress.com/wp-content/uploads/2026/09/wp-17898328944611784106779603276252.jpg',
-        
-        // URL ที่ต้องการให้ไปเมื่อกดที่ตัวแจ้งเตือน
         'url'   => '/portalapp/main.php',
-        
-        // ตั้งค่าให้แจ้งเตือนค้างอยู่บนหน้าจอจนกว่าผู้ใช้จะปัดทิ้ง (เหมาะสำหรับเรื่องสำคัญ)
         'requireInteraction' => true,
-        
-        // รูปแบบการสั่น (สั่น 2 จังหวะเตือนความจำ)
         'vibrate' => [200, 100, 200],
-        
-        // ปุ่มลัดด้านล่างแจ้งเตือน (ดูเป็นมืออาชีพมากขึ้น)
         'actions' => [
             [
                 'action' => 'open_app',
@@ -103,8 +128,9 @@ try {
         ]
     ], JSON_UNESCAPED_UNICODE);
 
-
-    // 6. วนลูปส่งการแจ้งเตือน
+    // ------------------------------------------------------------------
+    // 8. วนลูปส่งการแจ้งเตือน
+    // ------------------------------------------------------------------
     $sentCount = 0;
     $failedIds = [];
 
@@ -120,14 +146,15 @@ try {
         if ($report->isSuccess()) {
             $sentCount++;
         } else {
-            // หากส่งไม่ผ่าน (เช่น ยกเลิกการติดตั้งแอปไปแล้ว) เก็บ ID ไว้ลบออก
             if ($report->isSubscriptionExpired()) {
                 $failedIds[] = $row['id'];
             }
         }
     }
 
-    // 7. เคลียร์ข้อมูล Token ที่หมดอายุออกจาก DB
+    // ------------------------------------------------------------------
+    // 9. เคลียร์ข้อมูล Token ที่หมดอายุออกจาก DB
+    // ------------------------------------------------------------------
     if (!empty($failedIds)) {
         $idsList = implode(',', array_map('intval', $failedIds));
         $conn->query("DELETE FROM push_subscriptions WHERE id IN ($idsList)");
@@ -136,12 +163,13 @@ try {
     echo json_encode([
         'success' => true, 
         'sent_count' => $sentCount
-    ]);
+    ], JSON_UNESCAPED_UNICODE);
 
 } catch (Exception $e) {
+    http_response_code(500);
     echo json_encode([
         'success' => false, 
         'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()
-    ]);
+    ], JSON_UNESCAPED_UNICODE);
 }
 ?>
