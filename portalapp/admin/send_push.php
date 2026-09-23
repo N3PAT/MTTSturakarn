@@ -17,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 // 2. ความปลอดภัยขั้นที่ 2: ตรวจสอบ Security Secret Key (X-API-KEY)
 // ------------------------------------------------------------------
 // กำหนด Secret Key สำหรับยืนยันตัวตน (ควรเปลี่ยนคำว่า 'YOUR_SUPER_SECRET_KEY_12345' เป็นรหัสของคุณ)
-define('SECRET_API_KEY', getenv('API_SECRET_KEY') ?: 'YOUR_SUPER_SECRET_KEY_12345');
+define('SECRET_API_KEY', getenv('API_SECRET_KEY') ?: 'N4tthap41!nwza');
 
 $headers = getallheaders();
 $providedKey = $headers['X-API-KEY'] ?? $headers['x-api-key'] ?? $_SERVER['HTTP_X_API_KEY'] ?? '';
