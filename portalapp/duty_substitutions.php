@@ -1,25 +1,20 @@
 <?php
 session_start();
 
-// ตั้งค่า Timezone ให้เป็นเวลาประเทศไทย
 date_default_timezone_set('Asia/Bangkok');
 
-// สร้าง CSRF Token
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
 require 'db.php';
 
-// =======================================================
-// ฟังก์ชันคำนวณ ผลัดที่ และ จุดที่ ของนักเรียนในวันที่กำหนด
-// =======================================================
 function getStudentDutyForDate($conn, $student_code, $duty_date) {
     if (empty($duty_date) or empty($student_code)) {
         return null;
     }
 
-    $start_date = '2026-07-06'; // วันเริ่มต้นคำนวณเวรหลักการหมุนเวียน
+    $start_date = '2026-07-06';
     $location_names = array(
         'จุดที่ 4 อาคารยานยนต์', 
         'จุดที่ 5 ผฟอ.', 
@@ -71,10 +66,7 @@ function getStudentDutyForDate($conn, $student_code, $duty_date) {
     return null;
 }
 
-// =======================================================
-// ดึงสถานะ เปิด/ปิด ระบบขอแทนเวร จากฐานข้อมูล
-// =======================================================
-$is_system_open = false; // ค่าเริ่มต้นป้องกันไว้ก่อน
+$is_system_open = false;
 try {
     $setting_stmt = $conn->query("SELECT setting_value FROM system_settings WHERE setting_name = 'duty_system_status' LIMIT 1");
     if ($setting_row = $setting_stmt->fetch_assoc()) {
@@ -82,15 +74,12 @@ try {
             $is_system_open = true;
         }
     } else {
-        $is_system_open = true; // ถ้ายังไม่มีข้อมูลในตาราง ให้เปิดระบบไว้ก่อน
+        $is_system_open = true;
     }
 } catch (Exception $e) {
-    // กรณีตารางยังไม่ถูกสร้าง
     $is_system_open = true; 
 }
 
-
-// ---------------- 1. API สำหรับดึงข้อมูลนักเรียนและเวรผ่าน AJAX ----------------
 if (isset($_GET['action']) and $_GET['action'] == 'get_student_name' and isset($_GET['code'])) {
     while (ob_get_level()) { ob_end_clean(); }
     header('Content-Type: application/json; charset=utf-8');
@@ -108,9 +97,8 @@ if (isset($_GET['action']) and $_GET['action'] == 'get_student_name' and isset($
             $prefix = isset($row['prefix']) ? $row['prefix'] : '';
             $fname = isset($row['first_name']) ? $row['first_name'] : '';
             $lname = isset($row['last_name']) ? $row['last_name'] : '';
-            $fullname = trim($prefix . $fname . ' ' . $lname);
+            $fullname = trim($prefix . ' ' . $fname . ' ' . $lname);
             
-            // ดึงข้อมูลเวร (ผลัดที่ และ จุดที่)
             $duty_info = null;
             if (!empty($date)) {
                 $duty_info = getStudentDutyForDate($conn, $code, $date);
@@ -135,7 +123,6 @@ if (isset($_GET['action']) and $_GET['action'] == 'get_student_name' and isset($
 $alert_type = "";
 $message = "";
 
-// ---------------- 2. เมื่อนักเรียนกดบันทึกข้อมูลขอแทนเวร ----------------
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (!$is_system_open) {
         $alert_type = 'error';
@@ -159,13 +146,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $message = 'ไม่สามารถขอแทนเวรตัวเองได้';
         } else {
             try {
-                // บันทึกคำขอลงตาราง duty_swaps
                 $status = 'pending';
                 $insert_stmt = $conn->prepare("INSERT INTO duty_swaps (original_student_code, replacement_student_code, duty_date, duty_name, reason, status) VALUES (?, ?, ?, ?, ?, ?)");
                 $insert_stmt->bind_param("ssssss", $target_code, $requester_code, $duty_date, $duty_name, $reason, $status);
                 
                 if ($insert_stmt->execute()) {
-                    // สร้างการแจ้งเตือนไปยัง Admin
                     $notif_title = "คำขอแทนเวรใหม่จากรหัส " . $requester_code;
                     $notif_msg = "นักเรียนรหัส " . $requester_code . " ขอเข้าเวร (" . $duty_name . ") แทนรหัส " . $target_code . " ในวันที่ " . $duty_date . " เหตุผล: " . $reason;
                     $notif_type = "duty";
@@ -295,7 +280,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             <input type="date" id="duty_date" name="duty_date" required class="form-control">
           </div>
 
-          <!-- ช่องแสดง ผลัดที่ และ จุดรักษาการณ์ ของผู้ถูกแทนเวร -->
           <div class="form-group">
             <label><i class="fas fa-shield-alt icon-label"></i> ผลัดที่ / จุดรักษาการณ์ (ของเจ้าของเวรเดิม)</label>
             <input type="text" id="target_duty_info" readonly tabindex="-1" class="form-control input-readonly" placeholder="ระบบจะคำนวณผลัดและจุดรักษาการณ์อัตโนมัติ">
@@ -328,21 +312,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
 <script>
 <?php if ($alert_type == 'success'): ?>
-    Swal.fire({ title: 'สำเร็จ', text: "<?php echo addslashes($message); ?>", icon: 'success', confirmButtonColor: '#5a42a0' }).then(() => { window.location.href = window.location.pathname; });
+    Swal.fire({ title: 'สำเร็จ', text: "<?php echo addslashes($message); ?>", icon: 'success', confirmButtonColor: '#5a42a0' }).then(function() { window.location.href = window.location.pathname; });
 <?php elseif ($alert_type == 'error'): ?>
     Swal.fire({ title: 'ข้อผิดพลาด', text: "<?php echo addslashes($message); ?>", icon: 'error', confirmButtonColor: '#b71c1c' });
 <?php endif; ?>
 
 <?php if ($is_system_open): ?>
-async function fetchStudentName(inputId, nameInputId, isTarget = false) {
-    const codeInput = document.getElementById(inputId);
-    const nameInput = document.getElementById(nameInputId);
-    const dutyDateInput = document.getElementById('duty_date');
-    const dutyInfoInput = document.getElementById('target_duty_info');
-    const dutyNameInput = document.getElementById('duty_name');
+async function fetchStudentName(inputId, nameInputId, isTarget) {
+    var codeInput = document.getElementById(inputId);
+    var nameInput = document.getElementById(nameInputId);
+    var dutyDateInput = document.getElementById('duty_date');
+    var dutyInfoInput = document.getElementById('target_duty_info');
+    var dutyNameInput = document.getElementById('duty_name');
 
-    const code = codeInput ? codeInput.value.trim() : "";
-    const date = dutyDateInput ? dutyDateInput.value.trim() : "";
+    var code = codeInput ? codeInput.value.trim() : "";
+    var date = dutyDateInput ? dutyDateInput.value.trim() : "";
 
     if (code === "") {
         if (nameInput) {
@@ -362,12 +346,11 @@ async function fetchStudentName(inputId, nameInputId, isTarget = false) {
     }
 
     try {
-        // แก้ไขไม่ใช้ Backtick ป้องกัน Parse Error จาก Editor
-        const requestUrl = '?action=get_student_name&code=' + encodeURIComponent(code) + '&date=' + encodeURIComponent(date) + '&_t=' + Date.now();
-        const response = await fetch(requestUrl);
+        var requestUrl = '?action=get_student_name&code=' + encodeURIComponent(code) + '&date=' + encodeURIComponent(date) + '&_t=' + Date.now();
+        var response = await fetch(requestUrl);
         
         if (!response.ok) throw new Error('Network response error');
-        const data = await response.json();
+        var data = await response.json();
 
         if (data.found) {
             if (nameInput) {
@@ -415,19 +398,19 @@ async function fetchStudentName(inputId, nameInputId, isTarget = false) {
     }
 }
 
-const reqCode = document.getElementById('requester_code');
+var reqCode = document.getElementById('requester_code');
 if (reqCode) {
     reqCode.addEventListener('blur', function() { fetchStudentName('requester_code', 'requester_name', false); });
     reqCode.addEventListener('input', function() { if (this.value.trim().length >= 5) fetchStudentName('requester_code', 'requester_name', false); });
 }
 
-const targetCode = document.getElementById('target_code');
+var targetCode = document.getElementById('target_code');
 if (targetCode) {
     targetCode.addEventListener('blur', function() { fetchStudentName('target_code', 'target_name', true); });
     targetCode.addEventListener('input', function() { if (this.value.trim().length >= 5) fetchStudentName('target_code', 'target_name', true); });
 }
 
-const dutyDate = document.getElementById('duty_date');
+var dutyDate = document.getElementById('duty_date');
 if (dutyDate) {
     dutyDate.addEventListener('change', function() {
         if (targetCode && targetCode.value.trim() !== "") {
@@ -436,7 +419,7 @@ if (dutyDate) {
     });
 }
 
-const form = document.getElementById("substituteForm");
+var form = document.getElementById("substituteForm");
 if (form) {
     form.addEventListener("submit", function(e){
         e.preventDefault();
