@@ -34,22 +34,28 @@ $total_students = 0;
 $voted_count = 0;
 $today_duties = 0;
 
-// 4. ดึงข้อมูลสถิติ (ตรวจสอบ instanceof mysqli ป้องกัน Fatal Error กรณีเชื่อมต่อ DB ล้มเหลว)
+// 4. ดึงข้อมูลสถิติ (เพิ่ม try-catch เพื่อป้องกัน Error 500 จาก SQL Exception)
 if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
 
-    $res_std =$conn->query("SELECT COUNT(*) as total FROM students");
-    if ($res_std && $row =$res_std->fetch_assoc()) { 
-        $total_students =$row['total']; 
-    }
+    try {
+        $res_std =$conn->query("SELECT COUNT(*) as total FROM students");
+        if ($res_std && $row =$res_std->fetch_assoc()) { 
+            $total_students =$row['total']; 
+        }
 
-    $res_vote =$conn->query("SELECT COUNT(DISTINCT student_code) as voted FROM votes WHERE YEARWEEK(vote_date, 1) = YEARWEEK(CURDATE(), 1)");
-    if ($res_vote && $row =$res_vote->fetch_assoc()) { 
-        $voted_count =$row['voted']; 
-    }
+        $res_vote =$conn->query("SELECT COUNT(DISTINCT student_code) as voted FROM votes WHERE YEARWEEK(vote_date, 1) = YEARWEEK(CURDATE(), 1)");
+        if ($res_vote && $row =$res_vote->fetch_assoc()) { 
+            $voted_count =$row['voted']; 
+        }
 
-    $res_duty =$conn->query("SELECT COUNT(*) as today_duty FROM student_duties WHERE duty_date = CURDATE()");
-    if ($res_duty && $row =$res_duty->fetch_assoc()) { 
-        $today_duties =$row['today_duty']; 
+        $res_duty =$conn->query("SELECT COUNT(*) as today_duty FROM student_duties WHERE duty_date = CURDATE()");
+        if ($res_duty && $row =$res_duty->fetch_assoc()) { 
+            $today_duties =$row['today_duty']; 
+        }
+    } catch (Throwable $e) {
+        // หากตารางยังไม่ถูกสร้าง หรือคิวรี่มีปัญหา จะถูกดักจับตรงนี้ ไม่ให้เว็บพัง
+        error_log("SQL Error in main.php: " . $e->getMessage());
+        // ปล่อยให้ตัวแปรสถิติเป็น 0 ต่อไป
     }
 }
 ?>
