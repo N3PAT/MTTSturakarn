@@ -1,238 +1,171 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>ติดตั้งแอปพลิเคชัน MTTS</title>
-  
-  <!-- Manifest & Favicon -->
-  <link rel="manifest" href="manifest.json">
-  <link rel="icon" type="image/jpeg" href="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg">
-  
-  <!-- Fonts & Icons -->
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
-  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
-
-  <style>
-    :root {
-      --primary: #0f172a;
-      --accent: #2563eb;
-      --bg: #f8fafc;
-      --text-dark: #0f172a;
-      --text-gray: #64748b;
-    }
-
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    body { font-family: 'Prompt', sans-serif; background-color: #0f172a; margin: 0; min-height: 100vh; display: flex; justify-content: center; align-items: center; color: var(--text-dark); }
-
-    .install-card {
-      width: 100%;
-      max-width: 430px;
-      background: #ffffff;
-      min-height: 100vh;
-      padding: 32px 24px;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      position: relative;
-    }
-
-    @media (min-width: 480px) {
-      .install-card {
-        min-height: auto;
-        border-radius: 28px;
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-        margin: 20px;
-      }
-    }
-
-    .app-header { textโค้ดหน้าเว็บสำหรับติดตั้ง (Install Page) ที่รองรับทั้ง iOS และ Android พร้อมระบบดึงเวอร์ชันล่าสุดจาก API และเลือกติดตั้งได้ทั้งแบบ PWA หรือดาวน์โหลดไฟล์ APK
-
-```html
-<!DOCTYPE html>
-<html lang="th">
-<head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ติดตั้งแอปพลิเคชัน</title>
-    <link rel="manifest" href="/manifest.json">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ติดตั้งแอปพลิเคชัน MTTS</title>
+    
+    <!-- เรียกใช้ Manifest สำหรับ PWA (ตรวจสอบ path ให้ตรงกับที่เก็บไฟล์ manifest.json) -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="icon-192x192.png">
+    
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: 'Prompt', sans-serif; 
+            background-color: #f3f4f6; 
+            display: flex; justify-content: center; align-items: center; 
+            min-height: 100vh; padding: 20px; color: #1f2937;
         }
-        body {
-            background-color: #f4f6f9;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            padding: 20px;
-        }
-        .card {
-            background: #ffffff;
-            border-radius: 16px;
-            padding: 24px;
-            max-width: 400px;
-            width: 100%;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-            text-align: center;
+        .install-card {
+            background: #ffffff; border-radius: 24px; padding: 32px 24px;
+            max-width: 400px; width: 100%; text-align: center;
+            box-shadow: 0 10px 30px rgba(80, 56, 150, 0.1);
         }
         .app-icon {
-            width: 80px;
-            height: 80px;
-            border-radius: 20px;
-            margin-bottom: 16px;
+            width: 96px; height: 96px; border-radius: 24px; margin: 0 auto 16px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1); display: block;
+            background-color: #503896; /* Placeholder สีม่วง MTTS */
+            background-image: url('icon-192x192.png');
+            background-size: cover;
         }
-        h2 {
-            font-size: 1.25rem;
-            color: #1a1a1a;
-            margin-bottom: 6px;
-        }
+        h1 { font-size: 1.4rem; font-weight: 700; color: #111827; margin-bottom: 8px; }
         .version-badge {
-            display: inline-block;
-            background: #eef2ff;
-            color: #4f46e5;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            margin-bottom: 20px;
+            display: inline-block; background: #ede9fe; color: #6d28d9;
+            padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 600;
+            margin-bottom: 24px;
         }
-        .btn-group {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            margin-top: 10px;
-        }
+        .btn-group { display: flex; flex-direction: column; gap: 12px; }
         .btn {
-            width: 100%;
-            padding: 12px 16px;
-            border: none;
-            border-radius: 10px;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: opacity 0.2s;
+            width: 100%; padding: 14px; border: none; border-radius: 14px;
+            font-size: 1rem; font-weight: 600; cursor: pointer; transition: 0.2s;
+            display: flex; justify-content: center; align-items: center; gap: 8px;
             text-decoration: none;
-            display: flex;
-            justify-content: center;
-            align-items: center;
         }
-        .btn:hover {
-            opacity: 0.9;
+        .btn:active { transform: scale(0.98); }
+        .btn-primary { background-color: #503896; color: white; box-shadow: 0 4px 12px rgba(80, 56, 150, 0.3); }
+        .btn-primary:hover { background-color: #432e7a; }
+        .btn-secondary { background-color: #10b981; color: white; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); }
+        .btn-secondary:hover { background-color: #059669; }
+        
+        .ios-guide {
+            margin-top: 24px; padding: 16px; background: #fffbeb; border: 1px solid #fef3c7;
+            border-radius: 16px; font-size: 0.85rem; text-align: left; color: #92400e; display: none;
         }
-        .btn-primary {
-            background-color: #4f46e5;
-            color: white;
+        .ios-guide strong { color: #b45309; }
+        .changelog {
+            margin-top: 24px; text-align: left; font-size: 0.85rem; color: #4b5563;
         }
-        .btn-secondary {
-            background-color: #10b981;
-            color: white;
-        }
-        .instructions {
-            margin-top: 16px;
-            padding: 12px;
-            background: #fffbe3;
-            border: 1px solid #ffe58f;
-            border-radius: 8px;
-            font-size: 0.85rem;
-            color: #856404;
-            text-align: left;
-            display: none;
-        }
+        .changelog h3 { font-size: 0.95rem; margin-bottom: 8px; color: #111827; }
+        .changelog ul { padding-left: 20px; }
+        .changelog li { margin-bottom: 4px; }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <img src="icon.png" alt="App Icon" class="app-icon" id="appIcon">
-    <h2 id="appName">กำลังโหลดข้อมูลแอป...</h2>
-    <span class="version-badge" id="appVersion">v--.--</span>
+    <div class="install-card">
+        <div class="app-icon"></div>
+        <h1 id="appName">กำลังตรวจสอบเวอร์ชัน...</h1>
+        <div class="version-badge" id="appVersion">v--.--</div>
 
-    <div class="btn-group">
-        <!-- ปุ่มติดตั้ง PWA -->
-        <button id="pwaInstallBtn" class="btn btn-primary" style="display: none;">
-            ติดตั้งแอป (PWA)
-        </button>
+        <div class="btn-group">
+            <!-- ปุ่มติดตั้ง PWA (Android / Chrome Desktop) -->
+            <button id="pwaBtn" class="btn btn-primary" style="display: none;">
+                <i class="fas fa-mobile-alt"></i> ติดตั้งแอปลงเครื่อง (PWA)
+            </button>
 
-        <!-- ปุ่มดาวน์โหลด APK สำหรับ Android -->
-        <a id="apkDownloadBtn" class="btn btn-secondary" style="display: none;" download>
-            ดาวน์โหลดไฟล์ APK
-        </a>
+            <!-- ปุ่มโหลด APK (แสดงเฉพาะ Android) -->
+            <a id="apkBtn" class="btn btn-secondary" style="display: none;" download>
+                <i class="fab fa-android"></i> ดาวน์โหลดไฟล์ APK
+            </a>
+        </div>
+
+        <!-- คำแนะนำสำหรับ iOS -->
+        <div id="iosGuide" class="ios-guide">
+            <strong><i class="fab fa-apple"></i> วิธีติดตั้งบน iPhone/iPad:</strong><br><br>
+            1. แตะไอคอน <i class="fas fa-share-square"></i> (แชร์) ด้านล่างของ Safari<br>
+            2. เลื่อนลงแล้วเลือก <strong>"เพิ่มไปยังหน้าจอโฮม" <br>(Add to Home Screen)</strong><br>
+            3. กด "เพิ่ม" (Add) มุมขวาบน
+        </div>
+
+        <div class="changelog" id="changelogSection" style="display: none;">
+            <h3>มีอะไรใหม่:</h3>
+            <ul id="changelogList"></ul>
+        </div>
     </div>
 
-    <!-- แนะนำการติดตั้งบน iOS Safari -->
-    <div id="iosInstructions" class="instructions">
-        <strong>วิธีติดตั้งบน iOS:</strong><br>
-        1. แตะปุ่ม <strong>แชร์ (Share)</strong> ด้านล่างของ Safari<br>
-        2. เลือก <strong>เพิ่มไปยังหน้าจอโฮม (Add to Home Screen)</strong>
-    </div>
-</div>
+    <script>
+        let deferredPrompt;
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        const isAndroid = /Android/.test(navigator.userAgent);
 
-<script>
-    let deferredPrompt = null;
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    const isAndroid = /Android/.test(navigator.userAgent);
+        // 1. ดึงข้อมูลจาก API (ย้อนกลับไป 1 โฟลเดอร์เพื่อเข้าโฟลเดอร์ api)
+        async function fetchAppVersion() {
+            try {
+                const response = await fetch('../api/api_version.php');
+                const data = await response.json();
 
-    // 1. ดึงข้อมูลเวอร์ชันและลิงก์ดาวน์โหลดจาก API
-    async function loadVersionInfo() {
-        try {
-            const response = await fetch('/api/version');
-            const data = await response.json();
-            
-            // ตัวอย่างโครงสร้าง JSON จาก API:
-            // { "appName": "MyApp", "version": "1.2.0", "apkUrl": "/downloads/app-v1.2.0.apk" }
-            
-            document.getElementById('appName').textContent = data.appName || 'แอปพลิเคชัน';
-            document.getElementById('appVersion').textContent = `v${data.version || '1.0.0'}`;
-            
-            if (data.apkUrl && isAndroid) {
-                const apkBtn = document.getElementById('apkDownloadBtn');
-                apkBtn.href = data.apkUrl;
-                apkBtn.style.display = 'flex';
-            }
-        } catch (error) {
-            console.error('ไม่สามารถดึงข้อมูล API ได้:', error);
-            document.getElementById('appName').textContent = 'แอปพลิเคชัน';
-        }
-    }
+                document.getElementById('appName').textContent = data.appName;
+                document.getElementById('appVersion').textContent = 'เวอร์ชัน ' + data.version;
 
-    // 2. ดักจับ Event สำหรับการติดตั้ง PWA บน Android/Chrome
-    window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        deferredPrompt = e;
-        
-        const pwaBtn = document.getElementById('pwaInstallBtn');
-        pwaBtn.style.display = 'flex';
-        
-        pwaBtn.addEventListener('click', async () => {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                const { outcome } = await deferredPrompt.userChoice;
-                if (outcome === 'accepted') {
-                    pwaBtn.style.display = 'none';
+                // จัดการ Changelog
+                if (data.changelog && data.changelog.length > 0) {
+                    const list = document.getElementById('changelogList');
+                    data.changelog.forEach(item => {
+                        const li = document.createElement('li');
+                        li.textContent = item;
+                        list.appendChild(li);
+                    });
+                    document.getElementById('changelogSection').style.display = 'block';
                 }
-                deferredPrompt = null;
+
+                // จัดการปุ่ม APK สำหรับ Android
+                if (isAndroid && data.apkUrl) {
+                    const apkBtn = document.getElementById('apkBtn');
+                    apkBtn.href = data.apkUrl;
+                    apkBtn.style.display = 'flex';
+                }
+
+            } catch (error) {
+                console.error('API Error:', error);
+                document.getElementById('appName').textContent = 'ระบบสารสนเทศ MTTS';
             }
-        });
-    });
-
-    // 3. ตรวจสอบเงื่อนไข iOS สำหรับแสดงวิธีติดตั้ง
-    function checkDeviceSupport() {
-        if (isIOS) {
-            document.getElementById('iosInstructions').style.display = 'block';
         }
-    }
 
-    // เรียกทำงานเมื่อโหลดหน้าเว็บ
-    window.addEventListener('DOMContentLoaded', () => {
-        loadVersionInfo();
-        checkDeviceSupport();
-    });
-</script>
+        // 2. ตรวจจับการรองรับ PWA Install
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            const pwaBtn = document.getElementById('pwaBtn');
+            pwaBtn.style.display = 'flex';
+
+            pwaBtn.addEventListener('click', async () => {
+                if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    const { outcome } = await deferredPrompt.userChoice;
+                    if (outcome === 'accepted') {
+                        pwaBtn.style.display = 'none';
+                    }
+                    deferredPrompt = null;
+                }
+            });
+        });
+
+        // 3. ตรวจสอบเงื่อนไขการแสดงผล iOS
+        function setupDeviceUI() {
+            if (isIOS) {
+                document.getElementById('iosGuide').style.display = 'block';
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            fetchAppVersion();
+            setupDeviceUI();
+        });
+    </script>
 
 </body>
 </html>
