@@ -10,7 +10,7 @@ $is_edit = $id > 0;
 
 // ค่าเริ่มต้นสำหรับฟอร์ม (กรณีเพิ่มใหม่)
 $student = [
-    'student_code' => '', 'id_card' => '', 'prefix' => 'นตท.', 
+    'student_code' => '', 'id_card' => '', 'prefix' => 'นชท.', 
     'first_name' => '', 'last_name' => '', 'battalion' => '1', 
     'company' => '1', 'platoon' => '1', 'section' => '1'
 ];
