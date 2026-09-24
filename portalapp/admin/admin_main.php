@@ -28,24 +28,23 @@ $total_students = 0;
 $voted_count = 0;
 $today_duties = 0;
 
-// 4. ดึงข้อมูลสถิติ
-try {
-    if (!isset($conn) \vert{}\vert{} !($conn instanceof mysqli)) {
-        throw new Exception("Database connection error");
-    }
-    $conn->set_charset("utf8mb4");
+// 4. ดึงข้อมูลสถิติ (ปรับแก้ใหม่ ใช้ if ธรรมดาแทน try-catch เพื่อป้องกัน Syntax Error)
+if (isset($conn)) {$conn->set_charset("utf8mb4");
 
     $res_std =$conn->query("SELECT COUNT(*) as total FROM students");
-    if ($res_std && $row =$res_std->fetch_assoc()) { $total_students =$row['total']; }
+    if ($res_std && $row =$res_std->fetch_assoc()) { 
+        $total_students =$row['total']; 
+    }
 
     $res_vote =$conn->query("SELECT COUNT(DISTINCT student_code) as voted FROM votes WHERE YEARWEEK(vote_date, 1) = YEARWEEK(CURDATE(), 1)");
-    if ($res_vote && $row =$res_vote->fetch_assoc()) { $voted_count =$row['voted']; }
+    if ($res_vote && $row =$res_vote->fetch_assoc()) { 
+        $voted_count =$row['voted']; 
+    }
 
     $res_duty =$conn->query("SELECT COUNT(*) as today_duty FROM student_duties WHERE duty_date = CURDATE()");
-    if ($res_duty && $row =$res_duty->fetch_assoc()) { $today_duties =$row['today_duty']; }
-
-} catch (Throwable $e) {
-    error_log("Admin System error: " . $e->getMessage());
+    if ($res_duty && $row =$res_duty->fetch_assoc()) { 
+        $today_duties =$row['today_duty']; 
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -231,7 +230,7 @@ try {
         <span>ผลโหวต</span>
       </a>
       
-      <!-- แก้ไขปุ่มแจ้งเตือนตรงนี้ ให้เรียกใช้ JavaScript แทนการเปลี่ยนหน้าจอ -->
+      <!-- ปุ่มแจ้งเตือน -->
       <button onclick="triggerPushNotification()" class="app-btn">
         <div class="app-icon bg-grad-orange"><i class="fas fa-broadcast-tower"></i></div>
         <span>แจ้งเตือน</span>
@@ -262,7 +261,6 @@ try {
   </div>
 
   <script>
-    // 1. Script สำหรับ Loading Screen
     document.addEventListener("DOMContentLoaded", function() {
       const loader = document.getElementById('page-loader');
       if (loader) {
@@ -275,25 +273,20 @@ try {
       }
     });
 
-    // 2. Script สำหรับยิง API แจ้งเตือน (รองรับระบบความปลอดภัยใหม่)
     async function triggerPushNotification() {
-      // ถามเพื่อยืนยันก่อนส่ง
       if (!confirm("คุณต้องการส่งแจ้งเตือนไปยังผู้ใช้ที่ยังไม่ได้ทำรายการ ใช่หรือไม่?")) {
           return;
       }
 
       try {
-          // ดึงวันที่ปัจจุบันมาเป็น Target Date
           const today = new Date();
-          const targetDate = today.toLocaleDateString('en-GB'); // ได้ฟอร์แมต DD/MM/YYYY
+          const targetDate = today.toLocaleDateString('en-GB'); 
 
-          // ยิง POST Request พร้อมแนบ X-API-KEY
           const response = await fetch('send_push.php', {
               method: 'POST',
               headers: {
                   'Content-Type': 'application/json',
-                  // ต้องตรงกับค่า SECRET_API_KEY ที่คุณตั้งไว้ในไฟล์ send_push.php
-                  'X-API-KEY': 'w86Ccb6pIc6w6EMWun3uVj9zfDe0Q-44hA2asE_RUSs' 
+                  'X-API-KEY': 'w86Ccb6pIc6w6EMWun3uVj9zfDe0Q-44hA2asE_RUSs' // ใส่รหัสให้ตรงกับในไฟล์ send_push.php
               },
               body: JSON.stringify({
                   target_date: targetDate
