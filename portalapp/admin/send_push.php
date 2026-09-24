@@ -16,13 +16,25 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 // ------------------------------------------------------------------
 // 2. ความปลอดภัยขั้นที่ 2: ตรวจสอบ Security Secret Key (X-API-KEY)
 // ------------------------------------------------------------------
-// กำหนด Secret Key สำหรับยืนยันตัวตน (ควรเปลี่ยนคำว่า 'YOUR_SUPER_SECRET_KEY_12345' เป็นรหัสของคุณ)
 define('SECRET_API_KEY', getenv('API_SECRET_KEY') ?: 'N4tthap41!nwza');
 
-$headers = getallheaders();
-$providedKey = $headers['X-API-KEY'] ?? $headers['x-api-key'] ?? $_SERVER['HTTP_X_API_KEY'] ?? '';
+// ฟังก์ชันดึง Header แบบครอบคลุมทุก Server (รองรับเคสตัวพิมพ์เล็ก-ใหญ่)
+$providedKey = '';
+if (isset($_SERVER['HTTP_X_API_KEY'])) {
+    $providedKey = $_SERVER['HTTP_X_API_KEY'];
+} elseif (function_exists('getallheaders')) {
+    $headers = getallheaders();
+    foreach ($headers as $key => $value) {
+        if (strtolower($key) === 'x-api-key') {
+            $providedKey = $value;
+            break;
+        }
+    }
+}
 
-if (empty($providedKey) || $providedKey !== SECRET_API_KEY) {
+// ตรวจสอบกับ SECRET_API_KEY หรือ Private Key (เผื่อหน้าบ้านส่งรหัสเดิมมา)
+$fallbackKey = 'w86Ccb6pIc6w6EMWun3uVj9zfDe0Q-44hA2asE_RUSs';
+if (empty($providedKey) || ($providedKey !== SECRET_API_KEY && $providedKey !== $fallbackKey)) {
     http_response_code(401);
     echo json_encode([
         'success' => false,
@@ -115,9 +127,9 @@ try {
     $payload = json_encode([
         'title' => 'ประกาศ: ยังไม่ได้ทำรายการ',
         'body'  => "ระบบตรวจสอบพบว่าคุณยังไม่ได้ทำรายการประจำวันที่ {$targetDate}\n\nกรุณาเข้าสู่ระบบเพื่อดำเนินการให้เรียบร้อย",
-        'icon'  => 'https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg?utm_source=th.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled',
+        'icon'  => 'https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg',
         'image' => 'https://taothetutor.wordpress.com/wp-content/uploads/2026/09/wp-17898328944611784106779603276252.jpg',
-        'url'   => '/portalapp/main.php',
+        'url'   => '/main.php',
         'requireInteraction' => true,
         'vibrate' => [200, 100, 200],
         'actions' => [
