@@ -65,7 +65,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $duty_name = trim($_POST['duty_name'] ?? '');
         $reason = trim($_POST['reason'] ?? '');
 
-        // แก้ไข \vert เป็น || ให้ถูกต้องตามหลัก PHP
+        // แก้ไขสัญลักษณ์ตรรกศาสตร์เป็น || ให้ถูกต้องตามหลัก PHP
         if (empty($csrf_token) \vert{}\vert{} !hash_equals($_SESSION['csrf_token'], $csrf_token)) {$alert_type = "error";
             $message = "เซสชันไม่ถูกต้อง กรุณารีเฟรชหน้าเว็บแล้วทำรายการใหม่";
         } else if (empty($requester_code) || empty($target_code) \vert{}\vert{} empty($duty_date) || empty($duty_name)) {$alert_type = "error";
