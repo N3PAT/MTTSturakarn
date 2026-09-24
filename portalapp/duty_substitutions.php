@@ -5,7 +5,8 @@ session_start();
 date_default_timezone_set('Asia/Bangkok');
 
 // สร้าง CSRF Token
-if (empty($_SESSION['csrf_token'])) {$_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
 require 'db.php';
@@ -13,28 +14,34 @@ require 'db.php';
 // =======================================================
 // ฟังก์ชันคำนวณ ผลัดที่ และ จุดที่ ของนักเรียนในวันที่กำหนด
 // =======================================================
-function getStudentDutyForDate($conn, $student_code,$duty_date) {
-    if (empty($duty_date) or empty($student_code)) return null;
+function getStudentDutyForDate($conn, $student_code, $duty_date) {
+    if (empty($duty_date) or empty($student_code)) {
+        return null;
+    }
 
-    $start_date = "2026-07-06"; // วันเริ่มต้นคำนวณเวรหลักการหมุนเวียน
-    $location_names = [
-        "จุดที่ 4 อาคารยานยนต์", 
-        "จุดที่ 5 ผฟอ.", 
-        "จุดที่ 6 กศน.", 
-        "จุดที่ 3 โรงรถ บก.หน้า"
-    ];
-    $shift_labels = ["ผลัดที่ 1", "ผลัดที่ 2", "ผลัดที่ 3", "ผลัดที่ 4"];
+    $start_date = '2026-07-06'; // วันเริ่มต้นคำนวณเวรหลักการหมุนเวียน
+    $location_names = array(
+        'จุดที่ 4 อาคารยานยนต์', 
+        'จุดที่ 5 ผฟอ.', 
+        'จุดที่ 6 กศน.', 
+        'จุดที่ 3 โรงรถ บก.หน้า'
+    );
+    $shift_labels = array('ผลัดที่ 1', 'ผลัดที่ 2', 'ผลัดที่ 3', 'ผลัดที่ 4');
 
-    $eval_ts = strtotime($duty_date);$start_ts = strtotime($start_date);$diff_days = floor(($eval_ts -$start_ts) / 86400);
+    $eval_ts = strtotime($duty_date);
+    $start_ts = strtotime($start_date);
+    $diff_days = floor(($eval_ts - $start_ts) / 86400);
 
-    if ($diff_days < 0) return null;
+    if ($diff_days < 0) {
+        return null;
+    }
 
-    $all_students = [];
+    $all_students = array();
     try {
-        $res =$conn->query("SELECT student_code FROM students ORDER BY id ASC");
-        if ($res and$res->num_rows > 0) {
-            while ($row =$res->fetch_assoc()) {
-                $all_students[] =$row['student_code'];
+        $res = $conn->query("SELECT student_code FROM students ORDER BY id ASC");
+        if ($res and $res->num_rows > 0) {
+            while ($row = $res->fetch_assoc()) {
+                $all_students[] = $row['student_code'];
             }
         }
     } catch (Exception $e) {
@@ -42,20 +49,22 @@ function getStudentDutyForDate($conn, $student_code,$duty_date) {
     }
 
     $total_students = count($all_students);
-    if ($total_students === 0) return null;
+    if ($total_students === 0) {
+        return null;
+    }
 
-    $start_index = ($diff_days * 16) \%$total_students;
+    $start_index = ($diff_days * 16) % $total_students;
 
     for ($i = 0; $i < 16; $i++) {
-        $idx = ($start_index + $i) \%$total_students;
-        if (isset($all_students[$idx]) and$all_students[$idx] ===$student_code) {
+        $idx = ($start_index + $i) % $total_students;
+        if (isset($all_students[$idx]) and $all_students[$idx] === $student_code) {
             $shift_idx = floor($i / 4);
-            $loc_idx =$i % 4;
-            return [
+            $loc_idx = $i % 4;
+            return array(
                 'shift' => $shift_labels[$shift_idx],
                 'location' => $location_names[$loc_idx],
                 'full_duty' => $shift_labels[$shift_idx] . " (" . $location_names[$loc_idx] . ")"
-            ];
+            );
         }
     }
 
@@ -67,9 +76,11 @@ function getStudentDutyForDate($conn, $student_code,$duty_date) {
 // =======================================================
 $is_system_open = false; // ค่าเริ่มต้นป้องกันไว้ก่อน
 try {
-    $setting_stmt =$conn->query("SELECT setting_value FROM system_settings WHERE setting_name = 'duty_system_status' LIMIT 1");
-    if ($setting_row =$setting_stmt->fetch_assoc()) {
-        $is_system_open = ($setting_row['setting_value'] === 'open');
+    $setting_stmt = $conn->query("SELECT setting_value FROM system_settings WHERE setting_name = 'duty_system_status' LIMIT 1");
+    if ($setting_row = $setting_stmt->fetch_assoc()) {
+        if ($setting_row['setting_value'] === 'open') {
+            $is_system_open = true;
+        }
     } else {
         $is_system_open = true; // ถ้ายังไม่มีข้อมูลในตาราง ให้เปิดระบบไว้ก่อน
     }
@@ -85,34 +96,38 @@ if (isset($_GET['action']) and $_GET['action'] == 'get_student_name' and isset($
     header('Content-Type: application/json; charset=utf-8');
     
     $code = trim($_GET['code']);
-    $date = trim($_GET['date'] ?? '');
+    $date = isset($_GET['date']) ? trim($_GET['date']) : '';
 
     try {
-        $stmt =$conn->prepare("SELECT prefix, first_name, last_name, section FROM students WHERE student_code = ? LIMIT 1");
-        $stmt->bind_param("s", $code);$stmt->execute();
-        $res =$stmt->get_result();
+        $stmt = $conn->prepare("SELECT prefix, first_name, last_name, section FROM students WHERE student_code = ? LIMIT 1");
+        $stmt->bind_param("s", $code);
+        $stmt->execute();
+        $res = $stmt->get_result();
         
-        if ($row =$res->fetch_assoc()) {
-            $fullname = trim(($row['prefix'] ?? '') . ($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+        if ($row = $res->fetch_assoc()) {
+            $prefix = isset($row['prefix']) ? $row['prefix'] : '';
+            $fname = isset($row['first_name']) ? $row['first_name'] : '';
+            $lname = isset($row['last_name']) ? $row['last_name'] : '';
+            $fullname = trim($prefix . $fname . ' ' . $lname);
             
             // ดึงข้อมูลเวร (ผลัดที่ และ จุดที่)
             $duty_info = null;
             if (!empty($date)) {
-                $duty_info = getStudentDutyForDate($conn, $code,$date);
+                $duty_info = getStudentDutyForDate($conn, $code, $date);
             }
 
-            echo json_encode([
+            echo json_encode(array(
                 'found' => true, 
                 'name' => $fullname,
                 'duty_info' => $duty_info ? $duty_info['full_duty'] : '',
                 'shift' => $duty_info ? $duty_info['shift'] : '',
                 'location' => $duty_info ? $duty_info['location'] : ''
-            ]);
+            ));
         } else {
-            echo json_encode(['found' => false, 'name' => '', 'duty_info' => '']);
+            echo json_encode(array('found' => false, 'name' => '', 'duty_info' => ''));
         }
     } catch (Exception $e) {
-        echo json_encode(['found' => false, 'name' => 'Error: ' . $e->getMessage()]);
+        echo json_encode(array('found' => false, 'name' => 'Error: ' . $e->getMessage()));
     }
     exit;
 }
@@ -121,34 +136,38 @@ $alert_type = "";
 $message = "";
 
 // ---------------- 2. เมื่อนักเรียนกดบันทึกข้อมูลขอแทนเวร ----------------
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    if (!$is_system_open) {$alert_type = "error";
-        $message = "ระบบปิดรับคำขอแทนเวรชั่วคราว ไม่สามารถทำรายการได้";
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    if (!$is_system_open) {
+        $alert_type = 'error';
+        $message = 'ระบบปิดรับคำขอแทนเวรชั่วคราว ไม่สามารถทำรายการได้';
     } else {
-        $csrf_token =$_POST['csrf_token'] ?? '';
-        $requester_code = trim($_POST['requester_code'] ?? ''); // ผู้ทำหน้าที่แทน
-        $target_code = trim($_POST['target_code'] ?? '');       // ผู้ที่ถูกแทน
-        $duty_date = trim($_POST['duty_date'] ?? '');
-        $duty_name = trim($_POST['duty_name'] ?? '');
-        $reason = trim($_POST['reason'] ?? '');
+        $csrf_token = isset($_POST['csrf_token']) ? $_POST['csrf_token'] : '';
+        $requester_code = isset($_POST['requester_code']) ? trim($_POST['requester_code']) : ''; 
+        $target_code = isset($_POST['target_code']) ? trim($_POST['target_code']) : '';
+        $duty_date = isset($_POST['duty_date']) ? trim($_POST['duty_date']) : '';
+        $duty_name = isset($_POST['duty_name']) ? trim($_POST['duty_name']) : '';
+        $reason = isset($_POST['reason']) ? trim($_POST['reason']) : '';
 
-        if (empty($csrf_token) or !hash_equals($_SESSION['csrf_token'], $csrf_token)) {$alert_type = "error";
-            $message = "เซสชันไม่ถูกต้อง กรุณารีเฟรชหน้าเว็บแล้วทำรายการใหม่";
-        } else if (empty($requester_code) or empty($target_code) or empty($duty_date) or empty($duty_name)) {$alert_type = "error";
-            $message = "กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน";
-        } else if ($requester_code === $target_code) {$alert_type = "error";
-            $message = "ไม่สามารถขอแทนเวรตัวเองได้";
+        if (empty($csrf_token) or !hash_equals($_SESSION['csrf_token'], $csrf_token)) {
+            $alert_type = 'error';
+            $message = 'เซสชันไม่ถูกต้อง กรุณารีเฟรชหน้าเว็บแล้วทำรายการใหม่';
+        } else if (empty($requester_code) or empty($target_code) or empty($duty_date) or empty($duty_name)) {
+            $alert_type = 'error';
+            $message = 'กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน';
+        } else if ($requester_code === $target_code) {
+            $alert_type = 'error';
+            $message = 'ไม่สามารถขอแทนเวรตัวเองได้';
         } else {
             try {
                 // บันทึกคำขอลงตาราง duty_swaps
                 $status = 'pending';
-                $insert_stmt =$conn->prepare("INSERT INTO duty_swaps (original_student_code, replacement_student_code, duty_date, duty_name, reason, status) VALUES (?, ?, ?, ?, ?, ?)");
-                $insert_stmt->bind_param("ssssss", $target_code,$requester_code, $duty_date,$duty_name, $reason,$status);
+                $insert_stmt = $conn->prepare("INSERT INTO duty_swaps (original_student_code, replacement_student_code, duty_date, duty_name, reason, status) VALUES (?, ?, ?, ?, ?, ?)");
+                $insert_stmt->bind_param("ssssss", $target_code, $requester_code, $duty_date, $duty_name, $reason, $status);
                 
                 if ($insert_stmt->execute()) {
                     // สร้างการแจ้งเตือนไปยัง Admin
-                    $notif_title = "คำขอแทนเวรใหม่จากรหัส $requester_code";
-                    $notif_msg = "นักเรียนรหัส $requester_code ขอเข้าเวร ($duty_name) แทนรหัส $target_code ในวันที่ $duty_date เหตุผล: $reason";
+                    $notif_title = "คำขอแทนเวรใหม่จากรหัส " . $requester_code;
+                    $notif_msg = "นักเรียนรหัส " . $requester_code . " ขอเข้าเวร (" . $duty_name . ") แทนรหัส " . $target_code . " ในวันที่ " . $duty_date . " เหตุผล: " . $reason;
                     $notif_type = "duty";
                     $alert_level = "info";
 
@@ -156,14 +175,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     $notif_stmt->bind_param("ssss", $notif_title, $notif_msg, $notif_type, $alert_level);
                     $notif_stmt->execute();
 
-                    $alert_type = "success";
-                    $message = "ส่งคำขอแทนเวรของรหัส " . htmlspecialchars($target_code) . " เรียบร้อยแล้ว รอการอนุมัติจาก Admin";
+                    $alert_type = 'success';
+                    $message = 'ส่งคำขอแทนเวรของรหัส ' . htmlspecialchars($target_code) . ' เรียบร้อยแล้ว รอการอนุมัติจาก Admin';
                 } else {
-                    $alert_type = "error";
-                    $message = "เกิดข้อผิดพลาดในการบันทึกข้อมูล";
+                    $alert_type = 'error';
+                    $message = 'เกิดข้อผิดพลาดในการบันทึกข้อมูล';
                 }
-            } catch (Exception $e) {$alert_type = "error";
-                $message = "เกิดข้อผิดพลาดของระบบ: " . $e->getMessage();
+            } catch (Exception $e) {
+                $alert_type = 'error';
+                $message = 'เกิดข้อผิดพลาดของระบบ: ' . $e->getMessage();
             }
         }
     }
@@ -308,9 +328,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 <script>
 <?php if ($alert_type == 'success'): ?>
-    Swal.fire({ title: 'สำเร็จ', text: <?php echo json_encode($message); ?>, icon: 'success', confirmButtonColor: '#5a42a0' }).then(() => { window.location.href = window.location.pathname; });
+    Swal.fire({ title: 'สำเร็จ', text: "<?php echo addslashes($message); ?>", icon: 'success', confirmButtonColor: '#5a42a0' }).then(() => { window.location.href = window.location.pathname; });
 <?php elseif ($alert_type == 'error'): ?>
-    Swal.fire({ title: 'ข้อผิดพลาด', text: <?php echo json_encode($message); ?>, icon: 'error', confirmButtonColor: '#b71c1c' });
+    Swal.fire({ title: 'ข้อผิดพลาด', text: "<?php echo addslashes($message); ?>", icon: 'error', confirmButtonColor: '#b71c1c' });
 <?php endif; ?>
 
 <?php if ($is_system_open): ?>
@@ -342,7 +362,10 @@ async function fetchStudentName(inputId, nameInputId, isTarget = false) {
     }
 
     try {
-        const response = await fetch(`?action=get_student_name&code=${encodeURIComponent(code)}&date=${encodeURIComponent(date)}&_t=${Date.now()}`);
+        // แก้ไขไม่ใช้ Backtick ป้องกัน Parse Error จาก Editor
+        const requestUrl = '?action=get_student_name&code=' + encodeURIComponent(code) + '&date=' + encodeURIComponent(date) + '&_t=' + Date.now();
+        const response = await fetch(requestUrl);
+        
         if (!response.ok) throw new Error('Network response error');
         const data = await response.json();
 
@@ -352,7 +375,6 @@ async function fetchStudentName(inputId, nameInputId, isTarget = false) {
                 nameInput.className = "form-control input-success";
             }
 
-            // ถ้าเป็นข้อมูลของผู้ถูกแทนเวร (target) ให้ดึงข้อมูลผลัดและจุดที่มาแสดงด้วย
             if (isTarget) {
                 if (data.duty_info) {
                     if (dutyInfoInput) {
@@ -395,19 +417,19 @@ async function fetchStudentName(inputId, nameInputId, isTarget = false) {
 
 const reqCode = document.getElementById('requester_code');
 if (reqCode) {
-    reqCode.addEventListener('blur', () => fetchStudentName('requester_code', 'requester_name', false));
+    reqCode.addEventListener('blur', function() { fetchStudentName('requester_code', 'requester_name', false); });
     reqCode.addEventListener('input', function() { if (this.value.trim().length >= 5) fetchStudentName('requester_code', 'requester_name', false); });
 }
 
 const targetCode = document.getElementById('target_code');
 if (targetCode) {
-    targetCode.addEventListener('blur', () => fetchStudentName('target_code', 'target_name', true));
+    targetCode.addEventListener('blur', function() { fetchStudentName('target_code', 'target_name', true); });
     targetCode.addEventListener('input', function() { if (this.value.trim().length >= 5) fetchStudentName('target_code', 'target_name', true); });
 }
 
 const dutyDate = document.getElementById('duty_date');
 if (dutyDate) {
-    dutyDate.addEventListener('change', () => {
+    dutyDate.addEventListener('change', function() {
         if (targetCode && targetCode.value.trim() !== "") {
             fetchStudentName('target_code', 'target_name', true);
         }
@@ -429,7 +451,7 @@ if (form) {
             cancelButtonColor: '#94a3b8',
             confirmButtonText: 'ยืนยัน',
             cancelButtonText: 'ยกเลิก'
-        }).then((result) => {
+        }).then(function(result) {
             if(result.isConfirmed) {
                 document.getElementById("submitBtn").innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังดำเนินการ...';
                 form.submit();
