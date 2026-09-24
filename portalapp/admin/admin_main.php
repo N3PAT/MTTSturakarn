@@ -1,6 +1,12 @@
 <?php
 session_start();
-require_once 'db.php';
+
+// ป้องกัน HTTP 500 กรณีไฟล์ db.php หาย
+if (file_exists('db.php')) {
+    require_once 'db.php';
+} else {
+    die("Error: ไม่พบไฟล์ db.php หรือตั้งชื่อไฟล์ผิด (ตัวพิมพ์เล็ก-ใหญ่มีผลบน Server)");
+}
 
 // 1. จัดการการออกจากระบบ (Logout)
 if (isset($_GET['logout'])) {
@@ -28,8 +34,8 @@ $total_students = 0;
 $voted_count = 0;
 $today_duties = 0;
 
-// 4. ดึงข้อมูลสถิติ (ปรับแก้ใหม่ ใช้ if ธรรมดาแทน try-catch เพื่อป้องกัน Syntax Error)
-if (isset($conn)) {$conn->set_charset("utf8mb4");
+// 4. ดึงข้อมูลสถิติ (ตรวจสอบ instanceof mysqli ป้องกัน Fatal Error กรณีเชื่อมต่อ DB ล้มเหลว)
+if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
 
     $res_std =$conn->query("SELECT COUNT(*) as total FROM students");
     if ($res_std && $row =$res_std->fetch_assoc()) { 
