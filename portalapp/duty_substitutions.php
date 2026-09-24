@@ -4,6 +4,13 @@ session_start();
 // ตั้งค่า Timezone ให้เป็นเวลาประเทศไทย
 date_default_timezone_set('Asia/Bangkok');
 
+// =======================================================
+//  ตั้งค่า เปิด/ปิด ระบบขอแทนเวร
+//  true  = เปิดใช้งานระบบ
+//  false = ปิดใช้งานระบบ
+// =======================================================
+$is_system_open = true; 
+
 // สร้าง CSRF Token
 if (empty($_SESSION['csrf_token'])) {$_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
@@ -38,19 +45,50 @@ $message = "";
 
 // ---------------- 2. เมื่อนักเรียนกดบันทึกข้อมูลขอแทนเวร ----------------
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $csrf_token =$_POST['csrf_token'] ?? '';
-    $requester_code = trim($_POST['requester_code'] ?? '');
-    $target_code = trim($_POST['target_code'] ?? '');
-    $duty_date = trim($_POST['duty_date'] ?? '');
-
-    // เปลี่ยนจาก || เป็น or เพื่อแก้ปัญหาอักขระพิเศษ
-    if (empty($csrf_token) or !hash_equals($_SESSION['csrf_token'], $csrf_token)) {$alert_type = "error";
-        $message = "เซสชันไม่ถูกต้อง กรุณารีเฟรชหน้าเว็บแล้วทำรายการใหม่";
-    } else if ($requester_code === $target_code) {$alert_type = "error";
-        $message = "ไม่สามารถขอแทนเวรตัวเองได้";
+    if (!$is_system_open) {$alert_type = "error";
+        $message = "ระบบปิดรับคำขอแทนเวรชั่วคราว ไม่สามารถทำรายการได้";
     } else {
-        $alert_type = "success";
-        $message = "ส่งคำขอแทนเวรของรหัส " . htmlspecialchars($target_code) . " เรียบร้อยแล้ว รอการอนุมัติ";
+        $csrf_token =$_POST['csrf_token'] ?? '';
+        $requester_code = trim($_POST['requester_code'] ?? ''); // ผู้ทำหน้าที่แทน (Replacement)
+        $target_code = trim($_POST['target_code'] ?? '');       // ผู้ที่ถูกแทน (Original)
+        $duty_date = trim($_POST['duty_date'] ?? '');
+        $duty_name = trim($_POST['duty_name'] ?? '');
+        $reason = trim($_POST['reason'] ?? '');
+
+        if (empty($csrf_token) \vert{}\vert{} !hash_equals($_SESSION['csrf_token'], $csrf_token)) {$alert_type = "error";
+            $message = "เซสชันไม่ถูกต้อง กรุณารีเฟรชหน้าเว็บแล้วทำรายการใหม่";
+        } else if (empty($requester_code) || empty($target_code) \vert{}\vert{} empty($duty_date) || empty($duty_name)) {$alert_type = "error";
+            $message = "กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน";
+        } else if ($requester_code === $target_code) {$alert_type = "error";
+            $message = "ไม่สามารถขอแทนเวรตัวเองได้";
+        } else {
+            try {
+                // บันทึกคำขอลงตาราง duty_swaps
+                $status = 'pending';
+                $insert_stmt =$conn->prepare("INSERT INTO duty_swaps (original_student_code, replacement_student_code, duty_date, duty_name, reason, status) VALUES (?, ?, ?, ?, ?, ?)");
+                $insert_stmt->bind_param("ssssss", $target_code,$requester_code, $duty_date,$duty_name, $reason,$status);
+                
+                if ($insert_stmt->execute()) {
+                    // สร้างการแจ้งเตือนไปยัง Admin
+                    $notif_title = "คำขอแทนเวรใหม่จากรหัส $requester_code";
+                    $notif_msg = "นักเรียนรหัส $requester_code ขอเข้าเวร ($duty_name) แทนรหัส $target_code ในวันที่ $duty_date เหตุผล: $reason";
+                    $notif_type = "duty";
+                    $alert_level = "info";
+
+                    $notif_stmt = $conn->prepare("INSERT INTO notifications (student_code, title, message, type, alert_level) VALUES (NULL, ?, ?, ?, ?)");
+                    $notif_stmt->bind_param("ssss", $notif_title, $notif_msg, $notif_type, $alert_level);
+                    $notif_stmt->execute();
+
+                    $alert_type = "success";
+                    $message = "ส่งคำขอแทนเวรของรหัส " . htmlspecialchars($target_code) . " เรียบร้อยแล้ว รอการอนุมัติจาก Admin";
+                } else {
+                    $alert_type = "error";
+                    $message = "เกิดข้อผิดพลาดในการบันทึกข้อมูล";
+                }
+            } catch (Exception $e) {$alert_type = "error";
+                $message = "เกิดข้อผิดพลาดของระบบ: " . $e->getMessage();
+            }
+        }
     }
 }
 ?>
@@ -73,9 +111,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     .school-logo { width: 45px; height: 45px; border-radius: 10px; }
     .school-name h1 { font-size: 1rem; margin: 0 0 2px 0; }
     .school-name p { font-size: 0.75rem; color: var(--text-gray); margin: 0; }
-    .section-title { display: flex; align-items: center; gap: 10px; margin: 10px 20px 15px; }
+    
+    .section-title { display: flex; align-items: center; justify-content: space-between; margin: 10px 20px 15px; }
+    .title-left { display: flex; align-items: center; gap: 10px; }
     .section-pill { width: 5px; height: 24px; background: var(--primary); border-radius: 4px; }
     .section-title h3 { font-size: 1.1rem; margin: 0; }
+    
+    /* Status Badge */
+    .status-badge { font-size: 0.75rem; font-weight: 600; padding: 4px 10px; border-radius: 20px; display: flex; align-items: center; gap: 5px; }
+    .status-badge.open { background-color: #dcfce7; color: #166534; }
+    .status-badge.closed { background-color: #fee2e2; color: #991b1b; }
+
     .form-card { background: white; border-radius: 16px; padding: 20px; margin: 0 20px 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
     .form-group { margin-bottom: 18px; }
     .form-group label { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; font-weight: 600; margin-bottom: 8px; }
@@ -86,8 +132,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     .input-readonly { background: #f1f5f9; color: #64748b; border-style: dashed; }
     .input-success { background: #f0fdf4; border-color: #22c55e; color: #15803d; }
     .input-error { background: #fef2f2; border-color: #ef4444; color: #b91c1c; }
+    textarea.form-control { resize: none; height: 80px; }
     .btn-submit { width: 100%; padding: 14px; background: var(--primary); color: white; border: none; border-radius: 12px; font-size: 1rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 24px; font-family: 'Prompt', sans-serif; }
     .divider { height: 1px; background: #e2e8f0; margin: 20px 0; }
+
+    /* Closed System Card */
+    .closed-box { text-align: center; padding: 30px 20px; }
+    .closed-icon { font-size: 3rem; color: #ef4444; margin-bottom: 12px; }
+    .closed-title { font-size: 1.1rem; font-weight: 600; color: #1e293b; margin-bottom: 8px; }
+    .closed-desc { font-size: 0.875rem; color: #64748b; margin: 0; }
   </style>
 </head>
 <body>
@@ -104,49 +157,97 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     </div>
 
     <div class="section-title">
-      <div class="section-pill"></div>
-      <h3>แบบฟอร์มขอแทนเวร</h3>
+      <div class="title-left">
+        <div class="section-pill"></div>
+        <h3>แบบฟอร์มขอแทนเวร</h3>
+      </div>
+      <!-- แสดง Badge บอกสถานะ เปิด/ปิด ระบบ -->
+      <?php if ($is_system_open): ?>
+        <div class="status-badge open">
+          <i class="fas fa-circle text-[8px]"></i> เปิดระบบ
+        </div>
+      <?php else: ?>
+        <div class="status-badge closed">
+          <i class="fas fa-lock"></i> ปิดระบบ
+        </div>
+      <?php endif; ?>
     </div>
     
     <div class="form-card">
-      <form id="substituteForm" method="POST" action="">
-        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
-        
-        <div class="form-group">
-          <label for="requester_code"><i class="fas fa-user-check icon-label"></i> รหัสประจำตัว (ผู้ทำหน้าที่แทน) <span class="text-danger">*</span></label>
-          <input type="text" id="requester_code" name="requester_code" required maxlength="10" inputmode="numeric" class="form-control" placeholder="เช่น 151xx">
-        </div>
-        <div class="form-group">
-          <input type="text" id="requester_name" readonly tabindex="-1" class="form-control input-readonly" placeholder="ระบบจะแสดงชื่ออัตโนมัติ">
-        </div>
+      <?php if ($is_system_open): ?>
+        <!-- ================= แสดงฟอร์มเมื่อระบบเปิด ================= -->
+        <form id="substituteForm" method="POST" action="">
+          <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
+          
+          <div class="form-group">
+            <label for="requester_code"><i class="fas fa-user-check icon-label"></i> รหัสประจำตัว (ผู้ทำหน้าที่แทน) <span class="text-danger">*</span></label>
+            <input type="text" id="requester_code" name="requester_code" required maxlength="10" inputmode="numeric" class="form-control" placeholder="เช่น 151xx">
+          </div>
+          <div class="form-group">
+            <input type="text" id="requester_name" readonly tabindex="-1" class="form-control input-readonly" placeholder="ระบบจะแสดงชื่ออัตโนมัติ">
+          </div>
 
-        <div class="divider"></div>
+          <div class="divider"></div>
 
-        <div class="form-group">
-          <label for="target_code"><i class="fas fa-user-clock icon-label"></i> รหัสประจำตัว (ผู้ที่ถูกแทนเวร) <span class="text-danger">*</span></label>
-          <input type="text" id="target_code" name="target_code" required maxlength="10" inputmode="numeric" class="form-control" placeholder="รหัสของเพื่อนที่คุณจะเข้าเวรแทน">
-        </div>
-        <div class="form-group">
-          <input type="text" id="target_name" readonly tabindex="-1" class="form-control input-readonly" placeholder="ระบบจะแสดงชื่อเพื่อนอัตโนมัติ">
-        </div>
+          <div class="form-group">
+            <label for="target_code"><i class="fas fa-user-clock icon-label"></i> รหัสประจำตัว (ผู้ที่ถูกแทนเวร) <span class="text-danger">*</span></label>
+            <input type="text" id="target_code" name="target_code" required maxlength="10" inputmode="numeric" class="form-control" placeholder="รหัสของเพื่อนที่คุณจะเข้าเวรแทน">
+          </div>
+          <div class="form-group">
+            <input type="text" id="target_name" readonly tabindex="-1" class="form-control input-readonly" placeholder="ระบบจะแสดงชื่อเพื่อนอัตโนมัติ">
+          </div>
 
-        <div class="form-group">
-          <label for="duty_date"><i class="far fa-calendar-alt icon-label"></i> วันที่ต้องเข้าเวร <span class="text-danger">*</span></label>
-          <input type="date" id="duty_date" name="duty_date" required class="form-control">
-        </div>
+          <div class="divider"></div>
 
-        <button type="submit" id="submitBtn" class="btn-submit">ยื่นคำร้องขอแทนเวร <i class="fas fa-paper-plane"></i></button>
-      </form>
+          <div class="form-group">
+            <label for="duty_date"><i class="far fa-calendar-alt icon-label"></i> วันที่ต้องเข้าเวร <span class="text-danger">*</span></label>
+            <input type="date" id="duty_date" name="duty_date" required class="form-control">
+          </div>
+
+          <div class="form-group">
+            <label for="duty_name"><i class="fas fa-clipboard-list icon-label"></i> ชื่อเวร / หน้าที่ <span class="text-danger">*</span></label>
+            <input type="text" id="duty_name" name="duty_name" required class="form-control" placeholder="เช่น เวรยาม บก., เวรทำความสะอาด">
+          </div>
+
+          <div class="form-group">
+            <label for="reason"><i class="fas fa-comment-dots icon-label"></i> เหตุผลการขอแทนเวร</label>
+            <textarea id="reason" name="reason" class="form-control" placeholder="ระบุเหตุผลที่ขอทำหน้าที่แทน (ถ้ามี)"></textarea>
+          </div>
+
+          <button type="submit" id="submitBtn" class="btn-submit">ยื่นคำร้องขอแทนเวร <i class="fas fa-paper-plane"></i></button>
+        </form>
+
+      <?php else: ?>
+        <!-- ================= แสดงข้อความเมื่อระบบปิด ================= -->
+        <div class="closed-box">
+          <div class="closed-icon">
+            <i class="fas fa-ban"></i>
+          </div>
+          <div class="closed-title">ระบบปิดรับคำขอแทนเวรชั่วคราว</div>
+          <p class="closed-desc">ขณะนี้ระบบไม่อนุญาตให้ยื่นคำขอแทนเวร หากมีข้อสงสัยหรือเหตุจำเป็น กรุณาติดต่อผู้ดูแลระบบหรือกองร้อย/กองพัน</p>
+        </div>
+      <?php endif; ?>
     </div>
   </div>
 
 <script>
 <?php if ($alert_type == 'success'): ?>
-    Swal.fire({ title: 'สำเร็จ', text: <?php echo json_encode($message); ?>, icon: 'success', confirmButtonColor: '#5a42a0' }).then(() => { window.location.href = window.location.pathname; });
+    Swal.fire({ 
+        title: 'สำเร็จ', 
+        text: <?php echo json_encode($message); ?>, 
+        icon: 'success', 
+        confirmButtonColor: '#5a42a0' 
+    }).then(() => { window.location.href = window.location.pathname; });
 <?php elseif ($alert_type == 'error'): ?>
-    Swal.fire({ title: 'ข้อผิดพลาด', text: <?php echo json_encode($message); ?>, icon: 'error', confirmButtonColor: '#b71c1c' });
+    Swal.fire({ 
+        title: 'ข้อผิดพลาด', 
+        text: <?php echo json_encode($message); ?>, 
+        icon: 'error', 
+        confirmButtonColor: '#b71c1c' 
+    });
 <?php endif; ?>
 
+<?php if ($is_system_open): ?>
 async function fetchStudentName(inputId, nameInputId) {
     const codeInput = document.getElementById(inputId);
     const nameInput = document.getElementById(nameInputId);
@@ -180,34 +281,41 @@ async function fetchStudentName(inputId, nameInputId) {
 }
 
 const reqCode = document.getElementById('requester_code');
-reqCode.addEventListener('blur', () => fetchStudentName('requester_code', 'requester_name'));
-reqCode.addEventListener('input', function() { if (this.value.trim().length >= 5) fetchStudentName('requester_code', 'requester_name'); });
+if (reqCode) {
+    reqCode.addEventListener('blur', () => fetchStudentName('requester_code', 'requester_name'));
+    reqCode.addEventListener('input', function() { if (this.value.trim().length >= 5) fetchStudentName('requester_code', 'requester_name'); });
+}
 
 const targetCode = document.getElementById('target_code');
-targetCode.addEventListener('blur', () => fetchStudentName('target_code', 'target_name'));
-targetCode.addEventListener('input', function() { if (this.value.trim().length >= 5) fetchStudentName('target_code', 'target_name'); });
+if (targetCode) {
+    targetCode.addEventListener('blur', () => fetchStudentName('target_code', 'target_name'));
+    targetCode.addEventListener('input', function() { if (this.value.trim().length >= 5) fetchStudentName('target_code', 'target_name'); });
+}
 
 const form = document.getElementById("substituteForm");
-form.addEventListener("submit", function(e){
-    e.preventDefault();
-    if (!form.checkValidity()) { form.reportValidity(); return; }
+if (form) {
+    form.addEventListener("submit", function(e){
+        e.preventDefault();
+        if (!form.checkValidity()) { form.reportValidity(); return; }
 
-    Swal.fire({
-        title: 'ยืนยันการแทนเวร',
-        text: 'กรุณาตรวจสอบความถูกต้อง คุณแน่ใจหรือไม่ว่าต้องการแทนเวรให้รหัสนี้?',
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonColor: '#5a42a0',
-        cancelButtonColor: '#94a3b8',
-        confirmButtonText: 'ยืนยัน',
-        cancelButtonText: 'ยกเลิก'
-    }).then((result) => {
-        if(result.isConfirmed) {
-            document.getElementById("submitBtn").innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังดำเนินการ...';
-            form.submit();
-        }
+        Swal.fire({
+            title: 'ยืนยันการแทนเวร',
+            text: 'กรุณาตรวจสอบความถูกต้อง คุณแน่ใจหรือไม่ว่าต้องการแทนเวรให้เพื่อนคนนี้?',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#5a42a0',
+            cancelButtonColor: '#94a3b8',
+            confirmButtonText: 'ยืนยัน',
+            cancelButtonText: 'ยกเลิก'
+        }).then((result) => {
+            if(result.isConfirmed) {
+                document.getElementById("submitBtn").innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังดำเนินการ...';
+                form.submit();
+            }
+        });
     });
-});
+}
+<?php endif; ?>
 </script>
 </body>
 </html>
