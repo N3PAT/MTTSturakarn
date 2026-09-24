@@ -48,13 +48,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     } else if ($requester_code === $target_code) {$alert_type = "error";
         $message = "ไม่สามารถขอแทนเวรตัวเองได้";
     } else {
-        // แนะนำให้สร้างตาราง duty_substitutions เพิ่มในฐานข้อมูลของคุณ
-        // สมมติว่ามีตารางแล้ว จะใช้คำสั่ง SQL ประมาณนี้:
-        /*
-        $stmt =$conn->prepare("INSERT INTO duty_substitutions (requester_code, target_code, duty_date, status) VALUES (?, ?, ?, 'pending')");
-        $stmt->bind_param("sss", $requester_code,$target_code, $duty_date);$stmt->execute();
-        */
-        
         $alert_type = "success";
         $message = "ส่งคำขอแทนเวรของรหัส " . htmlspecialchars($target_code) . " เรียบร้อยแล้ว รอการอนุมัติ";
     }
@@ -71,7 +64,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   
   <style>
-    /* ใช้ Style เดียวกันกับหน้าเดิมเพื่อให้ UI เป็นไปในทิศทางเดียวกัน */
     :root { --primary: #5a42a0; --primary-dark: #473282; --bg-color: #f6f8fc; --text-dark: #1e293b; --text-gray: #64748b; }
     body { font-family: 'Prompt', sans-serif; background-color: #e2e8f0; margin: 0; display: flex; justify-content: center; min-height: 100vh; }
     .app-container { width: 100%; max-width: 430px; background-color: var(--bg-color); min-height: 100vh; padding-bottom: 90px; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
@@ -119,7 +111,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       <form id="substituteForm" method="POST" action="">
         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
         
-        <!-- ส่วนของผู้ขอแทนเวร -->
         <div class="form-group">
           <label for="requester_code"><i class="fas fa-user-check icon-label"></i> รหัสประจำตัว (ผู้ทำหน้าที่แทน) <span class="text-danger">*</span></label>
           <input type="text" id="requester_code" name="requester_code" required maxlength="10" inputmode="numeric" class="form-control" placeholder="เช่น 151xx">
@@ -130,7 +121,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         <div class="divider"></div>
 
-        <!-- ส่วนของผู้ที่ถูกแทนเวร -->
         <div class="form-group">
           <label for="target_code"><i class="fas fa-user-clock icon-label"></i> รหัสประจำตัว (ผู้ที่ถูกแทนเวร) <span class="text-danger">*</span></label>
           <input type="text" id="target_code" name="target_code" required maxlength="10" inputmode="numeric" class="form-control" placeholder="รหัสของเพื่อนที่คุณจะเข้าเวรแทน">
@@ -156,7 +146,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     Swal.fire({ title: 'ข้อผิดพลาด', text: <?php echo json_encode($message); ?>, icon: 'error', confirmButtonColor: '#b71c1c' });
 <?php endif; ?>
 
-// ฟังก์ชันสำหรับดึงชื่อนักเรียนผ่าน AJAX (ใช้ร่วมกันได้ทั้ง 2 ช่อง)
 async function fetchStudentName(inputId, nameInputId) {
     const codeInput = document.getElementById(inputId);
     const nameInput = document.getElementById(nameInputId);
@@ -189,17 +178,14 @@ async function fetchStudentName(inputId, nameInputId) {
     }
 }
 
-// ผูก Event ให้ช่องกรอกรหัสผู้ขอแทน
 const reqCode = document.getElementById('requester_code');
 reqCode.addEventListener('blur', () => fetchStudentName('requester_code', 'requester_name'));
 reqCode.addEventListener('input', function() { if (this.value.trim().length >= 5) fetchStudentName('requester_code', 'requester_name'); });
 
-// ผูก Event ให้ช่องกรอกรหัสผู้ถูกแทน
 const targetCode = document.getElementById('target_code');
 targetCode.addEventListener('blur', () => fetchStudentName('target_code', 'target_name'));
 targetCode.addEventListener('input', function() { if (this.value.trim().length >= 5) fetchStudentName('target_code', 'target_name'); });
 
-// แจ้งเตือนก่อน Submit
 const form = document.getElementById("substituteForm");
 form.addEventListener("submit", function(e){
     e.preventDefault();
