@@ -73,9 +73,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             $notif_title = "ผลการขอแทนเวรวันที่ " . $swap_info['duty_date'];
                             $notif_msg = "คำขอแทนเวรรหัส " . $swap_info['original_student_code'] . " โดยรหัส " . $swap_info['replacement_student_code'] . " " . $status_th;
                             
-                            // แก้ไขจุดนี้: เปลี่ยนเป็น "duty" เพื่อแก้ปัญหา Data truncated
                             $notif_type = "duty"; 
-                            $alert_lvl = ($status === 'approved') ? "success" : "warning";
+                            // แก้ไขจุดนี้: ใช้ "info" เพื่อป้องกันข้อผิดพลาด Data truncated
+                            $alert_lvl = "info";
 
                             // แจ้งเตือนผู้ทำแทน
                             $notif_stmt = $conn->prepare("INSERT INTO notifications (student_code, title, message, type, alert_level) VALUES (?, ?, ?, ?, ?)");
