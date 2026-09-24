@@ -161,7 +161,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $notif_stmt->execute();
 
                     $alert_type = 'success';
-                    $message = 'ส่งคำขอแทนเวรของรหัส ' . htmlspecialchars($target_code) . ' เรียบร้อยแล้ว รอการอนุมัติจาก Admin';
+                    $message = 'ส่งคำขอแทนเวรของรหัส ' . htmlspecialchars($target_code) . ' เรียบร้อยแล้ว รอการอนุมัติจาก ผู้ดูแลระบบ';
                 } else {
                     $alert_type = 'error';
                     $message = 'เกิดข้อผิดพลาดในการบันทึกข้อมูล';
@@ -240,6 +240,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
       <div class="title-left">
         <div class="section-pill"></div>
         <h3>แบบฟอร์มขอแทนเวร</h3>
+    <p>กรุณากรอกหลังส่งใบแทนเวรรักษาการณ์ที่ บก.พัน 1</p>
       </div>
       <?php if ($is_system_open): ?>
         <div class="status-badge open">
@@ -304,7 +305,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         <div class="closed-box">
           <div class="closed-icon"><i class="fas fa-ban"></i></div>
           <div class="closed-title">ระบบปิดรับคำขอแทนเวรชั่วคราว</div>
-          <p class="closed-desc">ขณะนี้ระบบไม่อนุญาตให้ยื่นคำขอแทนเวร หากมีข้อสงสัยหรือเหตุจำเป็น กรุณาติดต่อผู้ดูแลระบบหรือกองร้อย/กองพัน</p>
+          <p class="closed-desc">ขณะนี้ระบบไม่อนุญาตให้ยื่นคำขอแทนเวร หากมีข้อสงสัยหรือเหตุจำเป็น กรุณาติดต่อผู้ดูแลระบบหรือกองพัน</p>
         </div>
       <?php endif; ?>
     </div>
