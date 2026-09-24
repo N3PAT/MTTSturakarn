@@ -4,6 +4,7 @@ header('Access-Control-Allow-Origin: *');
 
 // ตั้งค่าข้อมูลเวอร์ชันของแอป
 $appVersion = [
+    'appName' => 'ระบบสารสนเทศนักเรียน MTTS',
     'version' => '1.2.0',
     'build' => 120,
     'release_date' => '2026-09-25',
@@ -16,8 +17,9 @@ $appVersion = [
         'ปรับปรุงประสิทธิภาพการโหลดหน้าหลัก',
         'แก้ไขข้อผิดพลาดระบบสถิติการเข้าเวร'
     ],
-    'apk_download_url' => 'downloads/mtts-app-v1.2.0.apk',
-    'pwa_manifest_url' => 'manifest.json'
+    'apkUrl' => '../downloads/mtts-app-v1.2.0.apk',
+    'apk_download_url' => '../downloads/mtts-app-v1.2.0.apk',
+    'pwa_manifest_url' => '../manifest.json'
 ];
 
 echo json_encode($appVersion, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
