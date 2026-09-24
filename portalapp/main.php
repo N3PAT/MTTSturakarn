@@ -615,6 +615,10 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
         <div class="icon-box bg-blue"><i class="fas fa-file-alt"></i></div>
         <span class="menu-text">คำร้องขอเอกสาร</span>
       </a>
+        <a href="duty_substitutions.php" class="menu-item">
+        <div class="icon-box bg-blue"><i class="fas fa-address-book"></i></div>
+        <span class="menu-text">คำร้องเปลี่ยนเวร</span>
+      </a>
     </div>
 
 <!-- ส่วนแสดงประกาศ / ข่าวสาร -->
