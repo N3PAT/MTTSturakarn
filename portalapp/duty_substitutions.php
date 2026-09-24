@@ -43,8 +43,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $target_code = trim($_POST['target_code'] ?? '');
     $duty_date = trim($_POST['duty_date'] ?? '');
 
-    // แก้ไขเครื่องหมาย || ตรงนี้
-    if (empty($csrf_token) \vert{}\vert{} !hash_equals($_SESSION['csrf_token'], $csrf_token)) {$alert_type = "error";
+    // เปลี่ยนจาก || เป็น or เพื่อแก้ปัญหาอักขระพิเศษ
+    if (empty($csrf_token) or !hash_equals($_SESSION['csrf_token'], $csrf_token)) {$alert_type = "error";
         $message = "เซสชันไม่ถูกต้อง กรุณารีเฟรชหน้าเว็บแล้วทำรายการใหม่";
     } else if ($requester_code === $target_code) {$alert_type = "error";
         $message = "ไม่สามารถขอแทนเวรตัวเองได้";
