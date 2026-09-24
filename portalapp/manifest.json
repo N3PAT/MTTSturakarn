@@ -2,7 +2,8 @@
   "name": "ระบบสารสนเทศนักเรียน MTTS",
   "short_name": "MTTS App",
   "description": "ระบบสารสนเทศนักเรียน โรงเรียนช่างฝีมือทหาร",
-  "start_url": "login.php",
+  "start_url": "./login.php",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#f3f4f6",
   "theme_color": "#503896",
@@ -11,7 +12,8 @@
     {
       "src": "icon-192x192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "icon-512x512.png",
