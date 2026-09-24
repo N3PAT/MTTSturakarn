@@ -17,13 +17,12 @@ if (empty($_SESSION['admin_id'])) {
 
 // 3. จัดการระบบ Loading Screen
 $show_loading = false;
-if (!isset($_SESSION['admin_has_seen_loading'])) {
-    $show_loading = true;
+if (!isset($_SESSION['admin_has_seen_loading'])) {$show_loading = true;
     $_SESSION['admin_has_seen_loading'] = true;
 }
 
-$admin_id = $_SESSION['admin_id'];
-$admin_name = $_SESSION['admin_name'] ?? 'ผู้ดูแลระบบ MTTS'; 
+$admin_id =$_SESSION['admin_id'];
+$admin_name =$_SESSION['admin_name'] ?? 'ผู้ดูแลระบบ MTTS'; 
 
 $total_students = 0;
 $voted_count = 0;
@@ -31,19 +30,19 @@ $today_duties = 0;
 
 // 4. ดึงข้อมูลสถิติ
 try {
-    if (!isset($conn) || !($conn instanceof mysqli)) {
+    if (!isset($conn) \vert{}\vert{} !($conn instanceof mysqli)) {
         throw new Exception("Database connection error");
     }
     $conn->set_charset("utf8mb4");
 
-    $res_std = $conn->query("SELECT COUNT(*) as total FROM students");
-    if ($res_std && $row = $res_std->fetch_assoc()) { $total_students = $row['total']; }
+    $res_std =$conn->query("SELECT COUNT(*) as total FROM students");
+    if ($res_std && $row =$res_std->fetch_assoc()) { $total_students =$row['total']; }
 
-    $res_vote = $conn->query("SELECT COUNT(DISTINCT student_code) as voted FROM votes WHERE YEARWEEK(vote_date, 1) = YEARWEEK(CURDATE(), 1)");
-    if ($res_vote && $row = $res_vote->fetch_assoc()) { $voted_count = $row['voted']; }
+    $res_vote =$conn->query("SELECT COUNT(DISTINCT student_code) as voted FROM votes WHERE YEARWEEK(vote_date, 1) = YEARWEEK(CURDATE(), 1)");
+    if ($res_vote && $row =$res_vote->fetch_assoc()) { $voted_count =$row['voted']; }
 
-    $res_duty = $conn->query("SELECT COUNT(*) as today_duty FROM student_duties WHERE duty_date = CURDATE()");
-    if ($res_duty && $row = $res_duty->fetch_assoc()) { $today_duties = $row['today_duty']; }
+    $res_duty =$conn->query("SELECT COUNT(*) as today_duty FROM student_duties WHERE duty_date = CURDATE()");
+    if ($res_duty && $row =$res_duty->fetch_assoc()) { $today_duties =$row['today_duty']; }
 
 } catch (Throwable $e) {
     error_log("Admin System error: " . $e->getMessage());
@@ -121,7 +120,7 @@ try {
 
     /* App Icons Grid (Menu) */
     .app-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px 12px; margin: 0 24px 28px; }
-    .app-btn { display: flex; flex-direction: column; align-items: center; text-decoration: none; gap: 8px; cursor: pointer; }
+    .app-btn { display: flex; flex-direction: column; align-items: center; text-decoration: none; gap: 8px; cursor: pointer; border: none; background: transparent; padding: 0; }
     .app-icon { width: 58px; height: 58px; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: white; box-shadow: 0 8px 16px rgba(0,0,0,0.1); transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
     .app-btn:hover .app-icon { transform: translateY(-4px) scale(1.05); box-shadow: 0 12px 20px rgba(0,0,0,0.15); }
     .app-btn:active .app-icon { transform: scale(0.95); }
@@ -207,7 +206,7 @@ try {
       <div class="stat-box">
         <div class="stat-icon c-red"><i class="fas fa-exclamation-circle"></i></div>
         <div>
-            <h3><?= number_format(max(0, $total_students - $voted_count)) ?></h3>
+            <h3><?= number_format(max(0, $total_students -$voted_count)) ?></h3>
             <p>ยังไม่โหวต</p>
         </div>
       </div>
@@ -231,10 +230,13 @@ try {
         <div class="app-icon bg-grad-green"><i class="fas fa-chart-bar"></i></div>
         <span>ผลโหวต</span>
       </a>
-      <a href="send_push.php" class="app-btn">
+      
+      <!-- แก้ไขปุ่มแจ้งเตือนตรงนี้ ให้เรียกใช้ JavaScript แทนการเปลี่ยนหน้าจอ -->
+      <button onclick="triggerPushNotification()" class="app-btn">
         <div class="app-icon bg-grad-orange"><i class="fas fa-broadcast-tower"></i></div>
         <span>แจ้งเตือน</span>
-      </a>
+      </button>
+
       <a href="reports.php" class="app-btn">
         <div class="app-icon bg-grad-red"><i class="fas fa-file-pdf"></i></div>
         <span>รายงาน</span>
@@ -260,6 +262,7 @@ try {
   </div>
 
   <script>
+    // 1. Script สำหรับ Loading Screen
     document.addEventListener("DOMContentLoaded", function() {
       const loader = document.getElementById('page-loader');
       if (loader) {
@@ -271,6 +274,44 @@ try {
         }, 1000);
       }
     });
+
+    // 2. Script สำหรับยิง API แจ้งเตือน (รองรับระบบความปลอดภัยใหม่)
+    async function triggerPushNotification() {
+      // ถามเพื่อยืนยันก่อนส่ง
+      if (!confirm("คุณต้องการส่งแจ้งเตือนไปยังผู้ใช้ที่ยังไม่ได้ทำรายการ ใช่หรือไม่?")) {
+          return;
+      }
+
+      try {
+          // ดึงวันที่ปัจจุบันมาเป็น Target Date
+          const today = new Date();
+          const targetDate = today.toLocaleDateString('en-GB'); // ได้ฟอร์แมต DD/MM/YYYY
+
+          // ยิง POST Request พร้อมแนบ X-API-KEY
+          const response = await fetch('send_push.php', {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+                  // ต้องตรงกับค่า SECRET_API_KEY ที่คุณตั้งไว้ในไฟล์ send_push.php
+                  'X-API-KEY': 'w86Ccb6pIc6w6EMWun3uVj9zfDe0Q-44hA2asE_RUSs' 
+              },
+              body: JSON.stringify({
+                  target_date: targetDate
+              })
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+              alert(`ส่งแจ้งเตือนสำเร็จ!\nส่งไปยัง ${data.sent_count} อุปกรณ์`);
+          } else {
+              alert(`เกิดข้อผิดพลาด:\n${data.message}`);
+          }
+      } catch (error) {
+          console.error('Fetch Error:', error);
+          alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ หรือ URL ไม่ถูกต้อง');
+      }
+    }
   </script>
 </body>
 </html>
