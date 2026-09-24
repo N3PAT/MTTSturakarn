@@ -1,0 +1,24 @@
+<?php
+header('Content-Type: application/json; charset=utf-8');
+header('Access-Control-Allow-Origin: *');
+
+// ตั้งค่าข้อมูลเวอร์ชันของแอป
+$appVersion = [
+    'version' => '1.2.0',
+    'build' => 120,
+    'release_date' => '2026-09-25',
+    'min_os_version' => [
+        'android' => '8.0',
+        'ios' => '14.0'
+    ],
+    'changelog' => [
+        'เพิ่มระบบแจ้งเตือนผ่าน Web Push',
+        'ปรับปรุงประสิทธิภาพการโหลดหน้าหลัก',
+        'แก้ไขข้อผิดพลาดระบบสถิติการเข้าเวร'
+    ],
+    'apk_download_url' => 'downloads/mtts-app-v1.2.0.apk',
+    'pwa_manifest_url' => 'manifest.json'
+];
+
+echo json_encode($appVersion, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+?>
