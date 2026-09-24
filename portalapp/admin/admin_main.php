@@ -297,9 +297,9 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
           const response = await fetch('send_push.php', {
               method: 'POST',
               headers: {
-                  'Content-Type': 'application/json',
-                  'X-API-KEY': 'w86Ccb6pIc6w6EMWun3uVj9zfDe0Q-44hA2asE_RUSs' // ใส่รหัสให้ตรงกับในไฟล์ send_push.php
-              },
+    'Content-Type': 'application/json',
+    'X-API-KEY': 'N4tthap41!nwza'
+},
               body: JSON.stringify({
                   target_date: targetDate
               })
