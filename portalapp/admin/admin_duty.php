@@ -50,45 +50,70 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             }
         }
         
-        // อนุมัติ หรือ ปฏิเสธคำขอแทนเวร
+        // อัปเดต/เปลี่ยนสถานะคำขอแทนเวร (approved, rejected, pending)
         else if ($action === 'update_swap_status') {
             $swap_id = isset($_POST['swap_id']) ? intval($_POST['swap_id']) : 0;
-            $status = isset($_POST['status']) ? $_POST['status'] : ''; // 'approved' หรือ 'rejected'
+            $status = isset($_POST['status']) ? $_POST['status'] : ''; // 'approved', 'rejected', 'pending'
             
-            if ($swap_id > 0 && in_array($status, ['approved', 'rejected'])) {
+            if ($swap_id > 0 && in_array($status, ['approved', 'rejected', 'pending'])) {
                 try {
                     // อัปเดตสถานะใน duty_swaps
                     $stmt = $conn->prepare("UPDATE duty_swaps SET status = ? WHERE id = ?");
                     $stmt->bind_param("si", $status, $swap_id);
                     
                     if ($stmt->execute()) {
-                        // ดึงข้อมูลคำขอเพื่อส่งแจ้งเตือนกลับไปหาผู้ขอ
-                        $info_stmt = $conn->prepare("SELECT original_student_code, replacement_student_code, duty_date FROM duty_swaps WHERE id = ? LIMIT 1");
-                        $info_stmt->bind_param("i", $swap_id);
-                        $info_stmt->execute();
-                        $swap_info = $info_stmt->get_result()->fetch_assoc();
+                        // ส่งแจ้งเตือนเมื่อเปลี่ยนสถานะเป็นอนุมัติหรือปฏิเสธ
+                        if (in_array($status, ['approved', 'rejected'])) {
+                            $info_stmt = $conn->prepare("SELECT original_student_code, replacement_student_code, duty_date FROM duty_swaps WHERE id = ? LIMIT 1");
+                            $info_stmt->bind_param("i", $swap_id);
+                            $info_stmt->execute();
+                            $swap_info = $info_stmt->get_result()->fetch_assoc();
 
-                        if ($swap_info) {
-                            $status_th = ($status === 'approved') ? 'อนุมัติแล้ว' : 'ถูกปฏิเสธ';
-                            $notif_title = "ผลการขอแทนเวรวันที่ " . $swap_info['duty_date'];
-                            $notif_msg = "คำขอแทนเวรรหัส " . $swap_info['original_student_code'] . " โดยรหัส " . $swap_info['replacement_student_code'] . " " . $status_th;
-                            
-                            $notif_type = "duty"; 
-                            // แก้ไขจุดนี้: ใช้ "info" เพื่อป้องกันข้อผิดพลาด Data truncated
-                            $alert_lvl = "info";
+                            if ($swap_info) {
+                                $status_th = ($status === 'approved') ? 'อนุมัติแล้ว' : 'ถูกปฏิเสธ';
+                                $notif_title = "ผลการขอแทนเวรวันที่ " . $swap_info['duty_date'];
+                                $notif_msg = "คำขอแทนเวรรหัส " . $swap_info['original_student_code'] . " โดยรหัส " . $swap_info['replacement_student_code'] . " " . $status_th;
+                                
+                                $notif_type = "duty"; 
+                                $alert_lvl = "info";
 
-                            // แจ้งเตือนผู้ทำแทน
-                            $notif_stmt = $conn->prepare("INSERT INTO notifications (student_code, title, message, type, alert_level) VALUES (?, ?, ?, ?, ?)");
-                            $notif_stmt->bind_param("sssss", $swap_info['replacement_student_code'], $notif_title, $notif_msg, $notif_type, $alert_lvl);
-                            $notif_stmt->execute();
+                                // แจ้งเตือนผู้ทำแทน
+                                $notif_stmt = $conn->prepare("INSERT INTO notifications (student_code, title, message, type, alert_level) VALUES (?, ?, ?, ?, ?)");
+                                $notif_stmt->bind_param("sssss", $swap_info['replacement_student_code'], $notif_title, $notif_msg, $notif_type, $alert_lvl);
+                                $notif_stmt->execute();
+                            }
                         }
 
                         $alert_type = 'success';
-                        $message = ($status === 'approved') ? 'อนุมัติคำขอแทนเวรเรียบร้อย' : 'ปฏิเสธคำขอแทนเวรเรียบร้อย';
+                        $status_msgs = [
+                            'approved' => 'อนุมัติคำขอแทนเวรเรียบร้อย',
+                            'rejected' => 'ปฏิเสธคำขอแทนเวรเรียบร้อย',
+                            'pending'  => 'เปลี่ยนสถานะเป็น "รออนุมัติ" เรียบร้อย'
+                        ];
+                        $message = $status_msgs[$status] ?? 'อัปเดตสถานะเรียบร้อยแล้ว';
                     }
                 } catch (Exception $e) {
                     $alert_type = 'error';
                     $message = 'เกิดข้อผิดพลาด: ' . $e->getMessage();
+                }
+            }
+        }
+
+        // ลบรายการคำขอแทนเวร
+        else if ($action === 'delete_swap') {
+            $swap_id = isset($_POST['swap_id']) ? intval($_POST['swap_id']) : 0;
+            
+            if ($swap_id > 0) {
+                try {
+                    $stmt = $conn->prepare("DELETE FROM duty_swaps WHERE id = ?");
+                    $stmt->bind_param("i", $swap_id);
+                    if ($stmt->execute()) {
+                        $alert_type = 'success';
+                        $message = 'ลบรายการคำขอแทนเวรเรียบร้อยแล้ว';
+                    }
+                } catch (Exception $e) {
+                    $alert_type = 'error';
+                    $message = 'เกิดข้อผิดพลาดในการลบรายการ: ' . $e->getMessage();
                 }
             }
         }
@@ -176,11 +201,15 @@ try {
     .reason-text { color: #64748b; font-style: italic; }
 
     .action-btns { display: flex; gap: 8px; }
-    .btn-action { flex: 1; padding: 9px; border-radius: 10px; border: none; font-family: 'Prompt', sans-serif; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
+    .btn-action { flex: 1; padding: 9px; border-radius: 10px; border: none; font-family: 'Prompt', sans-serif; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s; }
     .btn-approve { background: #22c55e; color: white; }
     .btn-approve:hover { background: #16a34a; }
     .btn-reject { background: #ef4444; color: white; }
     .btn-reject:hover { background: #dc2626; }
+    .btn-status { background: #e0f2fe; color: #0369a1; }
+    .btn-status:hover { background: #bae6fd; }
+    .btn-delete { background: #fee2e2; color: #b91c1c; flex: 0 0 auto; padding: 9px 12px; }
+    .btn-delete:hover { background: #fca5a5; }
 
     .empty-state { text-align: center; color: var(--text-gray); padding: 20px 0; font-size: 0.9rem; }
   </style>
@@ -271,16 +300,19 @@ try {
               <button type="button" onclick="handleSwapAction(<?php echo $item['id']; ?>, 'rejected')" class="btn-action btn-reject">
                 <i class="fas fa-times"></i> ปฏิเสธ
               </button>
+              <button type="button" onclick="handleDeleteAction(<?php echo $item['id']; ?>)" class="btn-action btn-delete" title="ลบรายการ">
+                <i class="fas fa-trash-alt"></i>
+              </button>
             </div>
           </div>
         <?php endforeach; ?>
       <?php endif; ?>
     </div>
 
-    <!-- Form ซ่อนสำหรับส่งค่า Approve/Reject -->
+    <!-- Form ซ่อนสำหรับส่งค่า Action ต่างๆ -->
     <form id="actionForm" method="POST" action="">
       <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
-      <input type="hidden" name="action" value="update_swap_status">
+      <input type="hidden" id="action_input" name="action" value="update_swap_status">
       <input type="hidden" id="swap_id_input" name="swap_id" value="">
       <input type="hidden" id="status_input" name="status" value="">
     </form>
@@ -290,23 +322,31 @@ try {
     <div class="section-title">
       <div class="title-left">
         <div class="section-pill" style="background: #64748b;"></div>
-        <h3>ประวัติการดำเนินการล่าสุด</h3>
+        <h3>ประวัติการดำเนินการ (<?php echo count($history_swaps); ?>)</h3>
       </div>
     </div>
 
     <div class="card">
-      <?php foreach (array_slice($history_swaps, 0, 5) as $item): ?>
+      <?php foreach ($history_swaps as $item): ?>
         <div class="swap-item">
           <div class="swap-header">
-            <span class="date-badge"><?php echo htmlspecialchars($item['duty_date']); ?></span>
+            <span class="date-badge"><i class="far fa-calendar-alt"></i> <?php echo htmlspecialchars($item['duty_date']); ?></span>
             <?php if ($item['status'] === 'approved'): ?>
               <span class="status-pill approved"><i class="fas fa-check-circle"></i> อนุมัติแล้ว</span>
             <?php else: ?>
               <span class="status-pill rejected"><i class="fas fa-times-circle"></i> ไม่อนุมัติ</span>
             <?php endif; ?>
           </div>
-          <div style="font-size: 0.85rem; color: var(--text-dark);">
+          <div style="font-size: 0.85rem; color: var(--text-dark); margin-bottom: 10px;">
             รหัส <strong><?php echo htmlspecialchars($item['replacement_student_code']); ?></strong> แทนรหัส <strong><?php echo htmlspecialchars($item['original_student_code']); ?></strong>
+          </div>
+          <div class="action-btns">
+            <button type="button" onclick="changeStatusDialog(<?php echo $item['id']; ?>, '<?php echo $item['status']; ?>')" class="btn-action btn-status">
+              <i class="fas fa-sync-alt"></i> เปลี่ยนสถานะ
+            </button>
+            <button type="button" onclick="handleDeleteAction(<?php echo $item['id']; ?>)" class="btn-action btn-delete" title="ลบรายการ">
+              <i class="fas fa-trash-alt"></i> ลบ
+            </button>
           </div>
         </div>
       <?php endforeach; ?>
@@ -342,7 +382,7 @@ function confirmToggle(isOpen) {
     });
 }
 
-// ยืนยันการ อนุมัติ/ปฏิเสธ คำขอแทนเวร
+// ยืนยันการ อนุมัติ/ปฏิเสธ คำขอแทนเวร (ฉบับรวดเร็ว)
 function handleSwapAction(id, status) {
     var isApprove = (status === 'approved');
     var titleText = isApprove ? 'ยืนยันการอนุมัติ' : 'ยืนยันการปฏิเสธ';
@@ -360,8 +400,55 @@ function handleSwapAction(id, status) {
         cancelButtonText: 'ยกเลิก'
     }).then((result) => {
         if (result.isConfirmed) {
+            document.getElementById('action_input').value = 'update_swap_status';
             document.getElementById('swap_id_input').value = id;
             document.getElementById('status_input').value = status;
+            document.getElementById('actionForm').submit();
+        }
+    });
+}
+
+// Dialog สำหรับเลือกเปลี่ยนสถานะได้อย่างอิสระ
+function changeStatusDialog(id, currentStatus) {
+    Swal.fire({
+        title: 'เลือกเปลี่ยนสถานะ',
+        input: 'select',
+        inputOptions: {
+            'pending': 'รออนุมัติ (Pending)',
+            'approved': 'อนุมัติแล้ว (Approved)',
+            'rejected': 'ปฏิเสธ/ไม่อนุมัติ (Rejected)'
+        },
+        inputValue: currentStatus,
+        showCancelButton: true,
+        confirmButtonText: 'บันทึกสถานะ',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#5a42a0',
+        cancelButtonColor: '#94a3b8'
+    }).then((result) => {
+        if (result.isConfirmed && result.value) {
+            document.getElementById('action_input').value = 'update_swap_status';
+            document.getElementById('swap_id_input').value = id;
+            document.getElementById('status_input').value = result.value;
+            document.getElementById('actionForm').submit();
+        }
+    });
+}
+
+// ยืนยันการลบรายการคำขอแทนเวร
+function handleDeleteAction(id) {
+    Swal.fire({
+        title: 'ยืนยันการลบรายการ',
+        text: 'คุณต้องการลบรายการคำขอแทนเวรนี้ใช่หรือไม่? (ข้อมูลจะถูกลบถาวร)',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#94a3b8',
+        confirmButtonText: 'ลบรายการ',
+        cancelButtonText: 'ยกเลิก'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            document.getElementById('action_input').value = 'delete_swap';
+            document.getElementById('swap_id_input').value = id;
             document.getElementById('actionForm').submit();
         }
     });
