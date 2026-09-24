@@ -4,18 +4,28 @@ session_start();
 // ตั้งค่า Timezone ให้เป็นเวลาประเทศไทย
 date_default_timezone_set('Asia/Bangkok');
 
-// =======================================================
-//  ตั้งค่า เปิด/ปิด ระบบขอแทนเวร
-//  true  = เปิดใช้งานระบบ
-//  false = ปิดใช้งานระบบ
-// =======================================================
-$is_system_open = true; 
-
 // สร้าง CSRF Token
 if (empty($_SESSION['csrf_token'])) {$_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
 require 'db.php';
+
+// =======================================================
+// ดึงสถานะ เปิด/ปิด ระบบขอแทนเวร จากฐานข้อมูล
+// =======================================================
+$is_system_open = false; // ค่าเริ่มต้นป้องกันไว้ก่อน
+try {
+    $setting_stmt =$conn->query("SELECT setting_value FROM system_settings WHERE setting_name = 'duty_system_status' LIMIT 1");
+    if ($setting_row =$setting_stmt->fetch_assoc()) {
+        $is_system_open = ($setting_row['setting_value'] === 'open');
+    } else {
+        $is_system_open = true; // ถ้ายังไม่มีข้อมูลในตาราง ให้เปิดระบบไว้ก่อน
+    }
+} catch (Exception $e) {
+    // กรณีตารางยังไม่ถูกสร้าง
+    $is_system_open = true; 
+}
+
 
 // ---------------- 1. API สำหรับดึงข้อมูลนักเรียนผ่าน AJAX ----------------
 if (isset($_GET['action']) && $_GET['action'] == 'get_student_name' && isset($_GET['code'])) {
@@ -49,12 +59,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $message = "ระบบปิดรับคำขอแทนเวรชั่วคราว ไม่สามารถทำรายการได้";
     } else {
         $csrf_token =$_POST['csrf_token'] ?? '';
-        $requester_code = trim($_POST['requester_code'] ?? ''); // ผู้ทำหน้าที่แทน (Replacement)
-        $target_code = trim($_POST['target_code'] ?? '');       // ผู้ที่ถูกแทน (Original)
+        $requester_code = trim($_POST['requester_code'] ?? ''); // ผู้ทำหน้าที่แทน
+        $target_code = trim($_POST['target_code'] ?? '');       // ผู้ที่ถูกแทน
         $duty_date = trim($_POST['duty_date'] ?? '');
         $duty_name = trim($_POST['duty_name'] ?? '');
         $reason = trim($_POST['reason'] ?? '');
 
+        // แก้ไข \vert เป็น || ให้ถูกต้องตามหลัก PHP
         if (empty($csrf_token) \vert{}\vert{} !hash_equals($_SESSION['csrf_token'], $csrf_token)) {$alert_type = "error";
             $message = "เซสชันไม่ถูกต้อง กรุณารีเฟรชหน้าเว็บแล้วทำรายการใหม่";
         } else if (empty($requester_code) || empty($target_code) \vert{}\vert{} empty($duty_date) || empty($duty_name)) {$alert_type = "error";
@@ -117,7 +128,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     .section-pill { width: 5px; height: 24px; background: var(--primary); border-radius: 4px; }
     .section-title h3 { font-size: 1.1rem; margin: 0; }
     
-    /* Status Badge */
     .status-badge { font-size: 0.75rem; font-weight: 600; padding: 4px 10px; border-radius: 20px; display: flex; align-items: center; gap: 5px; }
     .status-badge.open { background-color: #dcfce7; color: #166534; }
     .status-badge.closed { background-color: #fee2e2; color: #991b1b; }
@@ -136,7 +146,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     .btn-submit { width: 100%; padding: 14px; background: var(--primary); color: white; border: none; border-radius: 12px; font-size: 1rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 24px; font-family: 'Prompt', sans-serif; }
     .divider { height: 1px; background: #e2e8f0; margin: 20px 0; }
 
-    /* Closed System Card */
     .closed-box { text-align: center; padding: 30px 20px; }
     .closed-icon { font-size: 3rem; color: #ef4444; margin-bottom: 12px; }
     .closed-title { font-size: 1.1rem; font-weight: 600; color: #1e293b; margin-bottom: 8px; }
@@ -161,7 +170,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         <div class="section-pill"></div>
         <h3>แบบฟอร์มขอแทนเวร</h3>
       </div>
-      <!-- แสดง Badge บอกสถานะ เปิด/ปิด ระบบ -->
       <?php if ($is_system_open): ?>
         <div class="status-badge open">
           <i class="fas fa-circle text-[8px]"></i> เปิดระบบ
@@ -175,7 +183,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     
     <div class="form-card">
       <?php if ($is_system_open): ?>
-        <!-- ================= แสดงฟอร์มเมื่อระบบเปิด ================= -->
         <form id="substituteForm" method="POST" action="">
           <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
           
@@ -218,11 +225,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         </form>
 
       <?php else: ?>
-        <!-- ================= แสดงข้อความเมื่อระบบปิด ================= -->
         <div class="closed-box">
-          <div class="closed-icon">
-            <i class="fas fa-ban"></i>
-          </div>
+          <div class="closed-icon"><i class="fas fa-ban"></i></div>
           <div class="closed-title">ระบบปิดรับคำขอแทนเวรชั่วคราว</div>
           <p class="closed-desc">ขณะนี้ระบบไม่อนุญาตให้ยื่นคำขอแทนเวร หากมีข้อสงสัยหรือเหตุจำเป็น กรุณาติดต่อผู้ดูแลระบบหรือกองร้อย/กองพัน</p>
         </div>
@@ -232,19 +236,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 <script>
 <?php if ($alert_type == 'success'): ?>
-    Swal.fire({ 
-        title: 'สำเร็จ', 
-        text: <?php echo json_encode($message); ?>, 
-        icon: 'success', 
-        confirmButtonColor: '#5a42a0' 
-    }).then(() => { window.location.href = window.location.pathname; });
+    Swal.fire({ title: 'สำเร็จ', text: <?php echo json_encode($message); ?>, icon: 'success', confirmButtonColor: '#5a42a0' }).then(() => { window.location.href = window.location.pathname; });
 <?php elseif ($alert_type == 'error'): ?>
-    Swal.fire({ 
-        title: 'ข้อผิดพลาด', 
-        text: <?php echo json_encode($message); ?>, 
-        icon: 'error', 
-        confirmButtonColor: '#b71c1c' 
-    });
+    Swal.fire({ title: 'ข้อผิดพลาด', text: <?php echo json_encode($message); ?>, icon: 'error', confirmButtonColor: '#b71c1c' });
 <?php endif; ?>
 
 <?php if ($is_system_open): ?>
