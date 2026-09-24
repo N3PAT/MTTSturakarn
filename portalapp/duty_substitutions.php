@@ -11,6 +11,58 @@ if (empty($_SESSION['csrf_token'])) {$_SESSION['csrf_token'] = bin2hex(random_by
 require 'db.php';
 
 // =======================================================
+// ฟังก์ชันคำนวณ ผลัดที่ และ จุดที่ ของนักเรียนในวันที่กำหนด
+// =======================================================
+function getStudentDutyForDate($conn, $student_code,$duty_date) {
+    if (empty($duty_date) or empty($student_code)) return null;
+
+    $start_date = "2026-07-06"; // วันเริ่มต้นคำนวณเวรหลักการหมุนเวียน
+    $location_names = [
+        "จุดที่ 4 อาคารยานยนต์", 
+        "จุดที่ 5 ผฟอ.", 
+        "จุดที่ 6 กศน.", 
+        "จุดที่ 3 โรงรถ บก.หน้า"
+    ];
+    $shift_labels = ["ผลัดที่ 1", "ผลัดที่ 2", "ผลัดที่ 3", "ผลัดที่ 4"];
+
+    $eval_ts = strtotime($duty_date);$start_ts = strtotime($start_date);$diff_days = floor(($eval_ts -$start_ts) / 86400);
+
+    if ($diff_days < 0) return null;
+
+    $all_students = [];
+    try {
+        $res =$conn->query("SELECT student_code FROM students ORDER BY id ASC");
+        if ($res and$res->num_rows > 0) {
+            while ($row =$res->fetch_assoc()) {
+                $all_students[] =$row['student_code'];
+            }
+        }
+    } catch (Exception $e) {
+        return null;
+    }
+
+    $total_students = count($all_students);
+    if ($total_students === 0) return null;
+
+    $start_index = ($diff_days * 16) \%$total_students;
+
+    for ($i = 0; $i < 16; $i++) {
+        $idx = ($start_index + $i) \%$total_students;
+        if (isset($all_students[$idx]) and$all_students[$idx] ===$student_code) {
+            $shift_idx = floor($i / 4);
+            $loc_idx =$i % 4;
+            return [
+                'shift' => $shift_labels[$shift_idx],
+                'location' => $location_names[$loc_idx],
+                'full_duty' => $shift_labels[$shift_idx] . " (" . $location_names[$loc_idx] . ")"
+            ];
+        }
+    }
+
+    return null;
+}
+
+// =======================================================
 // ดึงสถานะ เปิด/ปิด ระบบขอแทนเวร จากฐานข้อมูล
 // =======================================================
 $is_system_open = false; // ค่าเริ่มต้นป้องกันไว้ก่อน
@@ -27,12 +79,14 @@ try {
 }
 
 
-// ---------------- 1. API สำหรับดึงข้อมูลนักเรียนผ่าน AJAX ----------------
-if (isset($_GET['action']) && $_GET['action'] == 'get_student_name' && isset($_GET['code'])) {
+// ---------------- 1. API สำหรับดึงข้อมูลนักเรียนและเวรผ่าน AJAX ----------------
+if (isset($_GET['action']) and $_GET['action'] == 'get_student_name' and isset($_GET['code'])) {
     while (ob_get_level()) { ob_end_clean(); }
     header('Content-Type: application/json; charset=utf-8');
     
     $code = trim($_GET['code']);
+    $date = trim($_GET['date'] ?? '');
+
     try {
         $stmt =$conn->prepare("SELECT prefix, first_name, last_name, section FROM students WHERE student_code = ? LIMIT 1");
         $stmt->bind_param("s", $code);$stmt->execute();
@@ -40,9 +94,22 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_student_name' && isset($_G
         
         if ($row =$res->fetch_assoc()) {
             $fullname = trim(($row['prefix'] ?? '') . ($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
-            echo json_encode(['found' => true, 'name' => $fullname]);
+            
+            // ดึงข้อมูลเวร (ผลัดที่ และ จุดที่)
+            $duty_info = null;
+            if (!empty($date)) {
+                $duty_info = getStudentDutyForDate($conn, $code,$date);
+            }
+
+            echo json_encode([
+                'found' => true, 
+                'name' => $fullname,
+                'duty_info' => $duty_info ? $duty_info['full_duty'] : '',
+                'shift' => $duty_info ? $duty_info['shift'] : '',
+                'location' => $duty_info ? $duty_info['location'] : ''
+            ]);
         } else {
-            echo json_encode(['found' => false, 'name' => '']);
+            echo json_encode(['found' => false, 'name' => '', 'duty_info' => '']);
         }
     } catch (Exception $e) {
         echo json_encode(['found' => false, 'name' => 'Error: ' . $e->getMessage()]);
@@ -65,7 +132,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $duty_name = trim($_POST['duty_name'] ?? '');
         $reason = trim($_POST['reason'] ?? '');
 
-        // ใช้ or แทนสัญลักษณ์ || เพื่อหลีกเลี่ยงปัญหาโค้ดเพี้ยนเป็น \vert
         if (empty($csrf_token) or !hash_equals($_SESSION['csrf_token'], $csrf_token)) {$alert_type = "error";
             $message = "เซสชันไม่ถูกต้อง กรุณารีเฟรชหน้าเว็บแล้วทำรายการใหม่";
         } else if (empty($requester_code) or empty($target_code) or empty($duty_date) or empty($duty_name)) {$alert_type = "error";
@@ -204,16 +270,22 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <input type="text" id="target_name" readonly tabindex="-1" class="form-control input-readonly" placeholder="ระบบจะแสดงชื่อเพื่อนอัตโนมัติ">
           </div>
 
-          <div class="divider"></div>
-
           <div class="form-group">
             <label for="duty_date"><i class="far fa-calendar-alt icon-label"></i> วันที่ต้องเข้าเวร <span class="text-danger">*</span></label>
             <input type="date" id="duty_date" name="duty_date" required class="form-control">
           </div>
 
+          <!-- ช่องแสดง ผลัดที่ และ จุดรักษาการณ์ ของผู้ถูกแทนเวร -->
+          <div class="form-group">
+            <label><i class="fas fa-shield-alt icon-label"></i> ผลัดที่ / จุดรักษาการณ์ (ของเจ้าของเวรเดิม)</label>
+            <input type="text" id="target_duty_info" readonly tabindex="-1" class="form-control input-readonly" placeholder="ระบบจะคำนวณผลัดและจุดรักษาการณ์อัตโนมัติ">
+          </div>
+
+          <div class="divider"></div>
+
           <div class="form-group">
             <label for="duty_name"><i class="fas fa-clipboard-list icon-label"></i> ชื่อเวร / หน้าที่ <span class="text-danger">*</span></label>
-            <input type="text" id="duty_name" name="duty_name" required class="form-control" placeholder="เช่น เวรยาม บก., เวรทำความสะอาด">
+            <input type="text" id="duty_name" name="duty_name" required class="form-control" placeholder="เช่น ผลัดที่ 1 (จุดที่ 4 อาคารยานยนต์)">
           </div>
 
           <div class="form-group">
@@ -242,48 +314,104 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <?php endif; ?>
 
 <?php if ($is_system_open): ?>
-async function fetchStudentName(inputId, nameInputId) {
+async function fetchStudentName(inputId, nameInputId, isTarget = false) {
     const codeInput = document.getElementById(inputId);
     const nameInput = document.getElementById(nameInputId);
-    const code = codeInput.value.trim();
+    const dutyDateInput = document.getElementById('duty_date');
+    const dutyInfoInput = document.getElementById('target_duty_info');
+    const dutyNameInput = document.getElementById('duty_name');
+
+    const code = codeInput ? codeInput.value.trim() : "";
+    const date = dutyDateInput ? dutyDateInput.value.trim() : "";
 
     if (code === "") {
-        nameInput.value = "";
-        nameInput.className = "form-control input-readonly";
+        if (nameInput) {
+            nameInput.value = "";
+            nameInput.className = "form-control input-readonly";
+        }
+        if (isTarget && dutyInfoInput) {
+            dutyInfoInput.value = "";
+            dutyInfoInput.className = "form-control input-readonly";
+        }
         return;
     }
 
-    nameInput.value = "กำลังค้นหาข้อมูล...";
-    nameInput.className = "form-control input-readonly";
+    if (nameInput) {
+        nameInput.value = "กำลังค้นหาข้อมูล...";
+        nameInput.className = "form-control input-readonly";
+    }
 
     try {
-        const response = await fetch(`?action=get_student_name&code=${encodeURIComponent(code)}&_t=${Date.now()}`);
+        const response = await fetch(`?action=get_student_name&code=${encodeURIComponent(code)}&date=${encodeURIComponent(date)}&_t=${Date.now()}`);
         if (!response.ok) throw new Error('Network response error');
         const data = await response.json();
 
         if (data.found) {
-            nameInput.value = data.name;
-            nameInput.className = "form-control input-success";
+            if (nameInput) {
+                nameInput.value = data.name;
+                nameInput.className = "form-control input-success";
+            }
+
+            // ถ้าเป็นข้อมูลของผู้ถูกแทนเวร (target) ให้ดึงข้อมูลผลัดและจุดที่มาแสดงด้วย
+            if (isTarget) {
+                if (data.duty_info) {
+                    if (dutyInfoInput) {
+                        dutyInfoInput.value = data.duty_info;
+                        dutyInfoInput.className = "form-control input-success";
+                    }
+                    if (dutyNameInput && (dutyNameInput.value === "" || dutyNameInput.dataset.autofilled === "true")) {
+                        dutyNameInput.value = data.duty_info;
+                        dutyNameInput.dataset.autofilled = "true";
+                    }
+                } else if (date !== "") {
+                    if (dutyInfoInput) {
+                        dutyInfoInput.value = "ไม่พบข้อมูลเวรในวันที่เลือก";
+                        dutyInfoInput.className = "form-control input-readonly";
+                    }
+                } else {
+                    if (dutyInfoInput) {
+                        dutyInfoInput.value = "กรุณาเลือกวันที่ต้องเข้าเวรเพื่อดูผลัด/จุดที่";
+                        dutyInfoInput.className = "form-control input-readonly";
+                    }
+                }
+            }
         } else {
-            nameInput.value = "ไม่พบรหัสนี้ในระบบ";
-            nameInput.className = "form-control input-error";
+            if (nameInput) {
+                nameInput.value = "ไม่พบรหัสนี้ในระบบ";
+                nameInput.className = "form-control input-error";
+            }
+            if (isTarget && dutyInfoInput) {
+                dutyInfoInput.value = "";
+                dutyInfoInput.className = "form-control input-readonly";
+            }
         }
     } catch (error) {
-        nameInput.value = "เชื่อมต่อล้มเหลว";
-        nameInput.className = "form-control input-error";
+        if (nameInput) {
+            nameInput.value = "เชื่อมต่อล้มเหลว";
+            nameInput.className = "form-control input-error";
+        }
     }
 }
 
 const reqCode = document.getElementById('requester_code');
 if (reqCode) {
-    reqCode.addEventListener('blur', () => fetchStudentName('requester_code', 'requester_name'));
-    reqCode.addEventListener('input', function() { if (this.value.trim().length >= 5) fetchStudentName('requester_code', 'requester_name'); });
+    reqCode.addEventListener('blur', () => fetchStudentName('requester_code', 'requester_name', false));
+    reqCode.addEventListener('input', function() { if (this.value.trim().length >= 5) fetchStudentName('requester_code', 'requester_name', false); });
 }
 
 const targetCode = document.getElementById('target_code');
 if (targetCode) {
-    targetCode.addEventListener('blur', () => fetchStudentName('target_code', 'target_name'));
-    targetCode.addEventListener('input', function() { if (this.value.trim().length >= 5) fetchStudentName('target_code', 'target_name'); });
+    targetCode.addEventListener('blur', () => fetchStudentName('target_code', 'target_name', true));
+    targetCode.addEventListener('input', function() { if (this.value.trim().length >= 5) fetchStudentName('target_code', 'target_name', true); });
+}
+
+const dutyDate = document.getElementById('duty_date');
+if (dutyDate) {
+    dutyDate.addEventListener('change', () => {
+        if (targetCode && targetCode.value.trim() !== "") {
+            fetchStudentName('target_code', 'target_name', true);
+        }
+    });
 }
 
 const form = document.getElementById("substituteForm");
