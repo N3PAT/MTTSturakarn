@@ -72,7 +72,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             $status_th = ($status === 'approved') ? 'อนุมัติแล้ว' : 'ถูกปฏิเสธ';
                             $notif_title = "ผลการขอแทนเวรวันที่ " . $swap_info['duty_date'];
                             $notif_msg = "คำขอแทนเวรรหัส " . $swap_info['original_student_code'] . " โดยรหัส " . $swap_info['replacement_student_code'] . " " . $status_th;
-                            $notif_type = "duty_status";
+                            
+                            // แก้ไขจุดนี้: เปลี่ยนเป็น "duty" เพื่อแก้ปัญหา Data truncated
+                            $notif_type = "duty"; 
                             $alert_lvl = ($status === 'approved') ? "success" : "warning";
 
                             // แจ้งเตือนผู้ทำแทน
