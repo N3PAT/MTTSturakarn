@@ -107,7 +107,7 @@ try {
 
 $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
 
-// ---------------- 5. ระบบกำหนดเดือน และคำนวณเวรประจำเดือน ----------------
+// ---------------- 5. ระบบกำหนดเดือน คำนวณเวรประจำเดือน และเวรแทน ----------------
 $selected_month = date('Y-m');
 if (isset($_GET['month']) && preg_match('/^\d{4}-\d{2}$/', $_GET['month'])) {
     $selected_month = $_GET['month'];
@@ -133,6 +133,37 @@ try {
 
 $total_students = count($all_students);
 
+/* ดึงข้อมูลการแลกเวร/แทนเวรในเดือนนี้ที่ได้รับการอนุมัติแล้ว */
+$swaps_by_date_and_orig = [];
+try {
+    $stmt_swaps = $conn->prepare("
+        SELECT 
+            s.duty_date, 
+            s.requester_code, 
+            s.replacement_code, 
+            s.status,
+            req.prefix AS req_prefix, req.first_name AS req_first_name, req.last_name AS req_last_name,
+            rep.prefix AS rep_prefix, rep.first_name AS rep_first_name, rep.last_name AS rep_last_name
+        FROM duty_swaps s
+        LEFT JOIN students req ON s.requester_code = req.student_code
+        LEFT JOIN students rep ON s.replacement_code = rep.student_code
+        WHERE DATE_FORMAT(s.duty_date, '%Y-%m') = ? 
+          AND (s.status = 'approved' OR s.status = '1')
+    ");
+    if ($stmt_swaps) {
+        $stmt_swaps->bind_param("s", $selected_month);
+        $stmt_swaps->execute();
+        $res_swaps = $stmt_swaps->get_result();
+        while ($row_swap = $res_swaps->fetch_assoc()) {
+            $key = $row_swap['duty_date'] . '_' . $row_swap['requester_code'];
+            $swaps_by_date_and_orig[$key] = $row_swap;
+        }
+        $stmt_swaps->close();
+    }
+} catch (Throwable $e) {
+    error_log("Swap Fetch Error: " . $e->getMessage());
+}
+
 // ข้อมูลสำหรับจัดผลัด/จุดรักษาการณ์
 $locations_count = 4;
 $location_names = [
@@ -154,7 +185,7 @@ $current_m_num = date('m', strtotime($first_day_of_month));
 $current_y_num = date('Y', strtotime($first_day_of_month)) + 543;
 $month_display_text = ($thai_months[$current_m_num] ?? '') . " " . $current_y_num;
 
-// วนลูปตรวจสอบทุกวันในเดือนที่เลือกเพื่อหาเวรของนักเรียน
+// วนลูปตรวจสอบทุกวันในเดือนที่เลือกเพื่อหาเวรปกติและเวรแทน
 $my_monthly_duties = [];
 
 if ($total_students > 0) {
@@ -171,52 +202,101 @@ if ($total_students > 0) {
         
         for ($i = 0; $i < 16; $i++) {
             $idx = ($start_index + $i) % $total_students;
-            if (isset($all_students[$idx]) && $all_students[$idx]['student_code'] === $login_student_code) {
-                $shift_idx = floor($i / $locations_count);
-                $loc_idx = $i % $locations_count;
-                $day_of_week = date('w', $eval_timestamp);
-                
-                $my_monthly_duties[] = [
-                    'date' => $eval_date,
-                    'day_num' => $d,
-                    'day_name' => $thai_days_short[$day_of_week],
-                    'shift' => $shift_labels[$shift_idx],
-                    'location' => $location_names[$loc_idx]
-                ];
-                break;
+            if (!isset($all_students[$idx])) continue;
+
+            $orig_student = $all_students[$idx];
+            $orig_code = $orig_student['student_code'];
+            $shift_idx = floor($i / $locations_count);
+            $loc_idx = $i % $locations_count;
+            $day_of_week = date('w', $eval_timestamp);
+
+            $swap_key = $eval_date . '_' . $orig_code;
+            $has_swap = isset($swaps_by_date_and_orig[$swap_key]);
+
+            if ($has_swap) {
+                $swap_info = $swaps_by_date_and_orig[$swap_key];
+                $rep_code = $swap_info['replacement_code'];
+                $req_name = trim(($swap_info['req_prefix'] ?? '') . $swap_info['req_first_name'] . ' ' . $swap_info['req_last_name']);
+                $rep_name = trim(($swap_info['rep_prefix'] ?? '') . $swap_info['rep_first_name'] . ' ' . $swap_info['rep_last_name']);
+
+                // 1. กรณีเราเป็นผู้ไปเข้าแทนคนอื่น
+                if ($rep_code === $login_student_code) {
+                    $my_monthly_duties[] = [
+                        'date' => $eval_date,
+                        'day_num' => $d,
+                        'day_name' => $thai_days_short[$day_of_week],
+                        'shift' => $shift_labels[$shift_idx],
+                        'location' => $location_names[$loc_idx],
+                        'duty_type' => 'substitute',
+                        'duty_type_label' => 'แทนเวร',
+                        'note' => 'เข้าแทน: ' . $req_name
+                    ];
+                } 
+                // 2. กรณีเป็นเวรเดิมของเรา แต่มีคนมาเข้าแทน
+                else if ($orig_code === $login_student_code) {
+                    $my_monthly_duties[] = [
+                        'date' => $eval_date,
+                        'day_num' => $d,
+                        'day_name' => $thai_days_short[$day_of_week],
+                        'shift' => $shift_labels[$shift_idx],
+                        'location' => $location_names[$loc_idx],
+                        'duty_type' => 'replaced',
+                        'duty_type_label' => 'มีคนเข้าแทน',
+                        'note' => 'ผู้เข้าแทน: ' . $rep_name
+                    ];
+                }
+            } else {
+                // 3. เวรปกติที่ไม่ได้รับการเปลี่ยนตัว
+                if ($orig_code === $login_student_code) {
+                    $my_monthly_duties[] = [
+                        'date' => $eval_date,
+                        'day_num' => $d,
+                        'day_name' => $thai_days_short[$day_of_week],
+                        'shift' => $shift_labels[$shift_idx],
+                        'location' => $location_names[$loc_idx],
+                        'duty_type' => 'normal',
+                        'duty_type_label' => 'เวรปกติ',
+                        'note' => ''
+                    ];
+                }
             }
         }
     }
 }
 
 // ==============================================================
-// [ส่วนที่เพิ่มใหม่] ตรวจสอบว่ามีเวรในอีก 1-3 วันข้างหน้า หรือ วันนี้ หรือไม่
+// ตรวจสอบเวรล่วงหน้า 1-3 วัน (ข้ามรายการที่มีคนเข้าแทนแล้ว)
 // ==============================================================
 $upcoming_alerts = [];
 $today_date = date('Y-m-d');
 $today_ts = strtotime($today_date);
 
 foreach ($my_monthly_duties as $duty) {
+    if ($duty['duty_type'] === 'replaced') continue;
+
     $duty_ts = strtotime($duty['date']);
     $diff_days = floor(($duty_ts - $today_ts) / 86400);
 
-    // แจ้งเตือนถ้าเป็น วันนี้ (0) ถึง อีก 3 วันข้างหน้า
     if ($diff_days >= 0 && $diff_days <= 3) {
         $time_text = "";
         if ($diff_days == 0) $time_text = "วันนี้!";
         else if ($diff_days == 1) $time_text = "พรุ่งนี้";
         else $time_text = "ในอีก {$diff_days} วัน";
 
+        $shift_info = $duty['shift'];
+        if ($duty['duty_type'] === 'substitute') {
+            $shift_info .= " (" . $duty['duty_type_label'] . ")";
+        }
+
         $upcoming_alerts[] = [
             'time_text' => $time_text,
             'full_date' => $duty['day_num'] . " " . $month_display_text,
-            'shift' => $duty['shift'],
+            'shift' => $shift_info,
             'location' => $duty['location']
         ];
     }
 }
 $upcoming_alerts_json = json_encode($upcoming_alerts);
-// ==============================================================
 
 // ปุ่มเปลี่ยนเดือนก่อนหน้า / ถัดไป
 $prev_month = date('Y-m', strtotime($first_day_of_month . ' -1 month'));
@@ -620,6 +700,32 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
       margin-bottom: 6px;
     }
 
+    /* Badges สำหรับประเภทเวร */
+    .type-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 8px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .type-badge.normal {
+      background: #e0f2fe;
+      color: #0284c7;
+    }
+
+    .type-badge.substitute {
+      background: #fef3c7;
+      color: #d97706;
+    }
+
+    .type-badge.replaced {
+      background: #f1f5f9;
+      color: #64748b;
+      text-decoration: line-through;
+    }
+
     .location-name {
       font-weight: 600;
       color: var(--text-dark);
@@ -718,9 +824,7 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
       font-size: 1.3rem;
     }
 
-    /* ========================================= */
-    /* [ส่วนที่เพิ่มใหม่] CSS สำหรับ Modal แจ้งเตือนเวร */
-    /* ========================================= */
+    /* Modal แจ้งเตือนเวร */
     .alert-overlay {
       position: fixed;
       top: 0; left: 0; width: 100%; height: 100%;
@@ -896,20 +1000,30 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
     <div class="duty-container fade-in-up delay-4">
       <?php if (!empty($my_monthly_duties)): ?>
         
-        <?php foreach ($my_monthly_duties as $index => $duty): ?>
+        <?php foreach ($my_monthly_duties as $index =>$duty): ?>
           <div class="duty-item-card" style="animation-delay: <?= 0.4 + ($index * 0.08) ?>s;">
             <div class="duty-date-box">
               <div class="day-num"><?= sprintf("%02d", $duty['day_num']); ?></div>
               <div class="day-name"><?= $duty['day_name']; ?></div>
             </div>
             <div class="duty-details">
-              <div class="shift-badge"><?= htmlspecialchars($duty['shift']); ?></div>
+              <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+                <span class="type-badge <?= htmlspecialchars($duty['duty_type']); ?>">
+                  <?= htmlspecialchars($duty['duty_type_label']); ?>
+                </span>
+                <span class="shift-badge"><?= htmlspecialchars($duty['shift']); ?></span>
+              </div>
               <div class="location-name">
                 <i class="fas fa-map-marker-alt"></i> 
                 <?= htmlspecialchars($duty['location']); ?>
               </div>
+              <?php if (!empty($duty['note'])): ?>
+                <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 4px;">
+                  <i class="fas fa-user-friends"></i> <?= htmlspecialchars($duty['note']); ?>
+                </div>
+              <?php endif; ?>
               <div class="full-date-text">
-                วันที่ <?= $duty['day_num']; ?> <?= $month_display_text; ?>
+                วันที่ <?= $duty['day_num']; ?> <?=$month_display_text; ?>
               </div>
             </div>
           </div>
@@ -946,35 +1060,27 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
 
   </div>
 
-  <!-- ========================================= -->
-  <!-- [ส่วนที่เพิ่มใหม่] HTML สำหรับ Modal แจ้งเตือนเวร -->
-  <!-- ========================================= -->
+  <!-- HTML สำหรับ Modal แจ้งเตือนเวร -->
   <div id="dutyAlertOverlay" class="alert-overlay">
     <div class="alert-modal">
       <div class="alert-icon-container">
         <i class="fas fa-bell"></i>
       </div>
       <div class="alert-title">เตรียมตัวเข้าเวร!</div>
-      <div id="alertContentBox" class="alert-content">
-        <!-- ข้อมูลเวรจะถูกแทรกที่นี่ด้วย JS -->
-      </div>
+      <div id="alertContentBox" class="alert-content"></div>
       <button class="alert-btn" onclick="closeDutyAlert()">รับทราบ</button>
     </div>
   </div>
 
   <!-- Javascript -->
   <script>
-    // ตัวแปรเก็บข้อมูลเวรที่ได้จาก PHP
     const upcomingAlerts = <?= $upcoming_alerts_json; ?>;
 
     document.addEventListener("DOMContentLoaded", function() {
       const loader = document.getElementById('page-loader');
       
-      // ฟังก์ชันเช็คและแสดง Alert หลังโหลดเสร็จ
       function checkAndShowAlert() {
-        // เช็คว่ามีข้อมูลแจ้งเตือน และยังไม่เคยแสดงใน session นี้ (ป้องกันการขึ้นซ้ำเวลารีเฟรช)
         if (upcomingAlerts && upcomingAlerts.length > 0 && !sessionStorage.getItem('duty_alert_shown')) {
-          
           let contentHtml = '';
           upcomingAlerts.forEach(alert => {
             contentHtml += `
@@ -990,7 +1096,6 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
 
           document.getElementById('alertContentBox').innerHTML = contentHtml;
           
-          // โชว์ Modal แจ้งเตือน
           setTimeout(() => {
             document.getElementById('dutyAlertOverlay').classList.add('show');
           }, 500);
@@ -1002,19 +1107,16 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
           loader.classList.add('hidden');
           setTimeout(function() {
             loader.remove();
-            checkAndShowAlert(); // เรียกใช้หลังจากซ่อน loader
+            checkAndShowAlert();
           }, 100);
         }, 1200);
       } else {
-        // ถ้าไม่มีหน้าโหลด (เข้าครั้งที่ 2 เป็นต้นไป)
         checkAndShowAlert();
       }
     });
 
-    // ฟังก์ชันปิด Modal แจ้งเตือน
     function closeDutyAlert() {
       document.getElementById('dutyAlertOverlay').classList.remove('show');
-      // บันทึกไว้ว่าแสดงไปแล้วใน session นี้ จะได้ไม่เด้งอีกถ้ารีเฟรช
       sessionStorage.setItem('duty_alert_shown', 'true');
     }
   </script>
