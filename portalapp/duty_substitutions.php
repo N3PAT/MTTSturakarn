@@ -329,7 +329,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     </div>
   </div>
 <div class="bottom-nav">
-      <a href="main.php" class="nav-link active">
+      <a href="main.php" class="nav-link">
         <i class="fas fa-home"></i>
         <span>หน้าหลัก</span>
       </a>
