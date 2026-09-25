@@ -2,7 +2,6 @@
 session_start();
 require_once 'db.php';
 
-// ตรวจสอบสิทธิ์ Admin (ถ้ามี)
 if (empty($_SESSION['admin_id'])) {
     // header("Location: index.php");
     // exit();
@@ -11,60 +10,85 @@ if (empty($_SESSION['admin_id'])) {
 $success_msg = '';
 $error_msg = '';
 
-// จัดการเมื่อมีการส่งฟอร์มบันทึกข้อมูล
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_record'])) {
-    $student_code = trim($_POST['student_code'] ?? '');
-    $check_date = $_POST['check_date'] ?? date('Y-m-d');
-    
-    // แปลงค่าจาก Checkbox (ถ้าไม่ได้ติ๊กจะไม่มีค่าส่งมา จึงให้เป็น 0)
-    $card_bed = isset($_POST['card_bed']) ? 1 : 0;
-    $card_shoe = isset($_POST['card_shoe']) ? 1 : 0;
-    $card_cabinet = isset($_POST['card_cabinet']) ? 1 : 0;
-    
-    $total_cards = $card_bed + $card_shoe + $card_cabinet;
-    
-    // กำหนดสีสถานะ
-    $status_color = 'green'; // 0-1 ใบ = ปกติ (สีเขียว)
-    if ($total_cards == 2) {
-        $status_color = 'yellow';
-    } elseif ($total_cards == 3) {
-        $status_color = 'red';
-    }
+// ตัวแปรสำหรับคัดกรอง
+$filter_company = $_GET['company'] ?? '';
+$filter_platoon = $_GET['platoon'] ?? '';
+$check_date = $_POST['check_date'] ?? ($_GET['date'] ?? date('Y-m-d'));
 
-    if (!empty($student_code)) {
+// ==========================================
+// 1. จัดการเมื่อมีการกด "บันทึกข้อมูลทั้งหมวด"
+// ==========================================
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_batch'])) {
+    if (!empty($_POST['records']) && is_array($_POST['records'])) {
+        $conn->begin_transaction();
         try {
-            $stmt = $conn->prepare("INSERT INTO discipline_cards (student_code, check_date, card_bed, card_shoe, card_cabinet, total_cards, status_color) VALUES (?, ?, ?, ?, ?, ?, ?)");
-            $stmt->bind_param("ssiiiis", $student_code, $check_date, $card_bed, $card_shoe, $card_cabinet, $total_cards, $status_color);
-            
-            if ($stmt->execute()) {
-                $success_msg = "บันทึกข้อมูลบัตรวินัยของรหัส $student_code สำเร็จ!";
-            } else {
-                $error_msg = "เกิดข้อผิดพลาดในการบันทึกข้อมูล";
+            // ใช้คำสั่ง INSERT ... ON DUPLICATE KEY UPDATE เพื่อรองรับการกดเซฟจากหลายอุปกรณ์พร้อมกัน
+            $stmt = $conn->prepare("
+                INSERT INTO discipline_cards 
+                (student_code, check_date, card_bed, card_shoe, card_cabinet, total_cards, status_color) 
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE 
+                card_bed = VALUES(card_bed), 
+                card_shoe = VALUES(card_shoe), 
+                card_cabinet = VALUES(card_cabinet), 
+                total_cards = VALUES(total_cards), 
+                status_color = VALUES(status_color)
+            ");
+
+            foreach ($_POST['records'] as $std_code => $cards) {
+                // เก็บค่าสถานะบัตร (เราใช้ column เดิมใน DB แต่ใน UI จะแสดงเป็นบัตรเปล่า 3 ใบ)
+                $c1 = isset($cards['c1']) ? 1 : 0;
+                $c2 = isset($cards['c2']) ? 1 : 0;
+                $c3 = isset($cards['c3']) ? 1 : 0;
+                
+                $total_cards = $c1 + $c2 + $c3;
+                
+                // กำหนดสี
+                $status_color = 'green';
+                if ($total_cards == 2) $status_color = 'yellow';
+                if ($total_cards == 3) $status_color = 'red';
+
+                $stmt->bind_param("ssiiiis", $std_code, $check_date, $c1, $c2, $c3, $total_cards, $status_color);
+                $stmt->execute();
             }
+            $conn->commit();
+            $success_msg = "บันทึกข้อมูลสำเร็จเรียบร้อยแล้ว!";
+            
+            // อัปเดตตัวกรองเพื่อให้กลับมาหน้าเดิม
+            $filter_company = $_POST['company'] ?? '';
+            $filter_platoon = $_POST['platoon'] ?? '';
         } catch (Throwable $e) {
-            $error_msg = "Error: " . $e->getMessage();
+            $conn->rollback();
+            $error_msg = "เกิดข้อผิดพลาด: " . $e->getMessage();
         }
-    } else {
-        $error_msg = "กรุณากรอกรหัสนักเรียน";
     }
 }
 
-// ดึงข้อมูลล่าสุดของวันนี้มาแสดงผล (Preview)
-$today_records = [];
-try {
-    $sql_today = "SELECT d.*, s.first_name, s.last_name 
-                  FROM discipline_cards d 
-                  LEFT JOIN students s ON d.student_code = s.student_code 
-                  WHERE d.check_date = CURDATE() 
-                  ORDER BY d.created_at DESC LIMIT 10";
-    $res = $conn->query($sql_today);
-    if ($res) {
+// ==========================================
+// 2. ดึงรายชื่อนักเรียนตาม หมวด และ กองร้อย ที่เลือก
+// ==========================================
+$students_list = [];
+if (!empty($filter_company) && !empty($filter_platoon)) {
+    try {
+        // ดึงรายชื่อ พร้อมข้อมูลการตรวจของวันนี้ (ถ้าเคยบันทึกจากอุปกรณ์อื่นไปแล้ว จะดึงมาแสดงด้วย)
+        $sql = "
+            SELECT s.student_code, s.prefix, s.first_name, s.last_name, 
+                   d.card_bed AS c1, d.card_shoe AS c2, d.card_cabinet AS c3, d.total_cards, d.status_color
+            FROM students s
+            LEFT JOIN discipline_cards d ON s.student_code = d.student_code AND d.check_date = ?
+            WHERE s.company = ? AND s.platoon = ?
+            ORDER BY s.student_code ASC
+        ";
+        $stmt_s = $conn->prepare($sql);
+        $stmt_s->bind_param("sss", $check_date, $filter_company, $filter_platoon);
+        $stmt_s->execute();
+        $res = $stmt_s->get_result();
         while ($row = $res->fetch_assoc()) {
-            $today_records[] = $row;
+            $students_list[] = $row;
         }
+    } catch (Throwable $e) {
+        $error_msg = "Error loading students: " . $e->getMessage();
     }
-} catch (Throwable $e) {
-    // เงียบไว้ถ้าตารางยังไม่มี
 }
 ?>
 <!DOCTYPE html>
@@ -72,7 +96,7 @@ try {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>บันทึกบัตรวินัย - MTTS</title>
+  <title>บันทึกบัตรวินัยแบบกลุ่ม - MTTS</title>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
   
@@ -86,58 +110,72 @@ try {
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body { font-family: 'Prompt', sans-serif; background-color: #e2e8f0; margin: 0; display: flex; justify-content: center; }
 
-    .fade-in-up { opacity: 0; transform: translateY(20px); animation: fadeInUp 0.5s forwards; }
-    @keyframes fadeInUp { to { opacity: 1; transform: translateY(0); } }
-    .delay-1 { animation-delay: 0.1s; } .delay-2 { animation-delay: 0.2s; }
-
-    .app-container { width: 100%; max-width: 430px; background-color: var(--bg-color); min-height: 100vh; padding-bottom: 90px; box-shadow: 0 0 20px rgba(0,0,0,0.05); }
+    .app-container { width: 100%; max-width: 500px; background-color: var(--bg-color); min-height: 100vh; padding-bottom: 90px; box-shadow: 0 0 20px rgba(0,0,0,0.05); }
 
     /* Header */
-    .top-header { display: flex; align-items: center; padding: 20px 24px 10px; }
-    .back-btn { font-size: 1.2rem; color: var(--text-dark); text-decoration: none; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 12px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-right: 15px; }
+    .top-header { display: flex; align-items: center; padding: 20px 24px 10px; background: white; position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 10px rgba(0,0,0,0.03); }
+    .back-btn { font-size: 1.2rem; color: var(--text-dark); text-decoration: none; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 12px; background: #f8fafc; margin-right: 15px; }
     .page-title h1 { font-size: 1.1rem; font-weight: 700; color: var(--text-dark); margin: 0; }
     
-    /* Form Section */
-    .form-section { padding: 20px 24px; }
-    .form-card { background: white; border-radius: 16px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); border: 1px solid #f1f5f9; }
-    .input-group { margin-bottom: 15px; }
-    .input-group label { display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-dark); margin-bottom: 8px; }
-    .input-group input[type="text"], .input-group input[type="date"] { width: 100%; padding: 12px 15px; border-radius: 10px; border: 1px solid #cbd5e1; font-family: 'Prompt', sans-serif; font-size: 0.9rem; outline: none; transition: border-color 0.2s; }
-    .input-group input:focus { border-color: #3b82f6; }
+    /* Filter Section */
+    .filter-card { background: white; margin: 15px 24px; padding: 15px; border-radius: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); border: 1px solid #f1f5f9; }
+    .filter-row { display: flex; gap: 10px; margin-bottom: 10px; }
+    .filter-group { flex: 1; }
+    .filter-group label { display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-gray); margin-bottom: 4px; }
+    .filter-group select, .filter-group input { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-family: 'Prompt', sans-serif; font-size: 0.85rem; outline: none; }
+    .btn-filter { width: 100%; background: var(--primary); color: white; border: none; padding: 10px; border-radius: 8px; font-weight: 600; font-family: 'Prompt', sans-serif; cursor: pointer; }
 
-    /* Cards Checkbox Grid */
-    .cards-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+    /* Student List */
+    .list-section { padding: 0 24px 20px; }
+    .student-row { background: white; padding: 12px 15px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.02); border: 1px solid #f1f5f9; }
+    .student-info h4 { margin: 0; font-size: 0.9rem; color: var(--text-dark); }
+    .student-info p { margin: 0; font-size: 0.75rem; color: var(--text-gray); }
+
+    /* Generic Cards UI */
+    .cards-container { display: flex; gap: 6px; align-items: center; }
     .card-checkbox { display: none; }
-    .card-label { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: #f8fafc; border: 2px solid #e2e8f0; border-radius: 12px; padding: 15px 5px; cursor: pointer; transition: all 0.2s; color: var(--text-gray); font-size: 0.8rem; font-weight: 600; text-align: center; }
-    .card-label i { font-size: 1.5rem; }
     
-    /* Active States */
-    .card-checkbox:checked + .card-label { background: #fee2e2; border-color: #ef4444; color: #ef4444; }
+    /* ดีไซน์บัตรเปล่า */
+    .empty-card { 
+      width: 22px; 
+      height: 30px; 
+      border: 2px solid #cbd5e1; 
+      border-radius: 4px; 
+      display: inline-block; 
+      cursor: pointer; 
+      background: #f8fafc; 
+      transition: all 0.2s ease;
+      position: relative;
+    }
+    
+    .card-checkbox:checked + .empty-card { 
+      border-color: #ef4444; 
+      background: #fee2e2; 
+    }
+    .card-checkbox:checked + .empty-card::after {
+      content: '\f00d'; /* X icon in FontAwesome */
+      font-family: 'Font Awesome 5 Free';
+      font-weight: 900;
+      color: #ef4444;
+      font-size: 0.7rem;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
 
-    /* Status Display Indicator */
-    .status-indicator { text-align: center; padding: 12px; border-radius: 10px; font-weight: 600; color: white; background-color: #10b981; transition: background-color 0.3s; margin-bottom: 20px; font-size: 0.95rem; }
+    /* Status Indicator Dot */
+    .status-dot { width: 12px; height: 12px; border-radius: 50%; background-color: #10b981; margin-left: 10px; transition: 0.3s; box-shadow: 0 0 5px rgba(0,0,0,0.1); }
+    .status-dot.yellow { background-color: #facc15; }
+    .status-dot.red { background-color: #ef4444; }
 
-    .submit-btn { width: 100%; background-color: var(--primary); color: white; border: none; padding: 14px; border-radius: 12px; font-family: 'Prompt', sans-serif; font-size: 1rem; font-weight: 600; cursor: pointer; box-shadow: 0 4px 10px rgba(15, 23, 42, 0.2); transition: transform 0.1s; }
-    .submit-btn:active { transform: scale(0.98); }
-
-    /* Alert */
-    .alert { padding: 12px; border-radius: 10px; margin-bottom: 15px; font-size: 0.85rem; font-weight: 500; text-align: center; }
+    /* Buttons */
+    .submit-btn { width: 100%; background-color: #10b981; color: white; border: none; padding: 14px; border-radius: 12px; font-family: 'Prompt', sans-serif; font-size: 1rem; font-weight: 600; cursor: pointer; box-shadow: 0 4px 10px rgba(16, 185, 129, 0.2); margin-top: 10px; position: sticky; bottom: 85px; z-index: 10; }
+    .alert { padding: 12px; border-radius: 10px; margin: 15px 24px; font-size: 0.85rem; font-weight: 500; text-align: center; }
     .alert-success { background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
-    .alert-error { background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
-
-    /* Recent Records */
-    .recent-section { padding: 0 24px 20px; }
-    .section-title { font-size: 0.95rem; font-weight: 700; color: var(--text-dark); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-    .record-item { background: white; padding: 12px 15px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.02); }
-    .record-info h4 { margin: 0; font-size: 0.9rem; color: var(--text-dark); }
-    .record-info p { margin: 0; font-size: 0.75rem; color: var(--text-gray); }
-    .badge { padding: 4px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: 600; color: white; }
-    .badge.green { background: #10b981; }
-    .badge.yellow { background: #facc15; color: #713f12; }
-    .badge.red { background: #ef4444; }
 
     /* Bottom Nav */
-    .bottom-nav { position: fixed; bottom: 0; width: 100%; max-width: 430px; left: 50%; transform: translateX(-50%); height: 70px; background: white; border-top-left-radius: 20px; border-top-right-radius: 20px; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 -5px 20px rgba(0,0,0,0.03); z-index: 1000; }
+    .bottom-nav { position: fixed; bottom: 0; width: 100%; max-width: 500px; left: 50%; transform: translateX(-50%); height: 70px; background: white; border-top-left-radius: 20px; border-top-right-radius: 20px; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 -5px 20px rgba(0,0,0,0.05); z-index: 100; }
     .nav-link { display: flex; flex-direction: column; align-items: center; text-decoration: none; color: #94a3b8; font-size: 0.7rem; font-weight: 600; gap: 4px; }
     .nav-link.active { color: var(--primary); }
     .nav-link i { font-size: 1.3rem; }
@@ -146,91 +184,118 @@ try {
 <body>
 
   <div class="app-container">
-    <div class="top-header fade-in-up">
+    <div class="top-header">
       <a href="turakarn.php" class="back-btn"><i class="fas fa-chevron-left"></i></a>
       <div class="page-title">
-        <h1>บันทึกบัตรวินัย (ประจำวัน)</h1>
+        <h1>ตรวจบัตรวินัย (แบบรายหมวด)</h1>
       </div>
     </div>
 
-    <div class="form-section fade-in-up delay-1">
-      <?php if($success_msg): ?>
-        <div class="alert alert-success"><i class="fas fa-check-circle"></i> <?= $success_msg ?></div>
-      <?php endif; ?>
-      <?php if($error_msg): ?>
-        <div class="alert alert-error"><i class="fas fa-exclamation-triangle"></i> <?= $error_msg ?></div>
-      <?php endif; ?>
+    <?php if($success_msg): ?>
+      <div class="alert alert-success"><i class="fas fa-check-circle"></i> <?= $success_msg ?></div>
+    <?php endif; ?>
 
-      <form class="form-card" method="POST" action="">
-        <div class="input-group">
-          <label>วันที่ตรวจ</label>
-          <input type="date" name="check_date" value="<?= date('Y-m-d') ?>" required>
-        </div>
-        
-        <div class="input-group">
-          <label>รหัสนักเรียน</label>
-          <input type="text" name="student_code" placeholder="เช่น 66001" required>
-        </div>
-
-        <div class="input-group">
-          <label>เลือกบัตรที่พบ (คลิกเพื่อเลือก)</label>
-          <div class="cards-grid">
-            <!-- บัตรเตียง -->
-            <div>
-              <input type="checkbox" id="c_bed" name="card_bed" class="card-checkbox" value="1" onchange="calculateCards()">
-              <label for="c_bed" class="card-label">
-                <i class="fas fa-bed"></i> เตียง
-              </label>
-            </div>
-            <!-- บัตรตู้ -->
-            <div>
-              <input type="checkbox" id="c_cab" name="card_cabinet" class="card-checkbox" value="1" onchange="calculateCards()">
-              <label for="c_cab" class="card-label">
-                <i class="fas fa-box"></i> ตู้
-              </label>
-            </div>
-            <!-- บัตรระเบียบ/รองเท้า -->
-            <div>
-              <input type="checkbox" id="c_shoe" name="card_shoe" class="card-checkbox" value="1" onchange="calculateCards()">
-              <label for="c_shoe" class="card-label">
-                <i class="fas fa-shoe-prints"></i> รองเท้า
-              </label>
-            </div>
+    <!-- ฟอร์มเลือกกองร้อยและหมวด -->
+    <div class="filter-card">
+      <form method="GET" action="">
+        <div class="filter-row">
+          <div class="filter-group">
+            <label>วันที่ตรวจ</label>
+            <input type="date" name="date" value="<?= $check_date ?>" required>
+          </div>
+          <div class="filter-group">
+            <label>กองร้อย</label>
+            <select name="company" required>
+              <option value="">-- เลือก --</option>
+              <option value="1" <?= $filter_company == '1' ? 'selected' : '' ?>>ร้อย. 1</option>
+              <option value="2" <?= $filter_company == '2' ? 'selected' : '' ?>>ร้อย. 2</option>
+              <option value="3" <?= $filter_company == '3' ? 'selected' : '' ?>>ร้อย. 3</option>
+              <option value="4" <?= $filter_company == '4' ? 'selected' : '' ?>>ร้อย. 4</option>
+              <option value="5" <?= $filter_company == '5' ? 'selected' : '' ?>>ร้อย. 5</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>หมวด</label>
+            <select name="platoon" required>
+              <option value="">-- เลือก --</option>
+              <option value="1" <?= $filter_platoon == '1' ? 'selected' : '' ?>>หมวด 1</option>
+              <option value="2" <?= $filter_platoon == '2' ? 'selected' : '' ?>>หมวด 2</option>
+              <option value="3" <?= $filter_platoon == '3' ? 'selected' : '' ?>>หมวด 3</option>
+              <option value="4" <?= $filter_platoon == '4' ? 'selected' : '' ?>>หมวด 4</option>
+            </select>
           </div>
         </div>
-
-        <div id="status_display" class="status-indicator">
-          <i class="fas fa-check"></i> ปกติ (0 ใบ)
-        </div>
-
-        <button type="submit" name="submit_record" class="submit-btn">
-          <i class="fas fa-save"></i> บันทึกข้อมูล
-        </button>
+        <button type="submit" class="btn-filter"><i class="fas fa-search"></i> ค้นหารายชื่อ</button>
       </form>
     </div>
 
-    <!-- รายการบันทึกของวันนี้ -->
-    <div class="recent-section fade-in-up delay-2">
-      <div class="section-title">
-        <i class="fas fa-history" style="color:var(--text-gray)"></i> รายการตรวจวันนี้
-      </div>
-      <?php if(empty($today_records)): ?>
-        <div style="text-align:center; font-size:0.8rem; color:#64748b; padding:10px;">ยังไม่มีการบันทึกของวันนี้</div>
-      <?php else: ?>
-        <?php foreach($today_records as $rec): ?>
-          <?php 
-            $name = (!empty($rec['first_name'])) ? $rec['first_name'].' '.$rec['last_name'] : 'รหัส: '.$rec['student_code'];
-            $color = $rec['status_color'];
-            $badge_text = ($color == 'red') ? 'แดง (3)' : (($color == 'yellow') ? 'เหลือง (2)' : 'ปกติ ('.$rec['total_cards'].')');
-          ?>
-          <div class="record-item">
-            <div class="record-info">
-              <h4><?= htmlspecialchars($name) ?></h4>
-              <p>เตียง: <?= $rec['card_bed']?'โดน':'ผ่าน' ?> | ตู้: <?= $rec['card_cabinet']?'โดน':'ผ่าน' ?> | รองเท้า: <?= $rec['card_shoe']?'โดน':'ผ่าน' ?></p>
-            </div>
-            <div class="badge <?= $color ?>"><?= $badge_text ?></div>
+    <!-- ฟอร์มแสดงรายชื่อและบันทึกข้อมูล -->
+    <div class="list-section">
+      <?php if (!empty($filter_company) && empty($students_list)): ?>
+        <div style="text-align:center; color:#64748b; margin-top:20px; font-size:0.9rem;">
+          ไม่พบรายชื่อนักเรียนใน ร้อย.<?= $filter_company ?> หมวด <?= $filter_platoon ?>
+        </div>
+      <?php elseif (!empty($students_list)): ?>
+        
+        <form method="POST" action="">
+          <input type="hidden" name="check_date" value="<?= $check_date ?>">
+          <input type="hidden" name="company" value="<?= $filter_company ?>">
+          <input type="hidden" name="platoon" value="<?= $filter_platoon ?>">
+
+          <div style="display:flex; justify-content:space-between; margin-bottom:10px; padding:0 5px;">
+            <span style="font-size:0.85rem; font-weight:600; color:var(--text-gray);">รายชื่อ (ร้อย.<?= $filter_company ?> หมวด <?= $filter_platoon ?>)</span>
+            <span style="font-size:0.85rem; font-weight:600; color:var(--text-gray);">เลือกบัตร</span>
           </div>
-        <?php endforeach; ?>
+
+          <?php foreach ($students_list as $std): ?>
+            <?php 
+              $std_code = $std['student_code'];
+              $name = trim($std['prefix'] . $std['first_name'] . ' ' . $std['last_name']);
+              // เตรียมค่าสีเริ่มต้น ถ้าดึงมาจากฐานข้อมูล (กรณีเครื่องอื่นบันทึกไว้แล้ว)
+              $dot_color = $std['status_color'] ?? 'green';
+            ?>
+            <div class="student-row">
+              <div class="student-info">
+                <h4><?= htmlspecialchars($name) ?></h4>
+                <p>รหัส: <?= htmlspecialchars($std_code) ?></p>
+              </div>
+              
+              <div class="cards-container">
+                <!-- บัตรใบที่ 1 -->
+                <label>
+                  <input type="checkbox" class="card-checkbox cb-<?= $std_code ?>" 
+                         name="records[<?= $std_code ?>][c1]" value="1" 
+                         <?= !empty($std['c1']) ? 'checked' : '' ?> 
+                         onchange="updateRowColor('<?= $std_code ?>')">
+                  <div class="empty-card"></div>
+                </label>
+                <!-- บัตรใบที่ 2 -->
+                <label>
+                  <input type="checkbox" class="card-checkbox cb-<?= $std_code ?>" 
+                         name="records[<?= $std_code ?>][c2]" value="1" 
+                         <?= !empty($std['c2']) ? 'checked' : '' ?> 
+                         onchange="updateRowColor('<?= $std_code ?>')">
+                  <div class="empty-card"></div>
+                </label>
+                <!-- บัตรใบที่ 3 -->
+                <label>
+                  <input type="checkbox" class="card-checkbox cb-<?= $std_code ?>" 
+                         name="records[<?= $std_code ?>][c3]" value="1" 
+                         <?= !empty($std['c3']) ? 'checked' : '' ?> 
+                         onchange="updateRowColor('<?= $std_code ?>')">
+                  <div class="empty-card"></div>
+                </label>
+                
+                <!-- จุดแสดงสถานะสี -->
+                <div id="dot-<?= $std_code ?>" class="status-dot <?= $dot_color ?>"></div>
+              </div>
+            </div>
+          <?php endforeach; ?>
+
+          <button type="submit" name="submit_batch" class="submit-btn">
+            <i class="fas fa-save"></i> บันทึกข้อมูลทั้งหมวด
+          </button>
+        </form>
       <?php endif; ?>
     </div>
 
@@ -240,31 +305,31 @@ try {
         <span>หน้าหลัก</span>
       </a>
       <a href="record_discipline.php" class="nav-link active">
-        <i class="fas fa-clipboard-check"></i>
+        <i class="fas fa-clipboard-list"></i>
         <span>ตรวจวินัย</span>
       </a>
     </div>
   </div>
 
   <script>
-    // ฟังก์ชันคำนวณจำนวนบัตรและเปลี่ยนสีสถานะ
-    function calculateCards() {
-      let bed = document.getElementById('c_bed').checked ? 1 : 0;
-      let cab = document.getElementById('c_cab').checked ? 1 : 0;
-      let shoe = document.getElementById('c_shoe').checked ? 1 : 0;
+    // ฟังก์ชันสำหรับคำนวณสีเมื่อมีการคลิกบัตรของแต่ละคนแบบ Real-time
+    function updateRowColor(studentCode) {
+      const checkboxes = document.querySelectorAll('.cb-' + studentCode);
+      let checkedCount = 0;
       
-      let total = bed + cab + shoe;
-      let display = document.getElementById('status_display');
+      checkboxes.forEach(cb => {
+        if (cb.checked) checkedCount++;
+      });
       
-      if (total === 3) {
-        display.style.backgroundColor = '#ef4444'; // แดง
-        display.innerHTML = '<i class="fas fa-times-circle"></i> สถานะ: แดง (โดน 3 ใบ)';
-      } else if (total === 2) {
-        display.style.backgroundColor = '#facc15'; // เหลือง
-        display.innerHTML = '<i class="fas fa-exclamation-triangle"></i> สถานะ: เหลือง (โดน 2 ใบ)';
+      const dot = document.getElementById('dot-' + studentCode);
+      dot.className = 'status-dot'; // Reset classes
+      
+      if (checkedCount === 3) {
+        dot.classList.add('red');
+      } else if (checkedCount === 2) {
+        dot.classList.add('yellow');
       } else {
-        display.style.backgroundColor = '#10b981'; // เขียว
-        display.innerHTML = '<i class="fas fa-check"></i> สถานะ: ปกติ (โดน ' + total + ' ใบ)';
+        // เขียว (ปกติ) ค่าเริ่มต้นไม่ต้อง add class เพิ่ม
       }
     }
   </script>
