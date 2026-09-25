@@ -221,6 +221,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     .closed-icon { font-size: 3rem; color: #ef4444; margin-bottom: 12px; }
     .closed-title { font-size: 1.1rem; font-weight: 600; color: #1e293b; margin-bottom: 8px; }
     .closed-desc { font-size: 0.875rem; color: #64748b; margin: 0; }
+        .bottom-nav {
+      position: fixed; 
+      bottom: 0;
+      width: 100%;
+      max-width: 430px; 
+      left: 50%;
+      transform: translateX(-50%); 
+      height: 70px;
+      background: white;
+      border-top-left-radius: 25px;
+      border-top-right-radius: 25px;
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      box-shadow: 0 -5px 20px rgba(0,0,0,0.03);
+      padding: 0 10px;
+      z-index: 1000; 
+    }
   </style>
 </head>
 <body>
