@@ -4,7 +4,7 @@ require_once 'db.php';
 
 // ตรวจสอบสิทธิ์ Admin
 if (empty($_SESSION['admin_id'])) {
-    header("Location: index.php");
+    header("Location: admin_main.php");
     exit();
 }
 
