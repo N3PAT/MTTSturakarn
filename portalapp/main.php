@@ -21,6 +21,7 @@ $duty_notifications = [];
 $announcements = []; 
 $has_voted = true; 
 $news_error = ""; 
+$today_discipline = null; // เก็บข้อมูลบัตรวินัยวันนี้
 
 try {
     if (!isset($conn) || !($conn instanceof mysqli)) {
@@ -81,26 +82,39 @@ try {
         $stmt_vote->close();
     }
 
-$announcements = [];
-$news_error = "";
-
-// 4. ดึงข้อมูลข่าวสาร/ประกาศ (ปรับปรุงให้ยืดหยุ่นขึ้น)
-$sql_news = "SELECT * FROM announcements WHERE status = 'active' OR status = '1' ORDER BY id DESC LIMIT 5";
-$res_news = $conn->query($sql_news);
-
-if (!$res_news) {
-    // หาก Query ด้านบนล้มเหลว (เช่น ไม่มีคอลัมน์ status) ให้ดึงข้อมูลโดยไม่เช็ค status
-    $sql_fallback = "SELECT * FROM announcements ORDER BY id DESC LIMIT 5";
-    $res_news = $conn->query($sql_fallback);
-}
-
-if ($res_news) {
-    while ($row = $res_news->fetch_assoc()) {
-        $announcements[] = $row;
+    // 4. [เพิ่มใหม่] ตรวจสอบข้อมูลบัตรวินัยประจำวันนี้
+    $stmt_disc = $conn->prepare("
+        SELECT card_bed, card_shoe, card_cabinet, total_cards, status_color 
+        FROM discipline_cards 
+        WHERE student_code = ? AND check_date = CURDATE() 
+        LIMIT 1
+    ");
+    if ($stmt_disc) {
+        $stmt_disc->bind_param("s", $studentCode);
+        $stmt_disc->execute();
+        $res_disc = $stmt_disc->get_result();
+        if ($row_disc = $res_disc->fetch_assoc()) {
+            $today_discipline = $row_disc;
+        }
+        $stmt_disc->close();
     }
-} else {
-    $news_error = $conn->error;
-}
+
+    // 5. ดึงข้อมูลข่าวสาร/ประกาศ
+    $sql_news = "SELECT * FROM announcements WHERE status = 'active' OR status = '1' ORDER BY id DESC LIMIT 5";
+    $res_news = $conn->query($sql_news);
+
+    if (!$res_news) {
+        $sql_fallback = "SELECT * FROM announcements ORDER BY id DESC LIMIT 5";
+        $res_news = $conn->query($sql_fallback);
+    }
+
+    if ($res_news) {
+        while ($row = $res_news->fetch_assoc()) {
+            $announcements[] = $row;
+        }
+    } else {
+        $news_error = $conn->error;
+    }
 
 } catch (Throwable $e) {
     error_log("System error: " . $e->getMessage());
@@ -121,7 +135,9 @@ if (empty($profile_image) || $profile_image === "default_student.png" || $profil
     $profile_image = "https://ui-avatars.com/api/?name=" . urlencode($name) . "&background=5a42a0&color=fff&size=128";
 }
 
-$noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
+// นับการแจ้งเตือน (รวมถ้าโดนบัตรวินัยตั้งแต่ 1 ใบขึ้นไป)
+$has_discipline_alert = ($today_discipline && $today_discipline['total_cards'] > 0);
+$noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipline_alert ? 1 : 0);
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -412,6 +428,12 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       color: #9a3412;
     }
 
+    .duty-alert-card.success {
+      background-color: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      color: #166534;
+    }
+
     .alert-icon { font-size: 1.5rem; }
     .alert-info { flex: 1; }
     .alert-info h4 { margin: 0 0 2px 0; font-size: 0.9rem; font-weight: 700; }
@@ -540,7 +562,6 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
         </div>
       </div>
 
-      <!-- ปรับจาก button เป็นแท็ก a เพื่อให้คลิกแล้วนำทางไปที่หน้า nofitication.php -->
       <a href="nofitication.php" class="noti-btn" id="notiBellBtn" title="ดูการแจ้งเตือน">
         <i class="far fa-bell"></i>
         <?php if ($noti_count > 0): ?>
@@ -558,42 +579,93 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
       <p><?= htmlspecialchars($student_code_display) ?></p>
     </div>
 
-    <!-- ส่วนแสดงการแจ้งเตือน (เวร + สถานะการโหวต) -->
-    <?php if (!empty($duty_notifications) || !$has_voted): ?>
-      <div class="section-title fade-in-up delay-3">
-        <div class="section-pill"></div>
-        <h3>การแจ้งเตือน</h3>
-      </div>
-      <div class="duty-alert-container fade-in-up delay-3">
-        
-        <?php if (!$has_voted): ?>
+    <!-- ส่วนแสดงการแจ้งเตือน (บัตรวินัย + เวร + สถานะการโหวต) -->
+    <div class="section-title fade-in-up delay-3">
+      <div class="section-pill"></div>
+      <h3>สถานะและการแจ้งเตือน</h3>
+    </div>
+
+    <div class="duty-alert-container fade-in-up delay-3">
+
+      <!-- 1. การ์ดแสดงสถานะบัตรวินัยประจำวันนี้ -->
+      <?php if ($today_discipline): ?>
+        <?php 
+          $tot = (int)$today_discipline['total_cards'];
+          $color = $today_discipline['status_color'];
+          
+          // หาประเภทหมวดที่โดน
+          $items = [];
+          if ($today_discipline['card_bed']) $items[] = "เตียง";
+          if ($today_discipline['card_cabinet']) $items[] = "ตู้";
+          if ($today_discipline['card_shoe']) $items[] = "รองเท้า";
+          $items_str = !empty($items) ? implode(", ", $items) : "ไม่มีรายการ";
+
+          if ($tot >= 3 || $color == 'red'):
+        ?>
           <div class="duty-alert-card urgent">
-            <div class="alert-icon"><i class="fas fa-exclamation-triangle"></i></div>
+            <div class="alert-icon"><i class="fas fa-id-card-alt"></i></div>
             <div class="alert-info">
-              <h4>ยังไม่ได้โหวตประสงค์กลับบ้าน</h4>
-              <p>กรุณาทำรายการโหวตสำหรับสัปดาห์นี้</p>
+              <h4>สถานะบัตรวินัยวันนี้: แดง (โดน <?= $tot ?> ใบ)</h4>
+              <p>รายการที่ไม่เรียบร้อย: <?= $items_str ?></p>
             </div>
-            <a href="fill.php" class="btn-action-alert">โหวตเลย</a>
+          </div>
+        <?php elseif ($tot == 2 || $color == 'yellow'): ?>
+          <div class="duty-alert-card warning">
+            <div class="alert-icon"><i class="fas fa-id-card-alt"></i></div>
+            <div class="alert-info">
+              <h4>สถานะบัตรวินัยวันนี้: เหลือง (โดน <?= $tot ?> ใบ)</h4>
+              <p>รายการที่ไม่เรียบร้อย: <?= $items_str ?></p>
+            </div>
+          </div>
+        <?php else: ?>
+          <div class="duty-alert-card success">
+            <div class="alert-icon"><i class="fas fa-check-circle"></i></div>
+            <div class="alert-info">
+              <h4>สถานะบัตรวินัยวันนี้: ปกติ (ผ่าน)</h4>
+              <p>ระเบียบเตียง ตู้ รองเท้า เรียบร้อยดี</p>
+            </div>
           </div>
         <?php endif; ?>
-
-        <?php foreach ($duty_notifications as $noti): ?>
-          <?php 
-            $is_urgent = ($noti['days_left'] == 1);
-            $card_class = $is_urgent ? 'urgent' : 'warning';
-            $icon_class = $is_urgent ? 'fa-exclamation-circle' : 'fa-clock';
-            $date_str = date('d/m/Y', strtotime($noti['duty_date']));
-          ?>
-          <div class="duty-alert-card <?= $card_class ?>">
-            <div class="alert-icon"><i class="fas <?= $icon_class ?>"></i></div>
-            <div class="alert-info">
-              <h4>แจ้งเตือนเข้าเวร: <?= htmlspecialchars($noti['duty_name'] ?? 'ปฏิบัติหน้าที่เวร') ?></h4>
-              <p>อีก <?= $noti['days_left'] ?> วัน (วันที่ <?= $date_str ?>) กรุณาเตรียมตัวให้พร้อม</p>
-            </div>
+      <?php else: ?>
+        <div class="duty-alert-card success">
+          <div class="alert-icon"><i class="fas fa-shield-alt"></i></div>
+          <div class="alert-info">
+            <h4>สถานะบัตรวินัยวันนี้: ปกติ</h4>
+            <p>ยังไม่มีรายการโดนตัดบัตรวินัยประจำวันนี้</p>
           </div>
-        <?php endforeach; ?>
-      </div>
-    <?php endif; ?>
+        </div>
+      <?php endif; ?>
+
+      <!-- 2. แจ้งเตือนโหวต -->
+      <?php if (!$has_voted): ?>
+        <div class="duty-alert-card urgent">
+          <div class="alert-icon"><i class="fas fa-exclamation-triangle"></i></div>
+          <div class="alert-info">
+            <h4>ยังไม่ได้โหวตประสงค์กลับบ้าน</h4>
+            <p>กรุณาทำรายการโหวตสำหรับสัปดาห์นี้</p>
+          </div>
+          <a href="fill.php" class="btn-action-alert">โหวตเลย</a>
+        </div>
+      <?php endif; ?>
+
+      <!-- 3. แจ้งเตือนเข้าเวร -->
+      <?php foreach ($duty_notifications as $noti): ?>
+        <?php 
+          $is_urgent = ($noti['days_left'] == 1);
+          $card_class = $is_urgent ? 'urgent' : 'warning';
+          $icon_class = $is_urgent ? 'fa-exclamation-circle' : 'fa-clock';
+          $date_str = date('d/m/Y', strtotime($noti['duty_date']));
+        ?>
+        <div class="duty-alert-card <?= $card_class ?>">
+          <div class="alert-icon"><i class="fas <?= $icon_class ?>"></i></div>
+          <div class="alert-info">
+            <h4>แจ้งเตือนเข้าเวร: <?= htmlspecialchars($noti['duty_name'] ?? 'ปฏิบัติหน้าที่เวร') ?></h4>
+            <p>อีก <?= $noti['days_left'] ?> วัน (วันที่ <?= $date_str ?>) กรุณาเตรียมตัวให้พร้อม</p>
+          </div>
+        </div>
+      <?php endforeach; ?>
+
+    </div>
 
     <div class="section-title fade-in-up delay-4">
       <div class="section-pill"></div>
@@ -615,57 +687,56 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
         <div class="icon-box bg-blue"><i class="fas fa-file-alt"></i></div>
         <span class="menu-text">คำร้องขอเอกสาร</span>
       </a>
-        <a href="duty_substitutions.php" class="menu-item">
+      <a href="duty_substitutions.php" class="menu-item">
         <div class="icon-box bg-blue"><i class="fas fa-address-book"></i></div>
         <span class="menu-text">คำร้องเปลี่ยนเวร</span>
       </a>
     </div>
 
-<!-- ส่วนแสดงประกาศ / ข่าวสาร -->
-<?php if (!empty($news_error)): ?>
-  <div style="margin: 0 20px 15px; padding: 15px; background: #fee2e2; border: 1px solid #ef4444; border-radius: 8px; color: #b91c1c;">
-    <strong><i class="fas fa-exclamation-circle"></i> เกิดข้อผิดพลาดในการโหลดประกาศ:</strong><br>
-    <?= htmlspecialchars($news_error) ?>
-  </div>
-<?php endif; ?>
+    <!-- ส่วนแสดงประกาศ / ข่าวสาร -->
+    <?php if (!empty($news_error)): ?>
+      <div style="margin: 0 20px 15px; padding: 15px; background: #fee2e2; border: 1px solid #ef4444; border-radius: 8px; color: #b91c1c;">
+        <strong><i class="fas fa-exclamation-circle"></i> เกิดข้อผิดพลาดในการโหลดประกาศ:</strong><br>
+        <?= htmlspecialchars($news_error) ?>
+      </div>
+    <?php endif; ?>
 
-<?php if (!empty($announcements)): ?>
-  <div class="section-title fade-in-up delay-3">
-    <div class="section-title-left">
-      <div class="section-pill" style="background: #3b82f6;"></div>
-      <h3>ประกาศ / ข่าวสาร</h3>
-    </div>
-  </div>
-  
-  <div class="fade-in-up delay-4">
-    <?php foreach ($announcements as $news): ?>
-      <?php 
-        $news_title = $news['title'] ?? $news['topic'] ?? $news['subject'] ?? 'ประกาศ';
-        $news_content = $news['content'] ?? $news['detail'] ?? $news['description'] ?? '';
-        $news_date = $news['created_at'] ?? $news['date'] ?? $news['created_date'] ?? date('Y-m-d H:i:s');
-      ?>
-      <div class="announcement-card">
-        <div class="announcement-icon">
-          <i class="fas fa-bullhorn"></i>
-        </div>
-        <div class="announcement-content">
-          <h4><?= htmlspecialchars($news_title) ?></h4>
-          <p><?= nl2br(htmlspecialchars($news_content)) ?></p>
-          <span class="announcement-date">
-            <i class="far fa-clock"></i> <?= date('d/m/Y H:i', strtotime($news_date)) ?>
-          </span>
+    <?php if (!empty($announcements)): ?>
+      <div class="section-title fade-in-up delay-3">
+        <div class="section-title-left">
+          <div class="section-pill" style="background: #3b82f6;"></div>
+          <h3>ประกาศ / ข่าวสาร</h3>
         </div>
       </div>
-    <?php endforeach; ?>
-  </div>
-<?php else: ?>
-  <?php if(empty($news_error)): ?>
-    <div style="text-align: center; color: #94a3b8; padding: 20px;">
-      ( ไม่มีประกาศหรือข่าวสารในขณะนี้ )
-    </div>
-  <?php endif; ?>
-<?php endif; ?>
-
+      
+      <div class="fade-in-up delay-4">
+        <?php foreach ($announcements as $news): ?>
+          <?php 
+            $news_title = $news['title'] ?? $news['topic'] ?? $news['subject'] ?? 'ประกาศ';
+            $news_content = $news['content'] ?? $news['detail'] ?? $news['description'] ?? '';
+            $news_date = $news['created_at'] ?? $news['date'] ?? $news['created_date'] ?? date('Y-m-d H:i:s');
+          ?>
+          <div class="announcement-card">
+            <div class="announcement-icon">
+              <i class="fas fa-bullhorn"></i>
+            </div>
+            <div class="announcement-content">
+              <h4><?= htmlspecialchars($news_title) ?></h4>
+              <p><?= nl2br(htmlspecialchars($news_content)) ?></p>
+              <span class="announcement-date">
+                <i class="far fa-clock"></i> <?= date('d/m/Y H:i', strtotime($news_date)) ?>
+              </span>
+            </div>
+          </div>
+        <?php endforeach; ?>
+      </div>
+    <?php else: ?>
+      <?php if(empty($news_error)): ?>
+        <div style="text-align: center; color: #94a3b8; padding: 20px;">
+          ( ไม่มีประกาศหรือข่าวสารในขณะนี้ )
+        </div>
+      <?php endif; ?>
+    <?php endif; ?>
 
     <div class="bottom-nav">
       <a href="main.php" class="nav-link active">
