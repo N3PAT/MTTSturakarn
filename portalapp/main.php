@@ -582,7 +582,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
     <!-- ส่วนแสดงการแจ้งเตือน (บัตรวินัย + เวร + สถานะการโหวต) -->
     <div class="section-title fade-in-up delay-3">
       <div class="section-pill"></div>
-      <h3>สถานะและการแจ้งเตือน</h3>
+      <h3>บัตรวินัย</h3>
     </div>
 
     <div class="duty-alert-container fade-in-up delay-3">
