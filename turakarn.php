@@ -793,5 +793,12 @@ if (isset($_POST['action']) && $_POST['action'] == 'export_csv') {
             document.getElementById('infoModal').classList.add('hidden');
         }
     </script>
+
+<!-- Vercel Speed Insights -->
+<script>
+  window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
+</script>
+<script defer src="/_vercel/speed-insights/script.js"></script>
+
 </body>
 </html>
