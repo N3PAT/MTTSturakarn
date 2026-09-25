@@ -83,7 +83,7 @@ function formatThaiDate($dateStr) {
       min-height: 100vh;
       position: relative;
       box-shadow: 0 0 20px rgba(0,0,0,0.1);
-      padding-bottom: 30px;
+      padding-bottom: 100px; /* ปรับเพิ่มเพื่อไม่ให้โดน bottom nav บัง */
     }
 
     .top-header {
@@ -227,6 +227,41 @@ function formatThaiDate($dateStr) {
       color: #cbd5e1;
       margin-bottom: 15px;
     }
+
+    /* Bottom Nav CSS */
+    .bottom-nav {
+      position: fixed; 
+      bottom: 0;
+      width: 100%;
+      max-width: 430px; 
+      left: 50%;
+      transform: translateX(-50%); 
+      height: 70px;
+      background: white;
+      border-top-left-radius: 25px;
+      border-top-right-radius: 25px;
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      box-shadow: 0 -5px 20px rgba(0,0,0,0.03);
+      padding: 0 10px;
+      z-index: 1000; 
+    }
+
+    .nav-link {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-decoration: none;
+      color: #94a3b8;
+      font-size: 0.7rem;
+      font-weight: 600;
+      width: 30%;
+      gap: 4px;
+    }
+
+    .nav-link.active { color: var(--primary); }
+    .nav-link i { font-size: 1.3rem; }
   </style>
 </head>
 <body>
@@ -300,6 +335,24 @@ function formatThaiDate($dateStr) {
           <p>คุณมีประวัติการตรวจ แต่ยังไม่เคยโดนตัดบัตรวินัย</p>
         </div>
       <?php endif; ?>
+    </div>
+    
+    <!-- Bottom Navigation -->
+    <div class="bottom-nav">
+      <a href="main.php" class="nav-link active">
+        <i class="fas fa-home"></i>
+        <span>หน้าหลัก</span>
+      </a>
+      
+      <a href="discipline_history.php" class="nav-link">
+        <i class="fas fa-cards"></i>
+        <span>ประวัติบัตรวินัย</span>
+      </a>
+
+      <a href="logout.php" class="nav-link">
+        <i class="far fa-user"></i>
+        <span>ออกจากระบบ</span>
+      </a>
     </div>
 
   </div>
