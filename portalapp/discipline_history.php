@@ -345,7 +345,7 @@ function formatThaiDate($dateStr) {
       </a>
       
       <a href="discipline_history.php" class="nav-link active">
-        <i class="fa-solid fa-cards"></i>
+        <i class="fa-solid fa-address-card"></i>
         <span>ประวัติบัตรวินัย</span>
       </a>
 
