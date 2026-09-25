@@ -10,7 +10,8 @@ if (session_status() === PHP_SESSION_NONE) {
 
 // 1. จัดการ Loading Screen
 $show_loading = false;
-if (!isset($_SESSION['has_seen_loading_fill'])) {$show_loading = true;
+if (!isset($_SESSION['has_seen_loading_fill'])) {
+    $show_loading = true;
     $_SESSION['has_seen_loading_fill'] = true;
 }
 
@@ -19,7 +20,9 @@ date_default_timezone_set('Asia/Bangkok');
 // สร้าง CSRF Token รองรับ PHP ทุกเวอร์ชัน
 if (empty($_SESSION['csrf_token'])) {
     if (function_exists('random_bytes')) {
-        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));     } else {$_SESSION['csrf_token'] = md5(uniqid(rand(), true));
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    } else {
+        $_SESSION['csrf_token'] = md5(uniqid(rand(), true));
     }
 }
 
@@ -42,20 +45,21 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_student_name' && isset($_G
     $code = trim($_GET['code']);
     
     try {
-        if (!isset($conn) \vert{}\vert{} !$conn) {
+        if (!isset($conn) || !$conn) {
             http_response_code(500);
             throw new Exception('เชื่อมต่อฐานข้อมูลไม่ได้');
         }
         
-        $stmt =$conn->prepare("SELECT prefix, first_name, last_name, section FROM students WHERE student_code = ? LIMIT 1");
+        $stmt = $conn->prepare("SELECT prefix, first_name, last_name, section FROM students WHERE student_code = ? LIMIT 1");
         if (!$stmt) {
             http_response_code(500);
             throw new Exception('SQL Error: ' . $conn->error);
         }
-        $stmt->bind_param("s", $code);$stmt->execute();
-        $res =$stmt->get_result();
+        $stmt->bind_param("s", $code);
+        $stmt->execute();
+        $res = $stmt->get_result();
         
-        if ($row =$res->fetch_assoc()) {
+        if ($row = $res->fetch_assoc()) {
             $fullname = trim(($row['prefix'] ?? '') . ($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
             echo json_encode([
                 'found' => true,
@@ -77,21 +81,23 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_student_name' && isset($_G
 }
 
 // ---------------- 1. ระบบคำนวณวันที่ ----------------
-$tz = new DateTimeZone('Asia/Bangkok');$dt = new DateTime('now', $tz);$dt->modify('+1 day -10 hours'); 
+$tz = new DateTimeZone('Asia/Bangkok');
+$dt = new DateTime('now', $tz);
+$dt->modify('+1 day -10 hours'); 
 
 $current_day_of_week = (int)$dt->format('N');
 $current_hour = (int)$dt->format('H');
 
-$days_until_friday = (5 -$current_day_of_week + 7) % 7;
-$target_dt = clone$dt;
+$days_until_friday = (5 - $current_day_of_week + 7) % 7;
+$target_dt = clone $dt;
 $target_dt->modify("+$days_until_friday days");
-$target_date =$target_dt->format('Y-m-d');
+$target_date = $target_dt->format('Y-m-d');
 
 $start_date = "2026-07-06"; 
 
 $is_voting_open = (
     in_array($current_day_of_week, [6, 7, 1]) ||
-    ($current_day_of_week == 2 &&$current_hour < 16)
+    ($current_day_of_week == 2 && $current_hour < 16)
 );
 
 $alert_type = "";
@@ -100,18 +106,20 @@ $message = "";
 // ---------------- 2. ลอจิกการคำนวณเวร ----------------
 $duty_roster_ids = [];
 try {
-    if (isset($conn) &&$conn) {
-        $res =$conn->query("SELECT student_code FROM students ORDER BY id ASC");
-        if ($res && $res->num_rows > 0) {$all_students = [];
-            while ($row =$res->fetch_assoc()) {
-                $all_students[] =$row['student_code'];
+    if (isset($conn) && $conn) {
+        $res = $conn->query("SELECT student_code FROM students ORDER BY id ASC");
+        if ($res && $res->num_rows > 0) {
+            $all_students = [];
+            while ($row = $res->fetch_assoc()) {
+                $all_students[] = $row['student_code'];
             }
             
             $total_students = count($all_students);
-            $diff_days = max(0, floor((strtotime($target_date) - strtotime($start_date)) / 86400));$start_index = ($diff_days * 16) \%$total_students;
+            $diff_days = max(0, floor((strtotime($target_date) - strtotime($start_date)) / 86400));
+            $start_index = ($diff_days * 16) % $total_students;
             
             for ($i = 0; $i < 16; $i++) {
-                $idx = ($start_index + $i) \%$total_students;
+                $idx = ($start_index + $i) % $total_students;
                 $duty_roster_ids[] = $all_students[$idx];
             }
         }
@@ -122,43 +130,54 @@ try {
 
 // ---------------- 3. จัดการ Form Submit ----------------
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $csrf_token = isset($_POST['csrf_token']) ? trim($_POST['csrf_token']) : '';$stu_code   = isset($_POST['student_code']) ? trim($_POST['student_code']) : '';
-    $section    = isset($_POST['section']) ? trim($_POST['section']) : '';$status     = isset($_POST['status']) ? trim($_POST['status']) : '';
+    $csrf_token = isset($_POST['csrf_token']) ? trim($_POST['csrf_token']) : '';
+    $stu_code   = isset($_POST['student_code']) ? trim($_POST['student_code']) : '';
+    $section    = isset($_POST['section']) ? trim($_POST['section']) : '';
+    $status     = isset($_POST['status']) ? trim($_POST['status']) : '';
 
-    if (empty($csrf_token) \vert{}\vert{} !hash_equals($_SESSION['csrf_token'], $csrf_token)) {$alert_type = "error";
+    if (empty($csrf_token) || !hash_equals($_SESSION['csrf_token'], $csrf_token)) {
+        $alert_type = "error";
         $message = "เซสชันไม่ถูกต้อง กรุณารีเฟรชหน้าเว็บแล้วทำรายการใหม่";
-    } else if (!$is_voting_open) {$alert_type = "error";
+    } else if (!$is_voting_open) {
+        $alert_type = "error";
         $message = "หมดเวลาทำรายการ ระบบเปิดให้ส่งข้อมูลเฉพาะวันเสาร์ถึงวันอังคารก่อนเวลา 16:00 น. เท่านั้น";
     } else {
         $allowed_status = ['home', 'stay', 'duty', 'restrict'];
         
-        if (!in_array($status, $allowed_status)) {$alert_type = "error";
+        if (!in_array($status, $allowed_status)) {
+            $alert_type = "error";
             $message = "สถานะไม่ถูกต้องตามที่ระบบกำหนด";
-        } else if ($status === 'duty' && !in_array($stu_code, $duty_roster_ids)) {$alert_type = "error";
+        } else if ($status === 'duty' && !in_array($stu_code, $duty_roster_ids)) {
+            $alert_type = "error";
             $message = "รหัส " . htmlspecialchars($stu_code) . " ไม่ได้มีรายชื่อปฏิบัติหน้าที่ในสัปดาห์นี้";
         } else {
             try {
                 // ตรวจสอบการโหวตซ้ำ
-                $stmt_check =$conn->prepare("SELECT id FROM weekly_votes WHERE student_code = ? AND vote_date = ?");
-                $stmt_check->bind_param("ss", $stu_code, $target_date);$stmt_check->execute();
+                $stmt_check = $conn->prepare("SELECT id FROM weekly_votes WHERE student_code = ? AND vote_date = ?");
+                $stmt_check->bind_param("ss", $stu_code, $target_date);
+                $stmt_check->execute();
                 
-                if ($stmt_check->get_result()->num_rows > 0) {$alert_type = "error";
+                if ($stmt_check->get_result()->num_rows > 0) {
+                    $alert_type = "error";
                     $message = "รหัส " . htmlspecialchars($stu_code) . " ได้บันทึกข้อมูลของสัปดาห์นี้ไปแล้ว";
                 } else {
                     // อัปเดตตอนเรียน
-                    $stmt_update =$conn->prepare("UPDATE students SET section = ? WHERE student_code = ?");
-                    $stmt_update->bind_param("ss", $section, $stu_code);$stmt_update->execute();
+                    $stmt_update = $conn->prepare("UPDATE students SET section = ? WHERE student_code = ?");
+                    $stmt_update->bind_param("ss", $section, $stu_code);
+                    $stmt_update->execute();
 
                     // บันทึกการโหวต
                     $real_time_now = date('Y-m-d H:i:s');
-                    $stmt_insert =$conn->prepare("INSERT INTO weekly_votes (student_code, vote_date, status, created_at) VALUES (?, ?, ?, ?)");
-                    $stmt_insert->bind_param("ssss", $stu_code,$target_date, $status,$real_time_now);
+                    $stmt_insert = $conn->prepare("INSERT INTO weekly_votes (student_code, vote_date, status, created_at) VALUES (?, ?, ?, ?)");
+                    $stmt_insert->bind_param("ssss", $stu_code, $target_date, $status, $real_time_now);
                     
-                    if ($stmt_insert->execute()) {$alert_type = "success";
+                    if ($stmt_insert->execute()) {
+                        $alert_type = "success";
                         $message = "บันทึกข้อมูลรหัส " . htmlspecialchars($stu_code) . " ประจำวันศุกร์ที่ " . date('d/m/Y', strtotime($target_date)) . " เรียบร้อยแล้ว";
                     }
                 }
-            } catch (Exception $e) {$alert_type = "error";
+            } catch (Exception $e) {
+                $alert_type = "error";
                 $message = "เกิดข้อผิดพลาดจากฐานข้อมูล: " . $e->getMessage();
             }
         }
