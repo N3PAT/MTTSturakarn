@@ -310,7 +310,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
       <?php endif; ?>
     </div>
   </div>
+<div class="bottom-nav">
+      <a href="main.php" class="nav-link active">
+        <i class="fas fa-home"></i>
+        <span>หน้าหลัก</span>
+      </a>
+      
+      <a href="duty.php" class="nav-link">
+        <i class="fas fa-calendar-alt"></i>
+        <span>เวรของฉัน</span>
+      </a>
 
+      <a href="logout.php" class="nav-link">
+        <i class="far fa-user"></i>
+        <span>ออกจากระบบ</span>
+      </a>
+    </div>
 <script>
 <?php if ($alert_type == 'success'): ?>
     Swal.fire({ title: 'สำเร็จ', text: "<?php echo addslashes($message); ?>", icon: 'success', confirmButtonColor: '#5a42a0' }).then(function() { window.location.href = window.location.pathname; });
