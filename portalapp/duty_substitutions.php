@@ -221,7 +221,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     .closed-icon { font-size: 3rem; color: #ef4444; margin-bottom: 12px; }
     .closed-title { font-size: 1.1rem; font-weight: 600; color: #1e293b; margin-bottom: 8px; }
     .closed-desc { font-size: 0.875rem; color: #64748b; margin: 0; }
-        .bottom-nav {
+    .bottom-nav {
       position: fixed; 
       bottom: 0;
       width: 100%;
@@ -239,6 +239,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
       padding: 0 10px;
       z-index: 1000; 
     }
+
+    .nav-link {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-decoration: none;
+      color: #94a3b8;
+      font-size: 0.7rem;
+      font-weight: 600;
+      width: 30%;
+      gap: 4px;
+    }
+
+    .nav-link.active { color: var(--primary); }
+    .nav-link i { font-size: 1.3rem; }
   </style>
 </head>
 <body>
