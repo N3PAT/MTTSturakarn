@@ -19,11 +19,12 @@ $check_date = $_POST['check_date'] ?? ($_GET['date'] ?? date('Y-m-d'));
 // 1. จัดการเมื่อมีการกด "บันทึกข้อมูลทั้งหมวด"
 // ==========================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_batch'])) {
-    if (!empty($_POST['records']) && is_array($_POST['records'])) {
+    // เช็คจาก all_students แทน เพื่อให้รู้ว่ามีใครแสดงอยู่บนหน้าจอบ้าง
+    if (!empty($_POST['all_students']) && is_array($_POST['all_students'])) {
         $conn->begin_transaction();
         try {
-            // ใช้คำสั่ง INSERT ... ON DUPLICATE KEY UPDATE เพื่อรองรับการกดเซฟจากหลายอุปกรณ์พร้อมกัน
-            $stmt = $conn->prepare("
+            // คำสั่งสำหรับเพิ่มหรืออัปเดตบัตร
+            $stmt_upsert = $conn->prepare("
                 INSERT INTO discipline_cards 
                 (student_code, check_date, card_bed, card_shoe, card_cabinet, total_cards, status_color) 
                 VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -35,21 +36,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_batch'])) {
                 status_color = VALUES(status_color)
             ");
 
-            foreach ($_POST['records'] as $std_code => $cards) {
-                // เก็บค่าสถานะบัตร (เราใช้ column เดิมใน DB แต่ใน UI จะแสดงเป็นบัตรเปล่า 3 ใบ)
+            // คำสั่งสำหรับลบข้อมูล กรณีที่ติ๊กออกหมด (0 ใบ)
+            $stmt_delete = $conn->prepare("
+                DELETE FROM discipline_cards 
+                WHERE student_code = ? AND check_date = ?
+            ");
+
+            // วนลูปรายชื่อนักเรียนทุกคนที่แสดงอยู่บนหน้าจอ
+            foreach ($_POST['all_students'] as $std_code) {
+                // ดึงข้อมูลการติ๊กบัตรของคนนี้ (ถ้าไม่มีการติ๊กเลย จะได้ค่าว่าง)
+                $cards = $_POST['records'][$std_code] ?? [];
+
                 $c1 = isset($cards['c1']) ? 1 : 0;
                 $c2 = isset($cards['c2']) ? 1 : 0;
                 $c3 = isset($cards['c3']) ? 1 : 0;
                 
                 $total_cards = $c1 + $c2 + $c3;
                 
-                // กำหนดสี
-                $status_color = 'green';
-                if ($total_cards == 2) $status_color = 'yellow';
-                if ($total_cards == 3) $status_color = 'red';
+                if ($total_cards == 0) {
+                    // ถ้าไม่มีบัตรเลย ให้ลบข้อมูลของวันนั้นทิ้ง (เผื่อกรณีบันทึกผิดแล้วมาติ๊กออก)
+                    $stmt_delete->bind_param("ss", $std_code, $check_date);
+                    $stmt_delete->execute();
+                } else {
+                    // กำหนดสี
+                    $status_color = 'green';
+                    if ($total_cards == 2) $status_color = 'yellow';
+                    if ($total_cards == 3) $status_color = 'red';
 
-                $stmt->bind_param("ssiiiis", $std_code, $check_date, $c1, $c2, $c3, $total_cards, $status_color);
-                $stmt->execute();
+                    $stmt_upsert->bind_param("ssiiiis", $std_code, $check_date, $c1, $c2, $c3, $total_cards, $status_color);
+                    $stmt_upsert->execute();
+                }
             }
             $conn->commit();
             $success_msg = "บันทึกข้อมูลสำเร็จเรียบร้อยแล้ว!";
@@ -70,7 +86,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_batch'])) {
 $students_list = [];
 if (!empty($filter_company) && !empty($filter_platoon)) {
     try {
-        // ดึงรายชื่อ พร้อมข้อมูลการตรวจของวันนี้ (ถ้าเคยบันทึกจากอุปกรณ์อื่นไปแล้ว จะดึงมาแสดงด้วย)
         $sql = "
             SELECT s.student_code, s.prefix, s.first_name, s.last_name, 
                    d.card_bed AS c1, d.card_shoe AS c2, d.card_cabinet AS c3, d.total_cards, d.status_color
@@ -141,19 +156,25 @@ if (!empty($filter_company) && !empty($filter_platoon)) {
       height: 30px; 
       border: 2px solid #cbd5e1; 
       border-radius: 4px; 
-      display: inline-block; 
+      display: inline-flex; 
+      justify-content: center;
+      align-items: center;
       cursor: pointer; 
       background: #f8fafc; 
       transition: all 0.2s ease;
       position: relative;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #94a3b8;
     }
     
     .card-checkbox:checked + .empty-card { 
       border-color: #ef4444; 
       background: #fee2e2; 
+      color: transparent; /* ซ่อนตัวเลขเมื่อถูกติ๊ก */
     }
     .card-checkbox:checked + .empty-card::after {
-      content: '\f00d'; /* X icon in FontAwesome */
+      content: '\f00d';
       font-family: 'Font Awesome 5 Free';
       font-weight: 900;
       color: #ef4444;
@@ -173,6 +194,7 @@ if (!empty($filter_company) && !empty($filter_platoon)) {
     .submit-btn { width: 100%; background-color: #10b981; color: white; border: none; padding: 14px; border-radius: 12px; font-family: 'Prompt', sans-serif; font-size: 1rem; font-weight: 600; cursor: pointer; box-shadow: 0 4px 10px rgba(16, 185, 129, 0.2); margin-top: 10px; position: sticky; bottom: 85px; z-index: 10; }
     .alert { padding: 12px; border-radius: 10px; margin: 15px 24px; font-size: 0.85rem; font-weight: 500; text-align: center; }
     .alert-success { background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .alert-danger { background-color: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
 
     /* Bottom Nav */
     .bottom-nav { position: fixed; bottom: 0; width: 100%; max-width: 500px; left: 50%; transform: translateX(-50%); height: 70px; background: white; border-top-left-radius: 20px; border-top-right-radius: 20px; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 -5px 20px rgba(0,0,0,0.05); z-index: 100; }
@@ -193,6 +215,9 @@ if (!empty($filter_company) && !empty($filter_platoon)) {
 
     <?php if($success_msg): ?>
       <div class="alert alert-success"><i class="fas fa-check-circle"></i> <?= $success_msg ?></div>
+    <?php endif; ?>
+    <?php if($error_msg): ?>
+      <div class="alert alert-danger"><i class="fas fa-exclamation-circle"></i> <?= $error_msg ?></div>
     <?php endif; ?>
 
     <!-- ฟอร์มเลือกกองร้อยและหมวด -->
@@ -238,48 +263,54 @@ if (!empty($filter_company) && !empty($filter_platoon)) {
           <input type="hidden" name="company" value="<?= $filter_company ?>">
           <input type="hidden" name="platoon" value="<?= $filter_platoon ?>">
 
-          <div style="display:flex; justify-content:space-between; margin-bottom:10px; padding:0 5px;">
+          <!-- เพิ่ม Info คำอธิบายบัตรที่หัวตาราง -->
+          <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:10px; padding:0 5px;">
             <span style="font-size:0.85rem; font-weight:600; color:var(--text-gray);">รายชื่อ (ร้อย.<?= $filter_company ?> หมวด <?= $filter_platoon ?>)</span>
-            <span style="font-size:0.85rem; font-weight:600; color:var(--text-gray);">เลือกบัตร</span>
+            <div style="text-align: right;">
+                <span style="font-size:0.85rem; font-weight:600; color:var(--text-gray); display:block;">เลือกบัตร</span>
+                <span style="font-size:0.65rem; color:#ef4444; font-weight:500;">1=เตียง, 2=รองเท้า, 3=ตู้</span>
+            </div>
           </div>
 
           <?php foreach ($students_list as $std): ?>
             <?php 
               $std_code = $std['student_code'];
               $name = trim($std['prefix'] . $std['first_name'] . ' ' . $std['last_name']);
-              // เตรียมค่าสีเริ่มต้น ถ้าดึงมาจากฐานข้อมูล (กรณีเครื่องอื่นบันทึกไว้แล้ว)
               $dot_color = $std['status_color'] ?? 'green';
             ?>
             <div class="student-row">
+              <!-- เพิ่ม input hidden ไว้เก็บรหัสนักเรียนทุกคนที่โชว์บนจอ -->
+              <input type="hidden" name="all_students[]" value="<?= $std_code ?>">
+              
               <div class="student-info">
                 <h4><?= htmlspecialchars($name) ?></h4>
                 <p>รหัส: <?= htmlspecialchars($std_code) ?></p>
               </div>
               
               <div class="cards-container">
-                <!-- บัตรใบที่ 1 -->
+                <!-- บัตรใบที่ 1 (เตียง) -->
                 <label>
                   <input type="checkbox" class="card-checkbox cb-<?= $std_code ?>" 
                          name="records[<?= $std_code ?>][c1]" value="1" 
                          <?= !empty($std['c1']) ? 'checked' : '' ?> 
                          onchange="updateRowColor('<?= $std_code ?>')">
-                  <div class="empty-card"></div>
+                  <div class="empty-card">1</div>
                 </label>
-                <!-- บัตรใบที่ 2 -->
+                <!-- บัตรใบที่ 2 (รองเท้า) -->
                 <label>
                   <input type="checkbox" class="card-checkbox cb-<?= $std_code ?>" 
                          name="records[<?= $std_code ?>][c2]" value="1" 
                          <?= !empty($std['c2']) ? 'checked' : '' ?> 
                          onchange="updateRowColor('<?= $std_code ?>')">
-                  <div class="empty-card"></div>
+                  <div class="empty-card">2</div>
                 </label>
-                <!-- บัตรใบที่ 3 -->
+                <!-- บัตรใบที่ 3 (ตู้) -->
                 <label>
                   <input type="checkbox" class="card-checkbox cb-<?= $std_code ?>" 
                          name="records[<?= $std_code ?>][c3]" value="1" 
                          <?= !empty($std['c3']) ? 'checked' : '' ?> 
                          onchange="updateRowColor('<?= $std_code ?>')">
-                  <div class="empty-card"></div>
+                  <div class="empty-card">3</div>
                 </label>
                 
                 <!-- จุดแสดงสถานะสี -->
@@ -302,13 +333,12 @@ if (!empty($filter_company) && !empty($filter_platoon)) {
       </a>
       <a href="record_discipline.php" class="nav-link active">
         <i class="fas fa-clipboard-list"></i>
-        <span>ตรวจวินัย</span>
+        <span>ตรวจบัตรวินัย</span>
       </a>
     </div>
   </div>
 
   <script>
-    // ฟังก์ชันสำหรับคำนวณสีเมื่อมีการคลิกบัตรของแต่ละคนแบบ Real-time
     function updateRowColor(studentCode) {
       const checkboxes = document.querySelectorAll('.cb-' + studentCode);
       let checkedCount = 0;
@@ -318,15 +348,13 @@ if (!empty($filter_company) && !empty($filter_platoon)) {
       });
       
       const dot = document.getElementById('dot-' + studentCode);
-      dot.className = 'status-dot'; // Reset classes
+      dot.className = 'status-dot'; 
       
       if (checkedCount === 3) {
         dot.classList.add('red');
       } else if (checkedCount === 2) {
         dot.classList.add('yellow');
-      } else {
-        // เขียว (ปกติ) ค่าเริ่มต้นไม่ต้อง add class เพิ่ม
-      }
+      } 
     }
   </script>
 </body>
