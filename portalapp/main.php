@@ -21,7 +21,8 @@ $duty_notifications = [];
 $announcements = []; 
 $has_voted = true; 
 $news_error = ""; 
-$today_discipline = null; // เก็บข้อมูลบัตรวินัยวันนี้
+$today_discipline = null; 
+$total_cards_history = 0; // เพิ่มตัวแปรเก็บยอดสะสมบัตรวินัย
 
 try {
     if (!isset($conn) || !($conn instanceof mysqli)) {
@@ -82,7 +83,7 @@ try {
         $stmt_vote->close();
     }
 
-    // 4. [เพิ่มใหม่] ตรวจสอบข้อมูลบัตรวินัยประจำวันนี้
+    // 4. ตรวจสอบข้อมูลบัตรวินัยประจำวันนี้
     $stmt_disc = $conn->prepare("
         SELECT card_bed, card_shoe, card_cabinet, total_cards, status_color 
         FROM discipline_cards 
@@ -97,6 +98,22 @@ try {
             $today_discipline = $row_disc;
         }
         $stmt_disc->close();
+    }
+
+    // 4.1 [เพิ่มใหม่] ดึงข้อมูลยอดรวมบัตรวินัยสะสมทั้งหมดของนักเรียนคนนี้
+    $stmt_total_disc = $conn->prepare("
+        SELECT SUM(total_cards) as all_cards 
+        FROM discipline_cards 
+        WHERE student_code = ?
+    ");
+    if ($stmt_total_disc) {
+        $stmt_total_disc->bind_param("s", $studentCode);
+        $stmt_total_disc->execute();
+        $res_total = $stmt_total_disc->get_result();
+        if ($row_total = $res_total->fetch_assoc()) {
+            $total_cards_history = (int)$row_total['all_cards'];
+        }
+        $stmt_total_disc->close();
     }
 
     // 5. ดึงข้อมูลข่าวสาร/ประกาศ
@@ -309,6 +326,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
 
     .badges {
       display: flex;
+      flex-wrap: wrap;
       gap: 8px;
       margin-bottom: 12px;
     }
@@ -321,6 +339,11 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
       font-size: 0.75rem;
       font-weight: 500;
       backdrop-filter: blur(4px);
+    }
+
+    .badge-danger {
+      background: rgba(220, 38, 38, 0.8) !important;
+      border-color: #f87171 !important;
     }
 
     .student-card h2 {
@@ -450,6 +473,17 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
       white-space: nowrap;
       box-shadow: 0 2px 4px rgba(220, 38, 38, 0.2);
     }
+    
+    .btn-action-warning {
+      background-color: #ea580c;
+      color: white;
+      text-decoration: none;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
 
     .menu-grid {
       display: grid;
@@ -495,6 +529,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
     .bg-purple { background: #f3e8ff; color: #9333ea; }
     .bg-orange { background: #ffedd5; color: #ea580c; }
     .bg-blue { background: #dbeafe; color: #2563eb; }
+    .bg-red { background: #fee2e2; color: #dc2626; } /* สีสำหรับเมนูบัตรวินัย */
 
     .app-container {
       width: 100%;
@@ -574,6 +609,9 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
       <div class="badges">
         <div class="badge-item">ปีการศึกษา 2569</div>
         <div class="badge-item"><?= htmlspecialchars($student_unit) ?></div>
+        <?php if ($total_cards_history > 0): ?>
+          <div class="badge-item badge-danger"><i class="fas fa-exclamation-circle"></i> โดนตัดบัตรสะสม: <?= $total_cards_history ?> ใบ</div>
+        <?php endif; ?>
       </div>
       <h2><?= htmlspecialchars($name) ?></h2>
       <p><?= htmlspecialchars($student_code_display) ?></p>
@@ -588,7 +626,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
     <div class="duty-alert-container fade-in-up delay-3">
 
       <!-- 1. การ์ดแสดงสถานะบัตรวินัยประจำวันนี้ -->
-      <?php if ($today_discipline): ?>
+      <?php if ($today_discipline && $today_discipline['total_cards'] > 0): ?>
         <?php 
           $tot = (int)$today_discipline['total_cards'];
           $color = $today_discipline['status_color'];
@@ -605,25 +643,19 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
           <div class="duty-alert-card urgent">
             <div class="alert-icon"><i class="fas fa-id-card-alt"></i></div>
             <div class="alert-info">
-              <h4>สถานะบัตรวินัยวันนี้: แดง (โดน <?= $tot ?> ใบ)</h4>
-              <p>รายการที่ไม่เรียบร้อย: <?= $items_str ?></p>
+              <h4>วันนี้สถานะบัตร: แดง (โดน <?= $tot ?> ใบ)</h4>
+              <p>รายการ: <?= $items_str ?></p>
             </div>
+            <a href="discipline_history.php" class="btn-action-alert">ดูรายละเอียด</a>
           </div>
         <?php elseif ($tot == 2 || $color == 'yellow'): ?>
           <div class="duty-alert-card warning">
             <div class="alert-icon"><i class="fas fa-id-card-alt"></i></div>
             <div class="alert-info">
-              <h4>สถานะบัตรวินัยวันนี้: เหลือง (โดน <?= $tot ?> ใบ)</h4>
-              <p>รายการที่ไม่เรียบร้อย: <?= $items_str ?></p>
+              <h4>วันนี้สถานะบัตร: เหลือง (โดน <?= $tot ?> ใบ)</h4>
+              <p>รายการ: <?= $items_str ?></p>
             </div>
-          </div>
-        <?php else: ?>
-          <div class="duty-alert-card success">
-            <div class="alert-icon"><i class="fas fa-check-circle"></i></div>
-            <div class="alert-info">
-              <h4>สถานะบัตรวินัยวันนี้: ปกติ (ผ่าน)</h4>
-              <p>ระเบียบเตียง ตู้ รองเท้า เรียบร้อยดี</p>
-            </div>
+            <a href="discipline_history.php" class="btn-action-warning">ดูรายละเอียด</a>
           </div>
         <?php endif; ?>
       <?php else: ?>
@@ -680,16 +712,23 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
 
       <a href="fill.php" class="menu-item">
         <div class="icon-box bg-orange"><i class="fas fa-vote-yea"></i></div>
-        <span class="menu-text">โหวตประสงค์กลับบ้าน</span>
+        <span class="menu-text">โหวตกลับบ้าน</span>
       </a>
 
       <a href="reqdoc.php" class="menu-item">
         <div class="icon-box bg-blue"><i class="fas fa-file-alt"></i></div>
         <span class="menu-text">คำร้องขอเอกสาร</span>
       </a>
+      
       <a href="duty_substitutions.php" class="menu-item">
         <div class="icon-box bg-blue"><i class="fas fa-address-book"></i></div>
-        <span class="menu-text">คำร้องเปลี่ยนเวร</span>
+        <span class="menu-text">เปลี่ยนเวร</span>
+      </a>
+
+      <!-- [เพิ่มใหม่] เมนูประวัติบัตรวินัย -->
+      <a href="discipline_history.php" class="menu-item">
+        <div class="icon-box bg-red"><i class="fas fa-id-card"></i></div>
+        <span class="menu-text">ประวัติบัตรวินัย</span>
       </a>
     </div>
 
@@ -703,7 +742,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
 
     <?php if (!empty($announcements)): ?>
       <div class="section-title fade-in-up delay-3">
-        <div class="section-title-left">
+        <div class="section-title-left" style="display: flex; gap: 10px; align-items: center;">
           <div class="section-pill" style="background: #3b82f6;"></div>
           <h3>ประกาศ / ข่าวสาร</h3>
         </div>
@@ -840,6 +879,6 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
     }
   });
 </script>
-    
+   
 </body>
 </html>
