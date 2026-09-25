@@ -1,27 +1,27 @@
 <?php
 session_start();
 
-// ป้องกัน HTTP 500 กรณีไฟล์ db.php หาย
+// ป้องกัน HTTP 500 กรณีไฟล์ db.php หาย[cite: 7]
 if (file_exists('db.php')) {
     require_once 'db.php';
 } else {
     die("Error: ไม่พบไฟล์ db.php หรือตั้งชื่อไฟล์ผิด (ตัวพิมพ์เล็ก-ใหญ่มีผลบน Server)");
 }
 
-// 1. จัดการการออกจากระบบ (Logout)
+// 1. จัดการการออกจากระบบ (Logout)[cite: 7]
 if (isset($_GET['logout'])) {
     session_destroy();
     header("Location: admin_login.php");
     exit();
 }
 
-// 2. ตรวจสอบสิทธิ์การเข้าสู่ระบบ
+// 2. ตรวจสอบสิทธิ์การเข้าสู่ระบบ[cite: 7]
 if (empty($_SESSION['admin_id'])) {
     header("Location: admin_login.php");
     exit();
 }
 
-// 3. จัดการระบบ Loading Screen
+// 3. จัดการระบบ Loading Screen[cite: 7]
 $show_loading = false;
 if (!isset($_SESSION['admin_has_seen_loading'])) {$show_loading = true;
     $_SESSION['admin_has_seen_loading'] = true;
@@ -34,7 +34,7 @@ $total_students = 0;
 $voted_count = 0;
 $today_duties = 0;
 
-// 4. ดึงข้อมูลสถิติ (เพิ่ม try-catch เพื่อป้องกัน Error 500 จาก SQL Exception)
+// 4. ดึงข้อมูลสถิติ[cite: 7]
 if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
 
     try {
@@ -53,9 +53,7 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
             $today_duties =$row['today_duty']; 
         }
     } catch (Throwable $e) {
-        // หากตารางยังไม่ถูกสร้าง หรือคิวรี่มีปัญหา จะถูกดักจับตรงนี้ ไม่ให้เว็บพัง
-        error_log("SQL Error in main.php: " . $e->getMessage());
-        // ปล่อยให้ตัวแปรสถิติเป็น 0 ต่อไป
+        error_log("SQL Error in admin_main.php: " . $e->getMessage());
     }
 }
 ?>
@@ -71,86 +69,116 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
   <style>
     :root {
       --primary: #0f172a; 
-      --bg-color: #f8fafc;
+      --bg-color: #f6f8fc;
       --text-dark: #1e293b;
       --text-gray: #64748b;
     }
 
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    body { font-family: 'Prompt', sans-serif; background-color: #e2e8f0; margin: 0; display: flex; justify-content: center; user-select: none; }
+    
+    body {
+      font-family: 'Prompt', sans-serif;
+      background-color: #e2e8f0;
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      user-select: none;
+    }
 
-    /* Loading Screen */
-    #page-loader { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #ffffff; z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 0.4s ease, visibility 0.4s ease; }
+    /* Loading Screen อิงตาม main.php */
+    #page-loader {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #ffffff;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      transition: opacity 0.5s ease, visibility 0.5s ease;
+    }
     #page-loader.hidden { opacity: 0; visibility: hidden; }
-    .loader-logo { width: 80px; height: 80px; border-radius: 18px; animation: pulse 1.5s infinite ease-in-out; }
-    .loader-spinner { margin-top: 24px; width: 40px; height: 40px; border: 3px solid #e2e8f0; border-top: 3px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
-    @keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(15, 23, 42, 0.2); } 50% { transform: scale(1.05); box-shadow: 0 0 20px 0 rgba(15, 23, 42, 0); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(15, 23, 42, 0); } }
+    .loader-logo { width: 80px; height: 80px; border-radius: 15px; animation: pulse 1.5s infinite ease-in-out; }
+    .loader-spinner { margin-top: 20px; width: 40px; height: 40px; border: 4px solid rgba(15, 23, 42, 0.2); border-top: 4px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
+    .loader-text { margin-top: 15px; color: var(--primary); font-weight: 600; font-size: 0.9rem; letter-spacing: 1px; animation: flash 1.5s infinite; }
+
+    @keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(15, 23, 42, 0.4); } 50% { transform: scale(1.05); box-shadow: 0 0 20px 0 rgba(15, 23, 42, 0); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(15, 23, 42, 0); } }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    @keyframes flash { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
     .fade-in-up { opacity: 0; transform: translateY(20px); animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
     @keyframes fadeInUp { to { opacity: 1; transform: translateY(0); } }
     .delay-1 { animation-delay: 0.1s; } .delay-2 { animation-delay: 0.2s; } .delay-3 { animation-delay: 0.3s; } .delay-4 { animation-delay: 0.4s; }
 
     /* App Container */
-    .app-container { width: 100%; max-width: 430px; background-color: var(--bg-color); min-height: 100vh; position: relative; padding-bottom: 100px; box-shadow: 0 0 30px rgba(0,0,0,0.05); overflow-x: hidden; }
+    .app-container {
+      width: 100%;
+      max-width: 430px;
+      background-color: var(--bg-color);
+      min-height: 100vh;
+      position: relative;
+      padding-bottom: 90px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.1);
+    }
 
     /* Header */
-    .top-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 10px; background: transparent; }
-    .header-left { display: flex; align-items: center; gap: 14px; }
-    .school-logo { width: 48px; height: 48px; object-fit: contain; border-radius: 14px; box-shadow: 0 4px 10px rgba(0,0,0,0.08); }
-    .school-name h1 { font-size: 1.1rem; font-weight: 700; color: var(--text-dark); margin: 0 0 2px 0; }
-    .school-name p { font-size: 0.8rem; color: var(--text-gray); margin: 0; }
+    .top-header { display: flex; align-items: center; justify-content: space-between; padding: 15px 20px; background: var(--bg-color); }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .school-logo { width: 45px; height: 45px; object-fit: contain; border-radius: 10px; }
+    .school-name h1 { font-size: 1rem; font-weight: 700; color: var(--text-dark); margin: 0 0 2px 0; }
+    .school-name p { font-size: 0.75rem; color: var(--text-gray); margin: 0; }
     
-    .noti-btn { position: relative; background: #ffffff; border: none; font-size: 1.2rem; color: var(--text-dark); cursor: pointer; width: 42px; height: 42px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: center; }
-    .noti-badge { position: absolute; top: -2px; right: -2px; background: #ef4444; color: white; font-size: 0.65rem; font-weight: 700; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid #ffffff; }
+    .noti-btn { position: relative; background: none; border: none; font-size: 1.4rem; color: #94a3b8; cursor: pointer; }
+    .noti-badge { position: absolute; top: -2px; right: -2px; background: #ef4444; color: white; font-size: 0.65rem; font-weight: 700; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid var(--bg-color); }
 
     /* Admin Card */
-    .admin-card { background: linear-gradient(135deg, #0f172a, #1e293b); border-radius: 20px; padding: 24px; margin: 15px 24px 24px; color: white; box-shadow: 0 15px 30px rgba(15, 23, 42, 0.2); position: relative; overflow: hidden; }
+    .admin-card { background: linear-gradient(135deg, #0f172a, #1e293b); border-radius: 16px; padding: 20px; margin: 5px 20px 20px; color: white; box-shadow: 0 10px 20px rgba(15, 23, 42, 0.2); position: relative; overflow: hidden; }
     .admin-card::after { content: '\f3ed'; font-family: 'Font Awesome 6 Free'; font-weight: 900; position: absolute; right: -15px; bottom: -25px; font-size: 8rem; opacity: 0.05; transform: rotate(-15deg); }
-    .badges { display: flex; gap: 8px; margin-bottom: 14px; }
-    .badge-item { background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.2); padding: 4px 14px; border-radius: 20px; font-size: 0.75rem; font-weight: 500; backdrop-filter: blur(8px); }
-    .admin-card h2 { font-size: 1.4rem; font-weight: 600; margin: 0 0 6px 0; letter-spacing: 0.5px; }
-    .admin-card p { font-size: 0.85rem; margin: 0; color: #cbd5e1; display: flex; align-items: center; gap: 6px; }
+    .badges { display: flex; gap: 8px; margin-bottom: 12px; }
+    .badge-item { background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.2); padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 500; backdrop-filter: blur(8px); }
+    .admin-card h2 { font-size: 1.3rem; font-weight: 600; margin: 0 0 4px 0; }
+    .admin-card p { font-size: 0.85rem; margin: 0; color: #cbd5e1; display: flex; align-items: center; gap: 6px; opacity: 0.9; }
 
-    /* Section Title */
-    .section-title { display: flex; align-items: center; justify-content: space-between; margin: 0 24px 16px; }
+    /* Section Title อิงจาก main.php */
+    .section-title { display: flex; align-items: center; gap: 10px; margin: 0 20px 15px; }
+    .section-pill { width: 5px; height: 24px; background: var(--primary); border-radius: 4px; }
     .section-title h3 { font-size: 1.1rem; font-weight: 700; color: var(--text-dark); margin: 0; }
-    .section-title a { font-size: 0.8rem; color: #3b82f6; text-decoration: none; font-weight: 600; }
 
     /* Stats Grid */
-    .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin: 0 24px 28px; }
-    .stat-box { background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.03); display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #f1f5f9; }
-    .stat-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1rem; margin-bottom: 12px; }
-    .stat-box h3 { font-size: 1.8rem; font-weight: 700; margin: 0 0 4px 0; color: var(--text-dark); line-height: 1; }
-    .stat-box p { margin: 0; font-size: 0.8rem; color: var(--text-gray); font-weight: 500; }
+    .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 0 20px 20px; }
+    .stat-box { background: white; padding: 15px; border-radius: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #f1f5f9; }
+    .stat-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1rem; margin-bottom: 10px; }
+    .stat-box h3 { font-size: 1.5rem; font-weight: 700; margin: 0 0 2px 0; color: var(--text-dark); line-height: 1; }
+    .stat-box p { margin: 0; font-size: 0.75rem; color: var(--text-gray); font-weight: 500; }
     
     .c-blue { background: #eff6ff; color: #3b82f6; }
     .c-green { background: #f0fdf4; color: #10b981; }
     .c-orange { background: #fffbeb; color: #f59e0b; }
     .c-red { background: #fef2f2; color: #ef4444; }
 
-    /* App Icons Grid (Menu) */
-    .app-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px 12px; margin: 0 24px 28px; }
-    .app-btn { display: flex; flex-direction: column; align-items: center; text-decoration: none; gap: 8px; cursor: pointer; border: none; background: transparent; padding: 0; }
-    .app-icon { width: 58px; height: 58px; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: white; box-shadow: 0 8px 16px rgba(0,0,0,0.1); transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
-    .app-btn:hover .app-icon { transform: translateY(-4px) scale(1.05); box-shadow: 0 12px 20px rgba(0,0,0,0.15); }
-    .app-btn:active .app-icon { transform: scale(0.95); }
-    .app-btn span { font-size: 0.75rem; color: var(--text-dark); font-weight: 500; text-align: center; line-height: 1.2; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* Menu Grid อิงจาก main.php */
+    .menu-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 0 20px 25px; }
+    .menu-item { background: white; border-radius: 16px; padding: 18px 5px; text-decoration: none; color: var(--text-dark); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.03); transition: transform 0.2s, box-shadow 0.2s; border: none; cursor: pointer; font-family: 'Prompt', sans-serif;}
+    .menu-item:active { transform: scale(0.95); }
+    
+    .icon-box { width: 52px; height: 52px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin-bottom: 10px; }
+    .menu-text { font-size: 0.8rem; font-weight: 600; line-height: 1.2; }
 
-    /* App Colors */
-    .bg-grad-blue { background: linear-gradient(135deg, #3b82f6, #2563eb); }
-    .bg-grad-purple { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
-    .bg-grad-green { background: linear-gradient(135deg, #10b981, #059669); }
-    .bg-grad-orange { background: linear-gradient(135deg, #f59e0b, #d97706); }
-    .bg-grad-red { background: linear-gradient(135deg, #ef4444, #dc2626); }
+    /* Theme Colors สำหรับปุ่มเมนู */
+    .bg-purple { background: #f3e8ff; color: #9333ea; }
+    .bg-orange { background: #ffedd5; color: #ea580c; }
+    .bg-blue { background: #dbeafe; color: #2563eb; }
+    .bg-green { background: #dcfce7; color: #16a34a; }
+    .bg-red { background: #fee2e2; color: #dc2626; }
 
-    /* Bottom Navigation */
-    .bottom-nav { position: fixed; bottom: 0; width: 100%; max-width: 430px; left: 50%; transform: translateX(-50%); height: 80px; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); border-top: 1px solid #f1f5f9; display: flex; justify-content: space-around; align-items: center; padding: 0 10px 10px; z-index: 1000; }
-    .nav-link { display: flex; flex-direction: column; align-items: center; justify-content: center; text-decoration: none; color: #94a3b8; font-size: 0.75rem; font-weight: 500; width: 33%; gap: 6px; height: 100%; transition: 0.3s; }
-    .nav-link i { font-size: 1.4rem; transition: transform 0.3s; }
-    .nav-link.active { color: var(--primary); font-weight: 600; }
-    .nav-link.active i { transform: translateY(-2px); }
-    .nav-link:hover { color: var(--primary); }
+    /* Bottom Navigation อิงจาก main.php */
+    .bottom-nav { position: fixed; bottom: 0; width: 100%; max-width: 430px; left: 50%; transform: translateX(-50%); height: 70px; background: white; border-top-left-radius: 25px; border-top-right-radius: 25px; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 -5px 20px rgba(0,0,0,0.03); padding: 0 10px; z-index: 1000; }
+    .nav-link { display: flex; flex-direction: column; align-items: center; text-decoration: none; color: #94a3b8; font-size: 0.7rem; font-weight: 600; width: 30%; gap: 4px; }
+    .nav-link.active { color: var(--primary); }
+    .nav-link i { font-size: 1.3rem; }
   </style>
 </head>
 <body>
@@ -159,6 +187,7 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
   <div id="page-loader">
     <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg" alt="Loading Logo" class="loader-logo">
     <div class="loader-spinner"></div>
+    <div class="loader-text">กำลังโหลดข้อมูล...</div>
   </div>
   <?php endif; ?>
 
@@ -187,11 +216,12 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
       <p><i class="fas fa-circle" style="color: #4ade80; font-size: 0.6rem;"></i> สถานะระบบ: ทำงานปกติ (Online)</p>
     </div>
 
+    <!-- Stats Section -->
     <div class="section-title fade-in-up delay-3">
+      <div class="section-pill"></div>
       <h3>ภาพรวมวันนี้</h3>
     </div>
     
-    <!-- Stats Grid -->
     <div class="stats-grid fade-in-up delay-3">
       <div class="stat-box">
         <div class="stat-icon c-blue"><i class="fas fa-users"></i></div>
@@ -223,34 +253,37 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
       </div>
     </div>
 
+    <!-- Menu Section -->
     <div class="section-title fade-in-up delay-4">
-      <h3>แอปพลิเคชัน</h3>
+      <div class="section-pill"></div>
+      <h3>เมนูหลัก</h3>
     </div>
 
-    <!-- App Grid Menu -->
-    <div class="app-grid fade-in-up delay-4">
-      <a href="admin_students.php" class="app-btn">
-        <div class="app-icon bg-grad-blue"><i class="fas fa-user-edit"></i></div>
-        <span>นร.ชท.</span>
+    <div class="menu-grid fade-in-up delay-4">
+      <a href="admin_students.php" class="menu-item">
+        <div class="icon-box bg-blue"><i class="fas fa-user-edit"></i></div>
+        <span class="menu-text">นร.ชท.</span>
       </a>
-      <a href="admin_duties.php" class="app-btn">
-        <div class="app-icon bg-grad-purple"><i class="fas fa-calendar-alt"></i></div>
-        <span>จัดเวร</span>
+      
+      <a href="admin_duties.php" class="menu-item">
+        <div class="icon-box bg-purple"><i class="fas fa-calendar-alt"></i></div>
+        <span class="menu-text">จัดเวร</span>
       </a>
-      <a href="admin_votes.php" class="app-btn">
-        <div class="app-icon bg-grad-green"><i class="fas fa-chart-bar"></i></div>
-        <span>ผลโหวต</span>
+      
+      <a href="admin_votes.php" class="menu-item">
+        <div class="icon-box bg-green"><i class="fas fa-chart-bar"></i></div>
+        <span class="menu-text">ผลโหวต</span>
       </a>
       
       <!-- ปุ่มแจ้งเตือน -->
-      <button onclick="triggerPushNotification()" class="app-btn">
-        <div class="app-icon bg-grad-orange"><i class="fas fa-broadcast-tower"></i></div>
-        <span>แจ้งเตือน</span>
+      <button onclick="triggerPushNotification()" class="menu-item">
+        <div class="icon-box bg-orange"><i class="fas fa-broadcast-tower"></i></div>
+        <span class="menu-text">แจ้งเตือน</span>
       </button>
 
-      <a href="reports.php" class="app-btn">
-        <div class="app-icon bg-grad-red"><i class="fas fa-file-pdf"></i></div>
-        <span>รายงาน</span>
+      <a href="reports.php" class="menu-item">
+        <div class="icon-box bg-red"><i class="fas fa-file-pdf"></i></div>
+        <span class="menu-text">รายงาน</span>
       </a>
     </div>
 
@@ -280,11 +313,12 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
           loader.classList.add('hidden');
           setTimeout(function() {
             loader.remove();
-          }, 400);
-        }, 1000);
+          }, 500);
+        }, 1200); // ปรับเวลา Loading ให้เท่ากับไฟล์ฝั่งนักเรียน
       }
     });
 
+    // โลจิกแจ้งเตือนเดิมของหน้าแอดมิน[cite: 7]
     async function triggerPushNotification() {
       if (!confirm("คุณต้องการส่งแจ้งเตือนไปยังผู้ใช้ที่ยังไม่ได้ทำรายการ ใช่หรือไม่?")) {
           return;
@@ -297,9 +331,9 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
           const response = await fetch('send_push.php', {
               method: 'POST',
               headers: {
-    'Content-Type': 'application/json',
-    'X-API-KEY': 'N4tthap41!nwza'
-},
+                  'Content-Type': 'application/json',
+                  'X-API-KEY': 'N4tthap41!nwza'
+              },
               body: JSON.stringify({
                   target_date: targetDate
               })
