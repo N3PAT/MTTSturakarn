@@ -254,8 +254,8 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
             <?php foreach ($weeks_list as $w_item): ?>
               <?php 
                 $yw_val = intval($w_item['yw']);
-                $year = substr($yw_val, 0, 4);
-                $week_num = substr($yw_val, 4);
+                $year = substr((string)$yw_val, 0, 4);
+                $week_num = substr((string)$yw_val, 4);
                 $is_selected = ($yw_val === $selected_week) ? 'selected' : '';
                 $start_formatted = date('d/m/Y', strtotime($w_item['start_d']));
                 $end_formatted = date('d/m/Y', strtotime($w_item['end_d']));
