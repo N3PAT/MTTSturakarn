@@ -8,7 +8,6 @@ if (empty($_SESSION['student_code'])) {
     header("Location: login.php");
     exit();
 }
-
 $login_student_code = $_SESSION['student_code'];
 
 /* 2. ตรวจสอบการแสดงหน้า Loading Screen (แสดงครั้งแรกของ Session) */
@@ -44,7 +43,6 @@ try {
     error_log("Profile Fetch Error: " . $e->getMessage());
 }
 
-/* กำหนดตัวแปรแสดงผล Profile */
 $name = $student_profile ? trim(($student_profile['prefix'] ?? '') . $student_profile['first_name'] . ' ' . $student_profile['last_name']) : "นักเรียนทหาร";
 $student_code_display = "รหัสนักเรียน " . $login_student_code;
 $profile_image = $student_profile['image'] ?? '';
@@ -56,70 +54,9 @@ if (!empty($student_profile['platoon']))   $unit_parts[] = "หมวด " . $st
 if (!empty($student_profile['section']))   $unit_parts[] = "ตอนเรียนที่ " . $student_profile['section'];
 $student_unit = !empty($unit_parts) ? implode(" ", $unit_parts) : "นักเรียนทหาร";
 
-if (empty($profile_image) || $profile_image === "default_student.png" || $profile_image === "0") {
-    $profile_image = "https://ui-avatars.com/api/?name=" . urlencode($name) . "&background=5a42a0&color=fff&size=128";
-}
-
-// ---------------- 4. ดึงข้อมูลการแจ้งเตือน (สำหรับแสดง Badge บนไอคอนกระดิ่ง) ----------------
-$duty_notifications = [];
-$has_voted = true;
-
-try {
-    // ดึงข้อมูลแจ้งเตือนเวรล่วงหน้า 3 วัน และ 1 วัน
-    $stmt_duty = $conn->prepare("
-        SELECT duty_name, duty_date, DATEDIFF(duty_date, CURDATE()) AS days_left 
-        FROM student_duties 
-        WHERE student_code = ? 
-          AND DATEDIFF(duty_date, CURDATE()) IN (1, 3)
-        ORDER BY duty_date ASC
-    ");
-    if ($stmt_duty) {
-        $stmt_duty->bind_param("s", $login_student_code);
-        $stmt_duty->execute();
-        $res_duty = $stmt_duty->get_result();
-        while ($row = $res_duty->fetch_assoc()) {
-            $duty_notifications[] = $row;
-        }
-        $stmt_duty->close();
-    }
-
-    // ตรวจสอบว่าโหวตประสงค์กลับบ้านหรือยัง
-    $stmt_vote = $conn->prepare("
-        SELECT COUNT(*) as vote_count 
-        FROM votes 
-        WHERE student_code = ? 
-          AND YEARWEEK(vote_date, 1) = YEARWEEK(CURDATE(), 1)
-    ");
-    if ($stmt_vote) {
-        $stmt_vote->bind_param("s", $login_student_code);
-        $stmt_vote->execute();
-        $res_vote = $stmt_vote->get_result();
-        if ($row_vote = $res_vote->fetch_assoc()) {
-            if ($row_vote['vote_count'] == 0) {
-                $has_voted = false;
-            }
-        }
-        $stmt_vote->close();
-    }
-} catch (Throwable $e) {
-    error_log("Notification Error: " . $e->getMessage());
-}
-
-$noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0);
-
-// ---------------- 5. ระบบกำหนดเดือน คำนวณเวรประจำเดือน และเวรแทน ----------------
-$selected_month = date('Y-m');
-if (isset($_GET['month']) && preg_match('/^\d{4}-\d{2}$/', $_GET['month'])) {
-    $selected_month = $_GET['month'];
-}
-
-$first_day_of_month = $selected_month . "-01";
-$days_in_month = date('t', strtotime($first_day_of_month));
-$start_date = "2026-07-06"; // วันเริ่มต้นคำนวณเวรหลักการหมุนเวียน
-
+// ---------------- 4. ดึงรายชื่อนักเรียนทั้งหมดสำหรับคำนวณเวร (Algorithm) ----------------
 $all_students = [];
-$error_db = false;
-
+$start_date = "2026-07-06"; // วันเริ่มต้นคำนวณเวรหลักการหมุนเวียน
 try {
     $res = $conn->query("SELECT student_code, prefix, first_name, last_name, section FROM students ORDER BY id ASC");
     if($res && $res->num_rows > 0) {
@@ -128,10 +65,128 @@ try {
         }
     }
 } catch (Exception $e) {
-    $error_db = true;
+    error_log("Student Fetch Error: " . $e->getMessage());
+}
+$total_students = count($all_students);
+
+// ตั้งค่าตัวแปรเวร
+$locations_count = 4;
+$location_names = ["จุดที่ 4 อาคารยานยนต์", "จุดที่ 5 ผฟอ.", "จุดที่ 6 กศน.", "จุดที่ 3 โรงรถ บก.หน้า"];
+$shift_labels = ["ผลัดที่ 1", "ผลัดที่ 2", "ผลัดที่ 3", "ผลัดที่ 4"];
+$thai_months = [
+    "01" => "มกราคม", "02" => "กุมภาพันธ์", "03" => "มีนาคม", "04" => "เมษายน",
+    "05" => "พฤษภาคม", "06" => "มิถุนายน", "07" => "กรกฎาคม", "08" => "สิงหาคม",
+    "09" => "กันยายน", "10" => "ตุลาคม", "11" => "พฤศจิกายน", "12" => "ธันวาคม"
+];
+$thai_days_short = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
+
+// ---------------- 5. คำนวณแจ้งเตือนเวรล่วงหน้า 3 วัน (Badge & Modal Alert) ----------------
+$duty_notifications_count = 0;
+$upcoming_alerts = [];
+$has_voted = true;
+$today_ts = strtotime(date('Y-m-d'));
+$start_timestamp = strtotime($start_date);
+
+try {
+    // โหวตประสงค์กลับบ้าน
+    $stmt_vote = $conn->prepare("
+        SELECT COUNT(*) as vote_count FROM votes 
+        WHERE student_code = ? AND YEARWEEK(vote_date, 1) = YEARWEEK(CURDATE(), 1)
+    ");
+    if ($stmt_vote) {
+        $stmt_vote->bind_param("s", $login_student_code);
+        $stmt_vote->execute();
+        $res_vote = $stmt_vote->get_result();
+        if ($row_vote = $res_vote->fetch_assoc()) {
+            $has_voted = ($row_vote['vote_count'] > 0);
+        }
+        $stmt_vote->close();
+    }
+
+    // ดึงข้อมูลการสลับเวรล่วงหน้า 0-3 วัน
+    $stmt_swaps_upcoming = $conn->query("
+        SELECT duty_date, requester_code, replacement_code 
+        FROM duty_swaps 
+        WHERE duty_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 3 DAY)
+          AND (status = 'approved' OR status = '1')
+    ");
+    $swaps_upcoming = [];
+    if ($stmt_swaps_upcoming) {
+        while ($row = $stmt_swaps_upcoming->fetch_assoc()) {
+            $swaps_upcoming[$row['duty_date'] . '_' . $row['requester_code']] = $row;
+        }
+    }
+
+    // ลูปคำนวณเวรของวันนี้ถึงอีก 3 วันข้างหน้า เพื่อทำแจ้งเตือน
+    if ($total_students > 0) {
+        for ($offset = 0; $offset <= 3; $offset++) {
+            $check_ts = $today_ts + ($offset * 86400);
+            $check_date = date('Y-m-d', $check_ts);
+            $diff_days = floor(($check_ts - $start_timestamp) / 86400);
+            
+            if ($diff_days >= 0) {
+                $start_index = ($diff_days * 16) % $total_students;
+                for ($i = 0; $i < 16; $i++) {
+                    $idx = ($start_index + $i) % $total_students;
+                    $orig_code = $all_students[$idx]['student_code'];
+                    
+                    $swap_key = $check_date . '_' . $orig_code;
+                    $has_swap = isset($swaps_upcoming[$swap_key]);
+                    $is_my_duty = false;
+                    $duty_label_extra = "";
+                    
+                    if ($has_swap) {
+                        // เราเป็นคนไปเข้าแทน
+                        if ($swaps_upcoming[$swap_key]['replacement_code'] === $login_student_code) {
+                            $is_my_duty = true;
+                            $duty_label_extra = " (เข้าแทน)";
+                        }
+                    } else {
+                        // เวรปกติของเรา
+                        if ($orig_code === $login_student_code) {
+                            $is_my_duty = true;
+                        }
+                    }
+                    
+                    if ($is_my_duty) {
+                        // เพิ่มตัวนับแจ้งเตือนเฉพาะล่วงหน้า 1 วัน และ 3 วัน
+                        if ($offset == 1 || $offset == 3) {
+                            $duty_notifications_count++;
+                        }
+                        
+                        // สร้างข้อความแจ้งเตือนเข้า Modal
+                        $time_text = ($offset == 0) ? "วันนี้!" : (($offset == 1) ? "พรุ่งนี้" : "ในอีก {$offset} วัน");
+                        $shift_idx = floor($i / $locations_count);
+                        $loc_idx = $i % $locations_count;
+                        $m_num = date('m', $check_ts);
+                        $y_num = date('Y', $check_ts) + 543;
+                        
+                        $upcoming_alerts[] = [
+                            'time_text' => $time_text,
+                            'full_date' => date('j', $check_ts) . " " . ($thai_months[$m_num] ?? '') . " " . $y_num,
+                            'shift' => $shift_labels[$shift_idx] . $duty_label_extra,
+                            'location' => $location_names[$loc_idx]
+                        ];
+                    }
+                }
+            }
+        }
+    }
+} catch (Throwable $e) {
+    error_log("Alerts Error: " . $e->getMessage());
 }
 
-$total_students = count($all_students);
+$noti_count = $duty_notifications_count + (!$has_voted ? 1 : 0);
+$upcoming_alerts_json = json_encode($upcoming_alerts);
+
+// ---------------- 6. คำนวณเวรประจำเดือนที่ผู้ใช้เลือกดู ----------------
+$selected_month = date('Y-m');
+if (isset($_GET['month']) && preg_match('/^\d{4}-\d{2}$/', $_GET['month'])) {
+    $selected_month = $_GET['month'];
+}
+
+$first_day_of_month = $selected_month . "-01";
+$days_in_month = date('t', strtotime($first_day_of_month));
 
 /* ดึงข้อมูลการแลกเวร/แทนเวรในเดือนนี้ที่ได้รับการอนุมัติแล้ว */
 $swaps_by_date_and_orig = [];
@@ -155,8 +210,7 @@ try {
         $stmt_swaps->execute();
         $res_swaps = $stmt_swaps->get_result();
         while ($row_swap = $res_swaps->fetch_assoc()) {
-            $key = $row_swap['duty_date'] . '_' . $row_swap['requester_code'];
-            $swaps_by_date_and_orig[$key] = $row_swap;
+            $swaps_by_date_and_orig[$row_swap['duty_date'] . '_' . $row_swap['requester_code']] = $row_swap;
         }
         $stmt_swaps->close();
     }
@@ -164,48 +218,25 @@ try {
     error_log("Swap Fetch Error: " . $e->getMessage());
 }
 
-// ข้อมูลสำหรับจัดผลัด/จุดรักษาการณ์
-$locations_count = 4;
-$location_names = [
-    "จุดที่ 4 อาคารยานยนต์", 
-    "จุดที่ 5 ผฟอ.", 
-    "จุดที่ 6 กศน.", 
-    "จุดที่ 3 โรงรถ บก.หน้า"
-];
-$shift_labels = ["ผลัดที่ 1", "ผลัดที่ 2", "ผลัดที่ 3", "ผลัดที่ 4"];
-
-$thai_months = [
-    "01" => "มกราคม", "02" => "กุมภาพันธ์", "03" => "มีนาคม", "04" => "เมษายน",
-    "05" => "พฤษภาคม", "06" => "มิถุนายน", "07" => "กรกฎาคม", "08" => "สิงหาคม",
-    "09" => "กันยายน", "10" => "ตุลาคม", "11" => "พฤศจิกายน", "12" => "ธันวาคม"
-];
-$thai_days_short = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
-
 $current_m_num = date('m', strtotime($first_day_of_month));
 $current_y_num = date('Y', strtotime($first_day_of_month)) + 543;
 $month_display_text = ($thai_months[$current_m_num] ?? '') . " " . $current_y_num;
 
-// วนลูปตรวจสอบทุกวันในเดือนที่เลือกเพื่อหาเวรปกติและเวรแทน
 $my_monthly_duties = [];
-
 if ($total_students > 0) {
-    $start_timestamp = strtotime($start_date);
-    
     for ($d = 1; $d <= $days_in_month; $d++) {
         $eval_date = sprintf("%s-%02d", $selected_month, $d);
         $eval_timestamp = strtotime($eval_date);
-        
         $diff_days = floor((($eval_timestamp - $start_timestamp) / 86400));
+        
         if ($diff_days < 0) continue;
         
         $start_index = ($diff_days * 16) % $total_students;
         
         for ($i = 0; $i < 16; $i++) {
             $idx = ($start_index + $i) % $total_students;
-            if (!isset($all_students[$idx])) continue;
-
-            $orig_student = $all_students[$idx];
-            $orig_code = $orig_student['student_code'];
+            $orig_code = $all_students[$idx]['student_code'];
+            
             $shift_idx = floor($i / $locations_count);
             $loc_idx = $i % $locations_count;
             $day_of_week = date('w', $eval_timestamp);
@@ -264,41 +295,6 @@ if ($total_students > 0) {
     }
 }
 
-// ==============================================================
-// ตรวจสอบเวรล่วงหน้า 1-3 วัน (ข้ามรายการที่มีคนเข้าแทนแล้ว)
-// ==============================================================
-$upcoming_alerts = [];
-$today_date = date('Y-m-d');
-$today_ts = strtotime($today_date);
-
-foreach ($my_monthly_duties as $duty) {
-    if ($duty['duty_type'] === 'replaced') continue;
-
-    $duty_ts = strtotime($duty['date']);
-    $diff_days = floor(($duty_ts - $today_ts) / 86400);
-
-    if ($diff_days >= 0 && $diff_days <= 3) {
-        $time_text = "";
-        if ($diff_days == 0) $time_text = "วันนี้!";
-        else if ($diff_days == 1) $time_text = "พรุ่งนี้";
-        else $time_text = "ในอีก {$diff_days} วัน";
-
-        $shift_info = $duty['shift'];
-        if ($duty['duty_type'] === 'substitute') {
-            $shift_info .= " (" . $duty['duty_type_label'] . ")";
-        }
-
-        $upcoming_alerts[] = [
-            'time_text' => $time_text,
-            'full_date' => $duty['day_num'] . " " . $month_display_text,
-            'shift' => $shift_info,
-            'location' => $duty['location']
-        ];
-    }
-}
-$upcoming_alerts_json = json_encode($upcoming_alerts);
-
-// ปุ่มเปลี่ยนเดือนก่อนหน้า / ถัดไป
 $prev_month = date('Y-m', strtotime($first_day_of_month . ' -1 month'));
 $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
 ?>
@@ -328,622 +324,113 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
       --safe-area-bottom: env(safe-area-inset-bottom, 20px);
     }
 
-    * { 
-      box-sizing: border-box; 
-      -webkit-tap-highlight-color: transparent; 
-      margin: 0; 
-      padding: 0;
-    }
-    
-    body {
-      font-family: 'Prompt', sans-serif;
-      background-color: #e2e8f0;
-      display: flex;
-      justify-content: center;
-      user-select: none;
-      -webkit-font-smoothing: antialiased;
-    }
-
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
+    body { font-family: 'Prompt', sans-serif; background-color: #e2e8f0; display: flex; justify-content: center; user-select: none; -webkit-font-smoothing: antialiased; }
     ::-webkit-scrollbar { display: none; }
 
-    /* ---------------- Loading Screen ---------------- */
-    #page-loader {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background-color: #ffffff;
-      z-index: 9999;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      transition: opacity 0.5s ease, visibility 0.5s ease;
-    }
-    #page-loader.hidden {
-      opacity: 0;
-      visibility: hidden;
-    }
-    .loader-logo {
-      width: 80px;
-      height: 80px;
-      border-radius: 15px;
-      animation: pulse 1.5s infinite ease-in-out;
-    }
-    .loader-spinner {
-      margin-top: 20px;
-      width: 40px;
-      height: 40px;
-      border: 4px solid rgba(90, 66, 160, 0.2);
-      border-top: 4px solid var(--primary);
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-    .loader-text {
-      margin-top: 15px;
-      color: var(--primary);
-      font-weight: 600;
-      font-size: 0.9rem;
-      letter-spacing: 1px;
-      animation: flash 1.5s infinite;
-    }
+    #page-loader { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #ffffff; z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 0.5s ease, visibility 0.5s ease; }
+    #page-loader.hidden { opacity: 0; visibility: hidden; }
+    .loader-logo { width: 80px; height: 80px; border-radius: 15px; animation: pulse 1.5s infinite ease-in-out; }
+    .loader-spinner { margin-top: 20px; width: 40px; height: 40px; border: 4px solid rgba(90, 66, 160, 0.2); border-top: 4px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
+    .loader-text { margin-top: 15px; color: var(--primary); font-weight: 600; font-size: 0.9rem; letter-spacing: 1px; animation: flash 1.5s infinite; }
 
-    @keyframes pulse {
-      0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(90, 66, 160, 0.4); }
-      50% { transform: scale(1.05); box-shadow: 0 0 20px 0 rgba(90, 66, 160, 0); }
-      100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(90, 66, 160, 0); }
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    @keyframes flash {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
+    @keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(90, 66, 160, 0.4); } 50% { transform: scale(1.05); box-shadow: 0 0 20px 0 rgba(90, 66, 160, 0); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(90, 66, 160, 0); } }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    @keyframes flash { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
-    /* ---------------- Fade In Animations ---------------- */
-    .fade-in-up {
-      opacity: 0;
-      transform: translateY(20px);
-      animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    }
-    @keyframes fadeInUp {
-      to { opacity: 1; transform: translateY(0); }
-    }
-    .delay-1 { animation-delay: 0.1s; }
-    .delay-2 { animation-delay: 0.2s; }
-    .delay-3 { animation-delay: 0.3s; }
-    .delay-4 { animation-delay: 0.4s; }
+    .fade-in-up { opacity: 0; transform: translateY(20px); animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    @keyframes fadeInUp { to { opacity: 1; transform: translateY(0); } }
+    .delay-1 { animation-delay: 0.1s; } .delay-2 { animation-delay: 0.2s; } .delay-3 { animation-delay: 0.3s; } .delay-4 { animation-delay: 0.4s; }
 
-    /* ---------------- Main Container ---------------- */
-    .app-container {
-      width: 100%;
-      max-width: 430px;
-      background-color: var(--bg-color);
-      min-height: 100vh;
-      position: relative;
-      padding-bottom: calc(90px + var(--safe-area-bottom));
-      box-shadow: 0 0 20px rgba(0,0,0,0.1);
-      overflow-x: hidden;
-      overflow-y: auto;
-    }
+    .app-container { width: 100%; max-width: 430px; background-color: var(--bg-color); min-height: 100vh; position: relative; padding-bottom: calc(90px + var(--safe-area-bottom)); box-shadow: 0 0 20px rgba(0,0,0,0.1); overflow-x: hidden; overflow-y: auto; }
+    .top-header { display: flex; align-items: center; justify-content: space-between; padding: 15px 20px; background: var(--bg-color); }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .school-logo { width: 45px; height: 45px; object-fit: contain; border-radius: 10px; }
+    .school-name h1 { font-size: 1rem; font-weight: 700; color: var(--text-dark); margin: 0 0 2px 0; }
+    .school-name p { font-size: 0.75rem; color: var(--text-gray); margin: 0; }
+    .noti-btn { position: relative; background: none; border: none; font-size: 1.4rem; color: #94a3b8; cursor: pointer; }
+    .noti-badge { position: absolute; top: -2px; right: -2px; background: #ef4444; color: white; font-size: 0.65rem; font-weight: 700; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid var(--bg-color); }
 
-    /* Top Header */
-    .top-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 15px 20px;
-      background: var(--bg-color);
-    }
+    .student-card { background: var(--primary); border-radius: 16px; padding: 20px; margin: 5px 20px 20px; color: white; box-shadow: 0 10px 20px rgba(90, 66, 160, 0.2); }
+    .badges { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+    .badge-item { background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.4); padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 500; backdrop-filter: blur(4px); }
+    .student-card h2 { font-size: 1.3rem; font-weight: 600; margin: 0 0 4px 0; }
+    .student-card p { font-size: 0.85rem; margin: 0; opacity: 0.9; }
 
-    .header-left {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
+    .month-navigator { display: flex; align-items: center; justify-content: space-between; background: var(--card-bg); margin: 0 20px 20px; padding: 8px; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
+    .nav-btn { width: 42px; height: 42px; border-radius: 12px; background: var(--bg-color); display: flex; align-items: center; justify-content: center; color: var(--text-dark); text-decoration: none; transition: all 0.2s; }
+    .nav-btn:active { transform: scale(0.9); background: #e2e8f0; }
+    .month-info { text-align: center; flex: 1; position: relative; }
+    .month-info h3 { font-size: 0.95rem; color: var(--text-dark); font-weight: 700; }
+    .duty-count { font-size: 0.7rem; color: var(--primary); background: #f3e8ff; padding: 2px 10px; border-radius: 10px; display: inline-block; margin-bottom: 4px; font-weight: 600; }
+    .hidden-month-input { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 
-    .school-logo {
-      width: 45px;
-      height: 45px;
-      object-fit: contain;
-      border-radius: 10px;
-    }
+    .section-title { display: flex; align-items: center; justify-content: space-between; margin: 0 20px 15px; }
+    .title-left { display: flex; align-items: center; gap: 10px; }
+    .section-pill { width: 5px; height: 24px; background: var(--primary); border-radius: 4px; }
+    .section-title h3 { font-size: 1.1rem; font-weight: 700; color: var(--text-dark); margin: 0; }
 
-    .school-name h1 {
-      font-size: 1rem;
-      font-weight: 700;
-      color: var(--text-dark);
-      margin: 0 0 2px 0;
-    }
-
-    .school-name p {
-      font-size: 0.75rem;
-      color: var(--text-gray);
-      margin: 0;
-    }
-
-    .noti-btn {
-      position: relative;
-      background: none;
-      border: none;
-      font-size: 1.4rem;
-      color: #94a3b8;
-      cursor: pointer;
-    }
-
-    .noti-badge {
-      position: absolute;
-      top: -2px;
-      right: -2px;
-      background: #ef4444;
-      color: white;
-      font-size: 0.65rem;
-      font-weight: 700;
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border: 2px solid var(--bg-color);
-    }
-
-    /* Student Card */
-    .student-card {
-      background: var(--primary);
-      border-radius: 16px;
-      padding: 20px;
-      margin: 5px 20px 20px;
-      color: white;
-      box-shadow: 0 10px 20px rgba(90, 66, 160, 0.2);
-    }
-
-    .badges {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 12px;
-      flex-wrap: wrap;
-    }
-
-    .badge-item {
-      background: rgba(255, 255, 255, 0.2);
-      border: 1px solid rgba(255, 255, 255, 0.4);
-      padding: 4px 12px;
-      border-radius: 20px;
-      font-size: 0.75rem;
-      font-weight: 500;
-      backdrop-filter: blur(4px);
-    }
-
-    .student-card h2 {
-      font-size: 1.3rem;
-      font-weight: 600;
-      margin: 0 0 4px 0;
-    }
-
-    .student-card p {
-      font-size: 0.85rem;
-      margin: 0;
-      opacity: 0.9;
-    }
-
-    /* Month Navigator */
-    .month-navigator {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: var(--card-bg);
-      margin: 0 20px 20px;
-      padding: 8px;
-      border-radius: 16px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.03);
-    }
-
-    .nav-btn {
-      width: 42px;
-      height: 42px;
-      border-radius: 12px;
-      background: var(--bg-color);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--text-dark);
-      text-decoration: none;
-      transition: all 0.2s;
-    }
-
-    .nav-btn:active {
-      transform: scale(0.9);
-      background: #e2e8f0;
-    }
-
-    .month-info {
-      text-align: center;
-      flex: 1;
-      position: relative;
-    }
-
-    .month-info h3 {
-      font-size: 0.95rem;
-      color: var(--text-dark);
-      font-weight: 700;
-    }
-
-    .duty-count {
-      font-size: 0.7rem;
-      color: var(--primary);
-      background: #f3e8ff;
-      padding: 2px 10px;
-      border-radius: 10px;
-      display: inline-block;
-      margin-bottom: 4px;
-      font-weight: 600;
-    }
-
-    .hidden-month-input {
-      position: absolute;
-      top: 0; left: 0; width: 100%; height: 100%;
-      opacity: 0;
-      cursor: pointer;
-    }
-
-    /* Section Title */
-    .section-title {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin: 0 20px 15px;
-    }
-
-    .title-left {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .section-pill {
-      width: 5px;
-      height: 24px;
-      background: var(--primary);
-      border-radius: 4px;
-    }
-
-    .section-title h3 {
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: var(--text-dark);
-      margin: 0;
-    }
-
-    /* Duty Cards */
-    .duty-container {
-      padding: 0 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .duty-item-card {
-      background: var(--card-bg);
-      border-radius: 16px;
-      padding: 14px;
-      display: flex;
-      align-items: center;
-      gap: 15px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.03);
-      border: 1px solid rgba(0,0,0,0.03);
-      position: relative;
-      overflow: hidden;
-      animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-      opacity: 0;
-      transform: translateY(20px);
-    }
-
-    .duty-item-card::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 0;
-      height: 100%;
-      width: 4px;
-      background: var(--primary);
-    }
-
-    @keyframes slideUp {
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .duty-date-box {
-      background: #f3e8ff;
-      color: var(--primary);
-      border-radius: 12px;
-      padding: 10px;
-      text-align: center;
-      min-width: 60px;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-    }
-
-    .duty-date-box .day-num {
-      font-size: 1.3rem;
-      font-weight: 700;
-      line-height: 1;
-    }
-
-    .duty-date-box .day-name {
-      font-size: 0.65rem;
-      font-weight: 600;
-      margin-top: 4px;
-      text-transform: uppercase;
-    }
-
-    .duty-details {
-      flex-grow: 1;
-    }
-
-    .shift-badge {
-      display: inline-block;
-      background: #ecfdf5;
-      color: #10b981;
-      padding: 3px 10px;
-      border-radius: 8px;
-      font-size: 0.7rem;
-      font-weight: 600;
-      margin-bottom: 6px;
-    }
-
-    /* Badges สำหรับประเภทเวร */
-    .type-badge {
-      display: inline-block;
-      padding: 3px 10px;
-      border-radius: 8px;
-      font-size: 0.7rem;
-      font-weight: 600;
-      margin-bottom: 6px;
-    }
-
-    .type-badge.normal {
-      background: #e0f2fe;
-      color: #0284c7;
-    }
-
-    .type-badge.substitute {
-      background: #fef3c7;
-      color: #d97706;
-    }
-
-    .type-badge.replaced {
-      background: #f1f5f9;
-      color: #64748b;
-      text-decoration: line-through;
-    }
-
-    .location-name {
-      font-weight: 600;
-      color: var(--text-dark);
-      font-size: 0.95rem;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-bottom: 2px;
-    }
-
-    .location-name i {
-      color: var(--secondary);
-      font-size: 0.9rem;
-    }
-
-    .full-date-text {
-      color: var(--text-gray);
-      font-size: 0.75rem;
-    }
-
-    /* Empty State */
-    .empty-state {
-      background: transparent;
-      padding: 40px 20px;
-      text-align: center;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-
-    .empty-icon {
-      width: 70px;
-      height: 70px;
-      background: var(--card-bg);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 15px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-    }
+    .duty-container { padding: 0 20px; display: flex; flex-direction: column; gap: 12px; }
+    .duty-item-card { background: var(--card-bg); border-radius: 16px; padding: 14px; display: flex; align-items: center; gap: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.03); position: relative; overflow: hidden; animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; transform: translateY(20px); }
+    .duty-item-card::before { content: ''; position: absolute; left: 0; top: 0; height: 100%; width: 4px; background: var(--primary); }
+    @keyframes slideUp { to { opacity: 1; transform: translateY(0); } }
+    .duty-date-box { background: #f3e8ff; color: var(--primary); border-radius: 12px; padding: 10px; text-align: center; min-width: 60px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+    .duty-date-box .day-num { font-size: 1.3rem; font-weight: 700; line-height: 1; }
+    .duty-date-box .day-name { font-size: 0.65rem; font-weight: 600; margin-top: 4px; text-transform: uppercase; }
+    .duty-details { flex-grow: 1; }
+    .shift-badge { display: inline-block; background: #ecfdf5; color: #10b981; padding: 3px 10px; border-radius: 8px; font-size: 0.7rem; font-weight: 600; margin-bottom: 6px; }
     
-    .empty-icon i {
-      font-size: 1.8rem;
-      color: #cbd5e1;
-    }
+    .type-badge { display: inline-block; padding: 3px 10px; border-radius: 8px; font-size: 0.7rem; font-weight: 600; margin-bottom: 6px; }
+    .type-badge.normal { background: #e0f2fe; color: #0284c7; }
+    .type-badge.substitute { background: #fef3c7; color: #d97706; }
+    .type-badge.replaced { background: #f1f5f9; color: #64748b; text-decoration: line-through; }
+    
+    .location-name { font-weight: 600; color: var(--text-dark); font-size: 0.95rem; display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+    .location-name i { color: var(--secondary); font-size: 0.9rem; }
+    .full-date-text { color: var(--text-gray); font-size: 0.75rem; }
 
-    .empty-state h4 {
-      font-size: 1rem;
-      color: var(--text-dark);
-      margin-bottom: 5px;
-    }
+    .empty-state { background: transparent; padding: 40px 20px; text-align: center; display: flex; flex-direction: column; align-items: center; }
+    .empty-icon { width: 70px; height: 70px; background: var(--card-bg); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+    .empty-icon i { font-size: 1.8rem; color: #cbd5e1; }
+    .empty-state h4 { font-size: 1rem; color: var(--text-dark); margin-bottom: 5px; }
+    .empty-state p { font-size: 0.8rem; color: var(--text-gray); }
 
-    .empty-state p {
-      font-size: 0.8rem;
-      color: var(--text-gray);
-    }
+    .bottom-nav { position: fixed; bottom: 0; width: 100%; max-width: 430px; left: 50%; transform: translateX(-50%); height: 70px; background: white; border-top-left-radius: 25px; border-top-right-radius: 25px; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 -5px 20px rgba(0,0,0,0.03); padding: 0 10px; z-index: 1000; }
+    .nav-link { display: flex; flex-direction: column; align-items: center; text-decoration: none; color: #94a3b8; font-size: 0.7rem; font-weight: 600; width: 30%; gap: 4px; }
+    .nav-link.active { color: var(--primary); }
+    .nav-link i { font-size: 1.3rem; }
 
-    /* Bottom Navigation */
-    .bottom-nav {
-      position: fixed; 
-      bottom: 0;
-      width: 100%;
-      max-width: 430px; 
-      left: 50%;
-      transform: translateX(-50%); 
-      height: 70px;
-      background: white;
-      border-top-left-radius: 25px;
-      border-top-right-radius: 25px;
-      display: flex;
-      justify-content: space-around;
-      align-items: center;
-      box-shadow: 0 -5px 20px rgba(0,0,0,0.03);
-      padding: 0 10px;
-      z-index: 1000; 
-    }
-
-    .nav-link {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      text-decoration: none;
-      color: #94a3b8;
-      font-size: 0.7rem;
-      font-weight: 600;
-      width: 30%;
-      gap: 4px;
-    }
-
-    .nav-link.active {
-      color: var(--primary);
-    }
-
-    .nav-link i {
-      font-size: 1.3rem;
-    }
-
-    /* Modal แจ้งเตือนเวร */
-    .alert-overlay {
-      position: fixed;
-      top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0, 0, 0, 0.5);
-      backdrop-filter: blur(3px);
-      z-index: 10000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      opacity: 0;
-      visibility: hidden;
-      transition: all 0.3s ease;
-    }
-    .alert-overlay.show {
-      opacity: 1;
-      visibility: visible;
-    }
-    .alert-modal {
-      background: white;
-      width: 85%;
-      max-width: 350px;
-      border-radius: 20px;
-      padding: 25px 20px;
-      text-align: center;
-      box-shadow: 0 15px 30px rgba(0,0,0,0.2);
-      transform: scale(0.8);
-      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    }
-    .alert-overlay.show .alert-modal {
-      transform: scale(1);
-    }
-    .alert-icon-container {
-      width: 60px;
-      height: 60px;
-      background: #ffe4e6;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 15px;
-    }
-    .alert-icon-container i {
-      font-size: 1.8rem;
-      color: var(--secondary);
-      animation: ring 2s infinite ease-in-out;
-    }
-    @keyframes ring {
-      0%, 100% { transform: rotate(0); }
-      10%, 30%, 50% { transform: rotate(-15deg); }
-      20%, 40% { transform: rotate(15deg); }
-    }
-    .alert-title {
-      font-size: 1.2rem;
-      font-weight: 700;
-      color: var(--text-dark);
-      margin-bottom: 15px;
-    }
-    .alert-content {
-      text-align: left;
-      background: #f8fafc;
-      padding: 12px;
-      border-radius: 12px;
-      border: 1px solid #e2e8f0;
-      margin-bottom: 20px;
-      max-height: 200px;
-      overflow-y: auto;
-    }
-    .alert-item {
-      padding: 8px 0;
-      border-bottom: 1px dashed #cbd5e1;
-    }
-    .alert-item:last-child {
-      border-bottom: none;
-    }
-    .alert-time {
-      color: var(--secondary);
-      font-weight: 700;
-      font-size: 0.95rem;
-    }
-    .alert-detail {
-      font-size: 0.85rem;
-      color: var(--text-dark);
-      margin-top: 4px;
-    }
-    .alert-btn {
-      background: var(--primary);
-      color: white;
-      border: none;
-      width: 100%;
-      padding: 12px;
-      border-radius: 12px;
-      font-size: 1rem;
-      font-weight: 600;
-      font-family: inherit;
-      cursor: pointer;
-      box-shadow: 0 4px 10px rgba(90, 66, 160, 0.3);
-    }
-    .alert-btn:active {
-      transform: scale(0.98);
-    }
+    .alert-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(3px); z-index: 10000; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: all 0.3s ease; }
+    .alert-overlay.show { opacity: 1; visibility: visible; }
+    .alert-modal { background: white; width: 85%; max-width: 350px; border-radius: 20px; padding: 25px 20px; text-align: center; box-shadow: 0 15px 30px rgba(0,0,0,0.2); transform: scale(0.8); transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+    .alert-overlay.show .alert-modal { transform: scale(1); }
+    .alert-icon-container { width: 60px; height: 60px; background: #ffe4e6; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; }
+    .alert-icon-container i { font-size: 1.8rem; color: var(--secondary); animation: ring 2s infinite ease-in-out; }
+    @keyframes ring { 0%, 100% { transform: rotate(0); } 10%, 30%, 50% { transform: rotate(-15deg); } 20%, 40% { transform: rotate(15deg); } }
+    .alert-title { font-size: 1.2rem; font-weight: 700; color: var(--text-dark); margin-bottom: 15px; }
+    .alert-content { text-align: left; background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 20px; max-height: 200px; overflow-y: auto; }
+    .alert-item { padding: 8px 0; border-bottom: 1px dashed #cbd5e1; }
+    .alert-item:last-child { border-bottom: none; }
+    .alert-time { color: var(--secondary); font-weight: 700; font-size: 0.95rem; }
+    .alert-detail { font-size: 0.85rem; color: var(--text-dark); margin-top: 4px; }
+    .alert-btn { background: var(--primary); color: white; border: none; width: 100%; padding: 12px; border-radius: 12px; font-size: 1rem; font-weight: 600; font-family: inherit; cursor: pointer; box-shadow: 0 4px 10px rgba(90, 66, 160, 0.3); }
+    .alert-btn:active { transform: scale(0.98); }
   </style>
 </head>
 <body>
 
-  <!-- Loading Screen -->
   <?php if ($show_loading): ?>
   <div id="page-loader">
-    <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg?utm_source=th.wikipedia.org&utm_campaign=index&utm_content=thumbnail_unscaled" alt="Loading Logo" class="loader-logo">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg" alt="Loading Logo" class="loader-logo">
     <div class="loader-spinner"></div>
     <div class="loader-text">กำลังโหลดข้อมูล...</div>
   </div>
   <?php endif; ?>
 
   <div class="app-container">
-    
-    <!-- Top Header -->
     <div class="top-header fade-in-up delay-1">
       <div class="header-left">
-        <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg?utm_source=th.wikipedia.org&utm_campaign=index&utm_content=thumbnail_unscaled" alt="Logo" class="school-logo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg" alt="Logo" class="school-logo">
         <div class="school-name">
           <h1>ระบบบริการสารสนเทศ กองพันนักเรียนที่ 1</h1>
           <p>โรงเรียนช่างฝีมือทหาร</p>
@@ -957,7 +444,6 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
       </button>
     </div>
 
-    <!-- Student Card -->
     <div class="student-card fade-in-up delay-2">
       <div class="badges">
         <div class="badge-item">ปีการศึกษา 2569</div>
@@ -967,7 +453,6 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
       <p><?= htmlspecialchars($student_code_display) ?></p>
     </div>
 
-    <!-- แถบเลือกเดือน -->
     <div class="month-navigator fade-in-up delay-3">
       <a href="?month=<?= htmlspecialchars($prev_month); ?>" class="nav-btn">
         <i class="fas fa-chevron-left"></i>
@@ -987,7 +472,6 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
       </a>
     </div>
 
-    <!-- หัวข้อรายการเวรประจำเดือน -->
     <div class="section-title fade-in-up delay-4">
       <div class="title-left">
         <div class="section-pill"></div>
@@ -996,10 +480,8 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
       <i class="fas fa-sliders-h" style="font-size: 0.9rem; color: #94a3b8;"></i>
     </div>
 
-    <!-- รายการเวร -->
     <div class="duty-container fade-in-up delay-4">
       <?php if (!empty($my_monthly_duties)): ?>
-        
         <?php foreach ($my_monthly_duties as $index =>$duty): ?>
           <div class="duty-item-card" style="animation-delay: <?= 0.4 + ($index * 0.08) ?>s;">
             <div class="duty-date-box">
@@ -1028,7 +510,6 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
             </div>
           </div>
         <?php endforeach; ?>
-
       <?php else: ?>
         <div class="empty-state">
           <div class="empty-icon">
@@ -1040,18 +521,15 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
       <?php endif; ?>
     </div>
 
-    <!-- Bottom Navigation -->
     <div class="bottom-nav">
       <a href="main.php" class="nav-link">
         <i class="fas fa-home"></i>
         <span>หน้าหลัก</span>
       </a>
-      
       <a href="duty.php" class="nav-link active">
         <i class="fas fa-calendar-alt"></i>
         <span>เวรของฉัน</span>
       </a>
-
       <a href="logout.php" class="nav-link">
         <i class="far fa-user"></i>
         <span>ออกจากระบบ</span>
@@ -1060,7 +538,6 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
 
   </div>
 
-  <!-- HTML สำหรับ Modal แจ้งเตือนเวร -->
   <div id="dutyAlertOverlay" class="alert-overlay">
     <div class="alert-modal">
       <div class="alert-icon-container">
@@ -1072,7 +549,6 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
     </div>
   </div>
 
-  <!-- Javascript -->
   <script>
     const upcomingAlerts = <?= $upcoming_alerts_json; ?>;
 
