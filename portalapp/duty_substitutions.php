@@ -225,10 +225,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
       position: fixed; 
       bottom: 0;
       width: 100%;
-      max-width: 420px; 
+      max-width: 430px; /* ปรับให้ตรงกับ .app-container */
       left: 50%;
       transform: translateX(-50%); 
-      height: 70px;
+      height: calc(70px + env(safe-area-inset-bottom, 0px)); /* เผื่อพื้นที่ขอบจอด้านล่างของ iPhone */
+      padding-bottom: env(safe-area-inset-bottom, 0px); /* ป้องกันไอคอนชิดขอบจอล่างเกินไป */
       background: white;
       border-top-left-radius: 25px;
       border-top-right-radius: 25px;
@@ -238,6 +239,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
       box-shadow: 0 -5px 20px rgba(0,0,0,0.03);
       padding: 0 10px;
       z-index: 1000; 
+      box-sizing: border-box; /* ป้องกันการพองตัวจาก padding */
     }
 
     .nav-link {
