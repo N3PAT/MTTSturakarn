@@ -42,7 +42,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_student_name' && isset($_G
     $code = trim($_GET['code']);
     
     try {
-        if (!isset($conn) \vert{}\vert{} !$conn) {
+        if (!isset($conn) || !$conn) {
             http_response_code(500);
             throw new Exception('เชื่อมต่อฐานข้อมูลไม่ได้');
         }
