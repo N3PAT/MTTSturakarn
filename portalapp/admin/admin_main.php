@@ -24,69 +24,75 @@ if (empty($_SESSION['admin_id'])) {
 
 // 4. จัดการระบบ Loading Screen
 $show_loading = false;
-if (!isset($_SESSION['admin_has_seen_loading'])) {
-    $show_loading = true;
+if (!isset($_SESSION['admin_has_seen_loading'])) {$show_loading = true;
     $_SESSION['admin_has_seen_loading'] = true;
 }
 
-$admin_id = $_SESSION['admin_id'];
-$admin_name = $_SESSION['admin_name'] ?? 'ผู้ดูแลระบบ MTTS'; 
+$admin_id =$_SESSION['admin_id'];
+$admin_name =$_SESSION['admin_name'] ?? 'ผู้ดูแลระบบ MTTS'; 
 
 $total_students = 0;
 $voted_count = 0;
 $today_duties = 0;
 
+// =========================================================
+// คำนวณหาวันที่เป้าหมาย (วันศุกร์)
+// =========================================================
+$tz = new DateTimeZone('Asia/Bangkok');
+$dt = new DateTime('now',$tz);
+
+$current_day_of_week = (int)$dt->format('N');
+$days_until_friday = 5 -$current_day_of_week;
+if ($days_until_friday < 0) {$days_until_friday += 7;
+}
+
+$target_dt = clone$dt;
+$target_dt->modify("+$days_until_friday days");
+$target_date = $target_dt->format('Y-m-d');$start_date = "2026-07-06"; // วันเริ่มต้นคำนวณเวรหลักการหมุนเวียน
+
 // 5. ดึงข้อมูลสถิติ และ คำนวณเวร
-if (isset($conn) && $conn instanceof mysqli) {
-    $conn->set_charset("utf8mb4");
+if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
 
     try {
         // ยอดนักเรียนทั้งหมด
-        $res_std = $conn->query("SELECT COUNT(*) as total FROM students");
-        if ($res_std && $row = $res_std->fetch_assoc()) { 
-            $total_students = $row['total']; 
+        $res_std =$conn->query("SELECT COUNT(*) as total FROM students");
+        if ($res_std && $row =$res_std->fetch_assoc()) { 
+            $total_students =$row['total']; 
         }
 
         // ยอดโหวตในสัปดาห์นี้
-        $res_vote = $conn->query("SELECT COUNT(DISTINCT student_code) as voted FROM votes WHERE YEARWEEK(vote_date, 1) = YEARWEEK(CURDATE(), 1)");
-        if ($res_vote && $row = $res_vote->fetch_assoc()) { 
-            $voted_count = $row['voted']; 
+        $res_vote =$conn->query("SELECT COUNT(DISTINCT student_code) as voted FROM weekly_votes WHERE vote_date = '$target_date'");
+        if ($res_vote && $row =$res_vote->fetch_assoc()) { 
+            $voted_count =$row['voted']; 
         }
 
         // =========================================================
-        // คำนวณยอดคนเข้าเวรวันนี้ (อิงอัลกอริทึมจาก duty.php)
+        // คำนวณยอดคนเข้าเวรวันนี้
         // =========================================================
-        $start_date = "2026-07-06"; // วันเริ่มต้นคำนวณเวรหลักการหมุนเวียน
-        $today_date = date('Y-m-d');
         
         // ดึงรายชื่อนักเรียนทั้งหมดเพื่อมาจำลองรอบเวรตาม Index
         $all_students_for_duty = [];
-        $res_all = $conn->query("SELECT student_code FROM students ORDER BY id ASC");
-        if ($res_all && $res_all->num_rows > 0) {
-            while ($row = $res_all->fetch_assoc()) {
-                $all_students_for_duty[] = $row;
+        $res_all =$conn->query("SELECT student_code FROM students ORDER BY id ASC");
+        if ($res_all &&$res_all->num_rows > 0) {
+            while ($row =$res_all->fetch_assoc()) {
+                $all_students_for_duty[] =$row;
             }
         }
         
         $total_std_count = count($all_students_for_duty);
-        if ($total_std_count > 0) {
-            $start_timestamp = strtotime($start_date);
-            $today_timestamp = strtotime($today_date);
-            $diff_days = floor((($today_timestamp - $start_timestamp) / 86400));
+        if ($total_std_count > 0) {$start_timestamp = strtotime($start_date);$target_timestamp = strtotime($target_date);$diff_days = floor((($target_timestamp -$start_timestamp) / 86400));
+            if ($diff_days < 0)$diff_days = 0;
             
-            // หากวันปัจจุบันเลยวันเริ่มต้นมาแล้ว ให้คำนวณหา 16 คนของวันนี้
-            if ($diff_days >= 0) {
-                $start_index = ($diff_days * 16) % $total_std_count;
-                $today_duty_list = [];
-                
-                for ($i = 0; $i < 16; $i++) {
-                    $idx = ($start_index + $i) % $total_std_count;
-                    if (isset($all_students_for_duty[$idx])) {
-                        $today_duty_list[] = $all_students_for_duty[$idx]['student_code'];
-                    }
+            // คำนวณหา 16 คนของรอบเวรเป้าหมาย
+            $start_index = ($diff_days * 16) \%$total_std_count;
+            $today_duty_list = [];
+            
+            for ($i = 0; $i < 16; $i++) {
+                $idx = ($start_index + $i) \%$total_std_count;
+                if (isset($all_students_for_duty[$idx])) {$today_duty_list[] = $all_students_for_duty[$idx]['student_code'];
                 }
-                $today_duties = count($today_duty_list); // ยอดปกติคือ 16 คน
             }
+            $today_duties = count($today_duty_list); // ยอดปกติคือ 16 คน
         }
 
     } catch (Throwable $e) {
@@ -256,7 +262,7 @@ if (isset($conn) && $conn instanceof mysqli) {
     <!-- Stats Section -->
     <div class="section-title fade-in-up delay-3">
       <div class="section-pill"></div>
-      <h3>ภาพรวมวันนี้</h3>
+      <h3>ภาพรวมวันที่ <?= date('d/m/Y', strtotime($target_date)) ?></h3>
     </div>
     
     <div class="stats-grid fade-in-up delay-3">
@@ -355,7 +361,7 @@ if (isset($conn) && $conn instanceof mysqli) {
       }
     });
 
-    // โลจิกแจ้งเตือนเดิมของหน้าแอดมิน[cite: 7]
+    // โลจิกแจ้งเตือนเดิมของหน้าแอดมิน
     async function triggerPushNotification() {
       if (!confirm("คุณต้องการส่งแจ้งเตือนไปยังผู้ใช้ที่ยังไม่ได้ทำรายการ ใช่หรือไม่?")) {
           return;
