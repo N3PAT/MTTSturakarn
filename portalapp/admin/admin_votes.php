@@ -48,6 +48,56 @@ try {
 } catch (Throwable $e) {
     error_log("Admin Votes error: " . $e->getMessage());
 }
+
+// ==========================================
+// ฟังก์ชัน Export CSV
+// ==========================================
+if (isset($_GET['export']) && $_GET['export'] === 'csv') {
+    // กำหนด Header ให้เบราว์เซอร์รู้ว่าเป็นการดาวน์โหลดไฟล์ CSV
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="weekly_votes_' . date('Ymd_His') . '.csv"');
+    
+    // พิมพ์ BOM (Byte Order Mark) เพื่อให้ Excel อ่านภาษาไทย (UTF-8) ได้ถูกต้อง
+    echo "\xEF\xBB\xBF";
+    
+    // เปิด output stream
+    $output = fopen('php://output', 'w');
+    
+    // เขียนหัวคอลัมน์
+    fputcsv($output, ['รหัสนักเรียน', 'คำนำหน้า', 'ชื่อ', 'นามสกุล', 'กองร้อย', 'หมวด', 'สถานะ', 'จังหวัด', 'การเดินทาง', 'วันกลับ', 'เวลาที่บันทึก']);
+    
+    // วนลูปข้อมูลเขียนลงไฟล์
+    foreach ($votes as $v) {
+        $status_raw = trim($v['status']);
+        $status_thai = 'ไม่ระบุ';
+        
+        if ($status_raw === 'home') {
+            $status_thai = 'กลับบ้าน';
+        } elseif ($status_raw === 'duty') {
+            $status_thai = 'เข้าเวร';
+        } elseif ($status_raw === 'restrict') {
+            $status_thai = 'กักบริเวณ/อยู่ รร.';
+        }
+
+        fputcsv($output, [
+            $v['student_code'],
+            $v['prefix'],
+            $v['first_name'],
+            $v['last_name'],
+            $v['company'],
+            $v['platoon'],
+            $status_thai,
+            $v['province'] ?? '-',
+            $v['travel_method'] ?? '-',
+            $v['return_day'] ?? '-',
+            $v['created_at']
+        ]);
+    }
+    
+    fclose($output);
+    exit(); // สั่งหยุดการทำงาน เพื่อไม่ให้โค้ด HTML ด้านล่างแทรกลงไปในไฟล์ CSV
+}
+// ==========================================
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -79,6 +129,10 @@ try {
     .header-left { display: flex; align-items: center; gap: 12px; }
     .back-btn { font-size: 1.2rem; color: var(--text-dark); text-decoration: none; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 12px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
     .page-title h1 { font-size: 1.1rem; font-weight: 700; color: var(--text-dark); margin: 0; }
+    
+    /* ปุ่ม Export CSV */
+    .export-btn { background-color: #10b981; color: white; padding: 8px 12px; border-radius: 10px; font-size: 0.85rem; font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3); transition: transform 0.1s; }
+    .export-btn:active { transform: scale(0.95); }
 
     /* Summary Card */
     .summary-card { background: linear-gradient(135deg, var(--primary), #1e293b); border-radius: 18px; padding: 20px; margin: 10px 24px 20px; color: white; box-shadow: 0 10px 25px rgba(15, 23, 42, 0.2); }
@@ -102,7 +156,7 @@ try {
     .status-badge { padding: 4px 10px; border-radius: 8px; font-size: 0.7rem; font-weight: 600; }
     .status-home { background: #dcfce7; color: #166534; }
     .status-stay { background: #fef3c7; color: #92400e; }
-    .status-duty { background: #fee2e2; color: #991b1b; } /* เพิ่มสีสำหรับเวร */
+    .status-duty { background: #fee2e2; color: #991b1b; } 
     
     .vote-details { font-size: 0.8rem; color: #475569; background: #f8fafc; padding: 10px; border-radius: 8px; display: flex; flex-direction: column; gap: 4px; }
 
@@ -123,6 +177,8 @@ try {
           <h1>ผลโหวตสัปดาห์นี้</h1>
         </div>
       </div>
+      <!-- ปุ่มสำหรับดึงไฟล์ CSV -->
+      <a href="?export=csv" class="export-btn"><i class="fas fa-file-excel"></i> CSV</a>
     </div>
 
     <!-- Summary Card -->
