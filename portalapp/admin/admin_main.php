@@ -1,57 +1,94 @@
 <?php
 session_start();
+date_default_timezone_set('Asia/Bangkok');
 
-// ป้องกัน HTTP 500 กรณีไฟล์ db.php หาย[cite: 7]
+// 1. ป้องกัน HTTP 500 กรณีไฟล์ db.php หาย
 if (file_exists('db.php')) {
     require_once 'db.php';
 } else {
     die("Error: ไม่พบไฟล์ db.php หรือตั้งชื่อไฟล์ผิด (ตัวพิมพ์เล็ก-ใหญ่มีผลบน Server)");
 }
 
-// 1. จัดการการออกจากระบบ (Logout)[cite: 7]
+// 2. จัดการการออกจากระบบ (Logout)
 if (isset($_GET['logout'])) {
     session_destroy();
     header("Location: admin_login.php");
     exit();
 }
 
-// 2. ตรวจสอบสิทธิ์การเข้าสู่ระบบ[cite: 7]
+// 3. ตรวจสอบสิทธิ์การเข้าสู่ระบบ
 if (empty($_SESSION['admin_id'])) {
     header("Location: admin_login.php");
     exit();
 }
 
-// 3. จัดการระบบ Loading Screen[cite: 7]
+// 4. จัดการระบบ Loading Screen
 $show_loading = false;
-if (!isset($_SESSION['admin_has_seen_loading'])) {$show_loading = true;
+if (!isset($_SESSION['admin_has_seen_loading'])) {
+    $show_loading = true;
     $_SESSION['admin_has_seen_loading'] = true;
 }
 
-$admin_id =$_SESSION['admin_id'];
-$admin_name =$_SESSION['admin_name'] ?? 'ผู้ดูแลระบบ MTTS'; 
+$admin_id = $_SESSION['admin_id'];
+$admin_name = $_SESSION['admin_name'] ?? 'ผู้ดูแลระบบ MTTS'; 
 
 $total_students = 0;
 $voted_count = 0;
 $today_duties = 0;
 
-// 4. ดึงข้อมูลสถิติ[cite: 7]
-if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
+// 5. ดึงข้อมูลสถิติ และ คำนวณเวร
+if (isset($conn) && $conn instanceof mysqli) {
+    $conn->set_charset("utf8mb4");
 
     try {
-        $res_std =$conn->query("SELECT COUNT(*) as total FROM students");
-        if ($res_std && $row =$res_std->fetch_assoc()) { 
-            $total_students =$row['total']; 
+        // ยอดนักเรียนทั้งหมด
+        $res_std = $conn->query("SELECT COUNT(*) as total FROM students");
+        if ($res_std && $row = $res_std->fetch_assoc()) { 
+            $total_students = $row['total']; 
         }
 
-        $res_vote =$conn->query("SELECT COUNT(DISTINCT student_code) as voted FROM votes WHERE YEARWEEK(vote_date, 1) = YEARWEEK(CURDATE(), 1)");
-        if ($res_vote && $row =$res_vote->fetch_assoc()) { 
-            $voted_count =$row['voted']; 
+        // ยอดโหวตในสัปดาห์นี้
+        $res_vote = $conn->query("SELECT COUNT(DISTINCT student_code) as voted FROM votes WHERE YEARWEEK(vote_date, 1) = YEARWEEK(CURDATE(), 1)");
+        if ($res_vote && $row = $res_vote->fetch_assoc()) { 
+            $voted_count = $row['voted']; 
         }
 
-        $res_duty =$conn->query("SELECT COUNT(*) as today_duty FROM student_duties WHERE duty_date = CURDATE()");
-        if ($res_duty && $row =$res_duty->fetch_assoc()) { 
-            $today_duties =$row['today_duty']; 
+        // =========================================================
+        // คำนวณยอดคนเข้าเวรวันนี้ (อิงอัลกอริทึมจาก duty.php)
+        // =========================================================
+        $start_date = "2026-07-06"; // วันเริ่มต้นคำนวณเวรหลักการหมุนเวียน
+        $today_date = date('Y-m-d');
+        
+        // ดึงรายชื่อนักเรียนทั้งหมดเพื่อมาจำลองรอบเวรตาม Index
+        $all_students_for_duty = [];
+        $res_all = $conn->query("SELECT student_code FROM students ORDER BY id ASC");
+        if ($res_all && $res_all->num_rows > 0) {
+            while ($row = $res_all->fetch_assoc()) {
+                $all_students_for_duty[] = $row;
+            }
         }
+        
+        $total_std_count = count($all_students_for_duty);
+        if ($total_std_count > 0) {
+            $start_timestamp = strtotime($start_date);
+            $today_timestamp = strtotime($today_date);
+            $diff_days = floor((($today_timestamp - $start_timestamp) / 86400));
+            
+            // หากวันปัจจุบันเลยวันเริ่มต้นมาแล้ว ให้คำนวณหา 16 คนของวันนี้
+            if ($diff_days >= 0) {
+                $start_index = ($diff_days * 16) % $total_std_count;
+                $today_duty_list = [];
+                
+                for ($i = 0; $i < 16; $i++) {
+                    $idx = ($start_index + $i) % $total_std_count;
+                    if (isset($all_students_for_duty[$idx])) {
+                        $today_duty_list[] = $all_students_for_duty[$idx]['student_code'];
+                    }
+                }
+                $today_duties = count($today_duty_list); // ยอดปกติคือ 16 คน
+            }
+        }
+
     } catch (Throwable $e) {
         error_log("SQL Error in admin_main.php: " . $e->getMessage());
     }
