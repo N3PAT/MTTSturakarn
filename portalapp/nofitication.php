@@ -13,6 +13,7 @@ $announcements = [];
 $system_notifications = []; 
 $has_voted = true; 
 $error_message = ""; 
+$today_discipline = null; // ตัวแปรเก็บข้อมูลบัตรวินัยวันนี้
 
 try {
     if (!isset($conn) || !($conn instanceof mysqli)) {
@@ -81,7 +82,28 @@ try {
         error_log("Query votes ผิดพลาด: " . $conn->error);
     }
 
-    // 4. ดึงประกาศ/ข่าวสาร
+    // 4. [เพิ่มใหม่] ตรวจสอบบัตรวินัยวันนี้
+    $stmt_disc = $conn->prepare("
+        SELECT card_bed, card_shoe, card_cabinet, total_cards, status_color 
+        FROM discipline_cards 
+        WHERE student_code = ? AND check_date = CURDATE() 
+        LIMIT 1
+    ");
+    if ($stmt_disc) {
+        $stmt_disc->bind_param("s", $studentCode);
+        $stmt_disc->execute();
+        $res_disc = $stmt_disc->get_result();
+        if ($row_disc = $res_disc->fetch_assoc()) {
+            if ($row_disc['total_cards'] > 0) {
+                $today_discipline = $row_disc;
+            }
+        }
+        $stmt_disc->close();
+    } else {
+        error_log("Query discipline_cards ผิดพลาด: " . $conn->error);
+    }
+
+    // 5. ดึงประกาศ/ข่าวสาร
     $sql_news = "SELECT * FROM announcements WHERE status = 'active' OR status = '1' ORDER BY id DESC LIMIT 10";
     $res_news = $conn->query($sql_news);
     if (!$res_news) {
@@ -96,7 +118,7 @@ try {
         error_log("Query announcements ผิดพลาด: " . $conn->error);
     }
 
-    // 5. ดึงการแจ้งเตือนจากตาราง notifications
+    // 6. ดึงการแจ้งเตือนจากตาราง notifications
     $stmt_noti = $conn->prepare("
         SELECT * FROM notifications 
         WHERE student_code = ? 
@@ -122,7 +144,8 @@ try {
 }
 
 // นับจำนวนรายการแจ้งเตือนทั้งหมด
-$total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + count($announcements) + count($system_notifications);
+$has_discipline_alert = ($today_discipline !== null);
+$total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + count($announcements) + count($system_notifications) + ($has_discipline_alert ? 1 : 0);
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -234,6 +257,35 @@ $total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + coun
       <?php if (!empty($error_message)): ?>
         <div style="padding: 12px 15px; background-color: #fef2f2; border: 1px solid #fecaca; color: #dc2626; border-radius: 10px; font-size: 0.85rem; margin-bottom: 12px;">
           <i class="fas fa-exclamation-circle"></i> <?= $error_message ?>
+        </div>
+      <?php endif; ?>
+
+      <!-- 0. แจ้งเตือนบัตรวินัย (เรียงขึ้นมาบนสุด) -->
+      <?php if ($today_discipline): ?>
+        <?php 
+          $tot = (int)$today_discipline['total_cards'];
+          $color = $today_discipline['status_color'];
+          
+          $items = [];
+          if ($today_discipline['card_bed']) $items[] = "เตียง";
+          if ($today_discipline['card_cabinet']) $items[] = "ตู้";
+          if ($today_discipline['card_shoe']) $items[] = "รองเท้า";
+          $items_str = !empty($items) ? implode(", ", $items) : "ไม่มีรายละเอียด";
+
+          // กำหนดระดับความแจ้งเตือน (3 ใบแดง = Urgent / 1-2 ใบเหลือง = Warning)
+          $card_class = ($tot >= 3 || $color == 'red') ? 'urgent' : 'warning';
+        ?>
+        <div class="noti-item <?= $card_class ?>">
+          <div class="noti-icon">
+            <i class="fas fa-id-card-alt"></i>
+          </div>
+          <div class="noti-content">
+            <h4>โดนตัดบัตรวินัยวันนี้! (จำนวน <?= $tot ?> ใบ)</h4>
+            <p><strong>รายการที่ไม่เรียบร้อย:</strong> <?= $items_str ?></p>
+            <div class="noti-time">
+              <i class="far fa-clock"></i> ตรวจพบวันนี้
+            </div>
+          </div>
         </div>
       <?php endif; ?>
 
