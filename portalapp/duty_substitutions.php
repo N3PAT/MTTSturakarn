@@ -225,7 +225,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
       position: fixed; 
       bottom: 0;
       width: 100%;
-      max-width: 430px; 
+      max-width: 420px; 
       left: 50%;
       transform: translateX(-50%); 
       height: 70px;
