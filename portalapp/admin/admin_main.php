@@ -85,12 +85,12 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
             
             // คำนวณหา 16 คนของรอบเวรเป้าหมาย
             // นำเครื่องหมาย \ ออกจากหน้า %
-            $start_index = ($diff_days * 16) \%$total_std_count;
+            $start_index = ($diff_days * 16) %$total_std_count;
             $today_duty_list = [];
             
             for ($i = 0; $i < 16; $i++) {
                 // นำเครื่องหมาย \ ออกจากหน้า %
-                $idx = ($start_index + $i) \%$total_std_count;
+                $idx = ($start_index + $i) %$total_std_count;
                 if (isset($all_students_for_duty[$idx])) {$today_duty_list[] = $all_students_for_duty[$idx]['student_code'];
                 }
             }
