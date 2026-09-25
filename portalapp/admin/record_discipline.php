@@ -207,11 +207,8 @@ if (!empty($filter_company) && !empty($filter_platoon)) {
             <label>กองร้อย</label>
             <select name="company" required>
               <option value="">-- เลือก --</option>
-              <option value="1" <?= $filter_company == '1' ? 'selected' : '' ?>>ร้อย. 1</option>
-              <option value="2" <?= $filter_company == '2' ? 'selected' : '' ?>>ร้อย. 2</option>
-              <option value="3" <?= $filter_company == '3' ? 'selected' : '' ?>>ร้อย. 3</option>
-              <option value="4" <?= $filter_company == '4' ? 'selected' : '' ?>>ร้อย. 4</option>
-              <option value="5" <?= $filter_company == '5' ? 'selected' : '' ?>>ร้อย. 5</option>
+              <option value="1" <?= $filter_company == '1' ? 'selected' : '' ?>>ร้อย 1</option>
+              <option value="2" <?= $filter_company == '2' ? 'selected' : '' ?>>ร้อย 2</option>
             </select>
           </div>
           <div class="filter-group">
@@ -221,7 +218,6 @@ if (!empty($filter_company) && !empty($filter_platoon)) {
               <option value="1" <?= $filter_platoon == '1' ? 'selected' : '' ?>>หมวด 1</option>
               <option value="2" <?= $filter_platoon == '2' ? 'selected' : '' ?>>หมวด 2</option>
               <option value="3" <?= $filter_platoon == '3' ? 'selected' : '' ?>>หมวด 3</option>
-              <option value="4" <?= $filter_platoon == '4' ? 'selected' : '' ?>>หมวด 4</option>
             </select>
           </div>
         </div>
