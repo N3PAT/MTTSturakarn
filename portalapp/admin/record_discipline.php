@@ -187,7 +187,7 @@ if (!empty($filter_company) && !empty($filter_platoon)) {
     <div class="top-header">
       <a href="turakarn.php" class="back-btn"><i class="fas fa-chevron-left"></i></a>
       <div class="page-title">
-        <h1>ตรวจบัตรวินัย (แบบรายหมวด)</h1>
+        <h1>ตรวจบัตรวินัย (หมวด/กองร้อย)</h1>
       </div>
     </div>
 
