@@ -1,5 +1,5 @@
 <?php
-// เปิดกระารแสดง Error เพื่อดูสาเหตุทันทีหากยังพบปัญหา
+// เปิดการแสดง Error เพื่อดูสาเหตุทันทีหากยังพบปัญหา
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
@@ -42,7 +42,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_student_name' && isset($_G
     $code = trim($_GET['code']);
     
     try {
-        if (!isset($conn) || !$conn) {
+        if (!isset($conn) \vert{}\vert{} !$conn) {
             http_response_code(500);
             throw new Exception('เชื่อมต่อฐานข้อมูลไม่ได้');
         }
@@ -138,18 +138,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $message = "รหัส " . htmlspecialchars($stu_code) . " ไม่ได้มีรายชื่อปฏิบัติหน้าที่ในสัปดาห์นี้";
         } else {
             try {
-                // Check if already voted
+                // ตรวจสอบการโหวตซ้ำ
                 $stmt_check =$conn->prepare("SELECT id FROM weekly_votes WHERE student_code = ? AND vote_date = ?");
                 $stmt_check->bind_param("ss", $stu_code, $target_date);$stmt_check->execute();
                 
                 if ($stmt_check->get_result()->num_rows > 0) {$alert_type = "error";
                     $message = "รหัส " . htmlspecialchars($stu_code) . " ได้บันทึกข้อมูลของสัปดาห์นี้ไปแล้ว";
                 } else {
-                    // Update section
+                    // อัปเดตตอนเรียน
                     $stmt_update =$conn->prepare("UPDATE students SET section = ? WHERE student_code = ?");
                     $stmt_update->bind_param("ss", $section, $stu_code);$stmt_update->execute();
 
-                    // Insert vote
+                    // บันทึกการโหวต
                     $real_time_now = date('Y-m-d H:i:s');
                     $stmt_insert =$conn->prepare("INSERT INTO weekly_votes (student_code, vote_date, status, created_at) VALUES (?, ?, ?, ?)");
                     $stmt_insert->bind_param("ssss", $stu_code,$target_date, $status,$real_time_now);
@@ -265,7 +265,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     .closed-time { background: #f8fafc; padding: 8px 16px; border-radius: 8px; border: 1px solid #e2e8f0; display: inline-block; font-size: 0.85rem; font-weight: 600; color: #ef4444; }
     
     /* Bottom Nav */
-    .bottom-nav { position: fixed; bottom: 0; width: 100%; max-width: 430px; left: 50%; transform: translateX(-50%); height: 70px; background: white; border-top-left-radius: 25px; border-top-right-radius: 25px; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 -5px 20px rgba(0,0,0,0.03); padding: 0 10px; z-index: 1000; }
+    .bottom-nav { position: fixed; bottom: 0; width: 100%; max-width: 430px; left: 50%; transform: translateX(-50%); height: 70px; background: white; border-top-left-radius: 25px; border-top-right-radius: 25px; display: flex; justify-space-around; align-items: center; box-shadow: 0 -5px 20px rgba(0,0,0,0.03); padding: 0 10px; z-index: 1000; }
     .nav-link { display: flex; flex-direction: column; align-items: center; text-decoration: none; color: #94a3b8; font-size: 0.7rem; font-weight: 600; width: 30%; gap: 4px; }
     .nav-link.active { color: var(--primary); }
     .nav-link i { font-size: 1.3rem; }
@@ -346,7 +346,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </div>
           </div>
 
-          <!-- Remark Box Style -->
           <div class="remark-box">
             <i class="fas fa-headset"></i>
             <p><strong>มีปัญหาการใช้งาน?</strong><br>หากพบปัญหาในการกรอกข้อมูล กรุณาติดต่อ Line ID: <strong>ntw25020</strong></p>
@@ -377,8 +376,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         <i class="fas fa-home"></i>
         <span>หน้าหลัก</span>
       </a>
-      
-      <!-- หากมีหน้าเวร/คำร้อง สามารถใส่เพิ่มตรงนี้ได้ตาม reqdoc.php เพื่อความสม่ำเสมอ -->
 
       <a href="logout.php" class="nav-link">
         <i class="far fa-user-circle"></i>
