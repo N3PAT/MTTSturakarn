@@ -1,6 +1,24 @@
 <?php
 session_start();
+
+// --- เปิดการแสดงผล Error เพื่อหาจุดพัง (ถ้าใช้งานได้ปกติแล้ว สามารถลบ 3 บรรทัดนี้ทิ้งได้) ---
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+// ----------------------------------------------------------------------
+
 require_once 'db.php';
+
+// --- อัปเดตฐานข้อมูลอัตโนมัติ ป้องกัน Error 500 ---
+try {
+    $check_col = $conn->query("SHOW COLUMNS FROM restrictions LIKE 'restrict_type'");
+    if ($check_col && $check_col->num_rows == 0) {
+        $conn->query("ALTER TABLE restrictions ADD COLUMN restrict_type VARCHAR(20) DEFAULT 'restrict'");
+    }
+} catch (Exception $e) {
+    // ปล่อยผ่านถ้าเช็คไม่ได้ (ขึ้นอยู่กับการตั้งค่า Server)
+}
+// ---------------------------------------------
 
 // ตรวจสอบสิทธิ์ Admin
 if (empty($_SESSION['admin_id'])) {
@@ -169,17 +187,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // โหลดข้อมูลสำหรับโหมด 'manage'
 $active_restrictions = [];
 if ($view === 'manage') {
-    $res = $conn->query("
-        SELECT r.id, r.student_code, s.first_name, s.last_name, r.weeks_count, r.restrict_type, r.created_at 
-        FROM restrictions r
-        JOIN students s ON r.student_code = s.student_code
-        ORDER BY r.created_at DESC 
-        LIMIT 50
-    ");
-    if ($res) {
-        while ($row = $res->fetch_assoc()) {
-            $active_restrictions[] = $row;
+    try {
+        $res = $conn->query("
+            SELECT r.id, r.student_code, s.first_name, s.last_name, r.weeks_count, r.restrict_type, r.created_at 
+            FROM restrictions r
+            JOIN students s ON r.student_code = s.student_code
+            ORDER BY r.created_at DESC 
+            LIMIT 50
+        ");
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                $active_restrictions[] = $row;
+            }
         }
+    } catch (Exception $e) {
+        $message = "เกิดข้อผิดพลาดในการดึงข้อมูลจากฐานข้อมูล";
+        $message_type = "error";
     }
 }
 ?>
