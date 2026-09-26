@@ -28,7 +28,7 @@ if (!isset($_SESSION['admin_has_seen_loading'])) {$show_loading = true;
     $_SESSION['admin_has_seen_loading'] = true;
 }
 
-$admin_id = $_SESSION['admin_id'];$admin_name = 'ผู้ดูแลระบบ MTTS'; 
+$admin_id = $_SESSION['admin_id'];$admin_name = 'ผู้ดูแลระบบ MTTS';
 
 $total_students = 0;
 $voted_count = 0;
@@ -45,7 +45,7 @@ $days_until_friday = 5 -$current_day_of_week;
 if ($days_until_friday < 0) {$days_until_friday += 7;
 }
 
-$target_dt = clone$dt; 
+$target_dt = clone$dt;
 $target_dt->modify("+$days_until_friday days");
 $target_date = $target_dt->format('Y-m-d');$start_date = "2026-07-06"; // วันเริ่มต้นคำนวณเวรหลักการหมุนเวียน
 
@@ -53,7 +53,7 @@ $target_date = $target_dt->format('Y-m-d');$start_date = "2026-07-06"; // วั
 if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
 
     try {
-        // [เพิ่มใหม่] ดึงข้อมูล Username ของ Admin จากฐานข้อมูล
+        // ดึงข้อมูล Username ของ Admin จากฐานข้อมูล
         $stmt_admin =$conn->prepare("SELECT username FROM admins WHERE id = ?");
         if ($stmt_admin) {$stmt_admin->bind_param("i", $admin_id);$stmt_admin->execute();
             $res_admin =$stmt_admin->get_result();
@@ -65,14 +65,14 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
 
         // ยอดนักเรียนทั้งหมด
         $res_std =$conn->query("SELECT COUNT(*) as total FROM students");
-        if ($res_std && $row =$res_std->fetch_assoc()) { 
-            $total_students =$row['total']; 
+        if ($res_std && $row =$res_std->fetch_assoc()) {
+            $total_students =$row['total'];
         }
 
         // ยอดโหวตในสัปดาห์นี้
         $res_vote =$conn->query("SELECT COUNT(DISTINCT student_code) as voted FROM weekly_votes WHERE vote_date = '$target_date'");
-        if ($res_vote && $row =$res_vote->fetch_assoc()) { 
-            $voted_count =$row['voted']; 
+        if ($res_vote && $row =$res_vote->fetch_assoc()) {
+            $voted_count =$row['voted'];
         }
 
         // =========================================================
@@ -90,7 +90,8 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
         
         $total_std_count = count($all_students_for_duty);
         if ($total_std_count > 0) {$start_timestamp = strtotime($start_date);$target_timestamp = strtotime($target_date);$diff_days = floor((($target_timestamp -$start_timestamp) / 86400));
-            if ($diff_days < 0)$diff_days = 0;
+            if ($diff_days < 0) {$diff_days = 0;
+            }
             
             // คำนวณหา 16 คนของรอบเวรเป้าหมาย
             $start_index = ($diff_days * 16) \%$total_std_count;
@@ -137,7 +138,7 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
       user-select: none;
     }
 
-    /* Loading Screen อิงตาม main.php */
+    /* Loading Screen */
     #page-loader {
       position: fixed;
       top: 0;
@@ -194,7 +195,7 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
     .admin-card h2 { font-size: 1.3rem; font-weight: 600; margin: 0 0 4px 0; text-transform: uppercase; }
     .admin-card p { font-size: 0.85rem; margin: 0; color: #cbd5e1; display: flex; align-items: center; gap: 6px; opacity: 0.9; }
 
-    /* Section Title อิงจาก main.php */
+    /* Section Title */
     .section-title { display: flex; align-items: center; gap: 10px; margin: 0 20px 15px; }
     .section-pill { width: 5px; height: 24px; background: var(--primary); border-radius: 4px; }
     .section-title h3 { font-size: 1.1rem; font-weight: 700; color: var(--text-dark); margin: 0; }
@@ -211,7 +212,7 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
     .c-orange { background: #fffbeb; color: #f59e0b; }
     .c-red { background: #fef2f2; color: #ef4444; }
 
-    /* Menu Grid อิงจาก main.php */
+    /* Menu Grid */
     .menu-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 0 20px 25px; }
     .menu-item { background: white; border-radius: 16px; padding: 18px 5px; text-decoration: none; color: var(--text-dark); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.03); transition: transform 0.2s, box-shadow 0.2s; border: none; cursor: pointer; font-family: 'Prompt', sans-serif;}
     .menu-item:active { transform: scale(0.95); }
@@ -219,14 +220,14 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
     .icon-box { width: 52px; height: 52px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin-bottom: 10px; }
     .menu-text { font-size: 0.8rem; font-weight: 600; line-height: 1.2; }
 
-    /* Theme Colors สำหรับปุ่มเมนู */
+    /* Theme Colors */
     .bg-purple { background: #f3e8ff; color: #9333ea; }
     .bg-orange { background: #ffedd5; color: #ea580c; }
     .bg-blue { background: #dbeafe; color: #2563eb; }
     .bg-green { background: #dcfce7; color: #16a34a; }
     .bg-red { background: #fee2e2; color: #dc2626; }
 
-    /* Bottom Navigation อิงจาก main.php */
+    /* Bottom Navigation */
     .bottom-nav { position: fixed; bottom: 0; width: 100%; max-width: 430px; left: 50%; transform: translateX(-50%); height: 70px; background: white; border-top-left-radius: 25px; border-top-right-radius: 25px; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 -5px 20px rgba(0,0,0,0.03); padding: 0 10px; z-index: 1000; }
     .nav-link { display: flex; flex-direction: column; align-items: center; text-decoration: none; color: #94a3b8; font-size: 0.7rem; font-weight: 600; width: 30%; gap: 4px; }
     .nav-link.active { color: var(--primary); }
@@ -337,8 +338,9 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
         <div class="icon-box bg-red"><i class="fas fa-file-pdf"></i></div>
         <span class="menu-text">รายงาน</span>
       </a>
-          <a href="admin_restrict.php" class="menu-item">
-    <div class="icon-box bg-red"><i class="fas fa-dungeon"></i></div>
+
+      <a href="admin_restrict.php" class="menu-item">
+        <div class="icon-box bg-red"><i class="fas fa-dungeon"></i></div>
         <span class="menu-text">กักบริเวณ</span>
       </a>
     </div>
