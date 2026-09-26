@@ -7,18 +7,15 @@ session_start(); // 1. เปิดใช้งาน Session สำหรับ
 $show_loading = false;
 if (!isset($_SESSION['has_seen_loading_fill'])) {
     $show_loading = true;
-    $_SESSION['has_seen_loading_fill'] = true; // เซ็ตค่าไว้ว่าเห็นแล้ว ครั้งหน้าจะได้ไม่โชว์ซ้ำ
+    $_SESSION['has_seen_loading_fill'] = true;
 }
 
-// ตั้งค่า Timezone ให้เป็นเวลาประเทศไทย
 date_default_timezone_set('Asia/Bangkok');
 
-// สร้าง CSRF Token หากยังไม่มี
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
-// เชื่อมต่อฐานข้อมูล
 require 'db.php';
 
 // ---------------- 0. API สำหรับดึงข้อมูลนักเรียนผ่าน AJAX ----------------
@@ -68,7 +65,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_student_name' && isset($_G
     exit;
 }
 
-// ---------------- 1. ระบบคำนวณวันที่ (ปรับแต่ง วัน+1 และ เวลา-10 ชม.) ----------------
+// ---------------- 1. ระบบคำนวณวันที่ ----------------
 $tz = new DateTimeZone('Asia/Bangkok');
 $dt = new DateTime('now', $tz);
 
@@ -96,16 +93,29 @@ $is_voting_open = (
 $alert_type = "";
 $message = "";
 
-// ---------------- 2. ลอจิกการคำนวณเวร ----------------
+// ---------------- 2. ลอจิกการคำนวณเวร และดึงรายชื่อผู้ถูกกักบริเวณ ----------------
 $all_students = [];
 $duty_roster_ids = [];
+$restricted_ids = []; // รายชื่อนักเรียนที่โดนกักบริเวณ
 
 try {
     if (isset($conn) && $conn) {
+        // ดึงนักเรียนทั้งหมดเพื่อคำนวณเวร
         $res = $conn->query("SELECT student_code FROM students ORDER BY id ASC");
         if ($res) {
             while ($row = $res->fetch_assoc()) {
                 $all_students[] = $row['student_code'];
+            }
+        }
+
+        // ดึงรหัสนักเรียนที่ถูกกักบริเวณประจำสัปดาห์นี้
+        $stmt_rest = $conn->prepare("SELECT student_code FROM restricted_students WHERE restrict_date = ? OR is_active = 1");
+        if ($stmt_rest) {
+            $stmt_rest->bind_param("s", $target_date);
+            $stmt_rest->execute();
+            $res_rest = $stmt_rest->get_result();
+            while ($r_row = $res_rest->fetch_assoc()) {
+                $restricted_ids[] = $r_row['student_code'];
             }
         }
     }
@@ -145,6 +155,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         if (!in_array($status, $allowed_status)) {
             $alert_type = "error";
             $message = "สถานะไม่ถูกต้องตามที่ระบบกำหนด (กรุณาเลือกสถานะให้ครบถ้วน)";
+        } else if (in_array($stu_code, $restricted_ids) && $status !== 'restrict') {
+            $alert_type = "error";
+            $message = "รหัส " . htmlspecialchars($stu_code) . " มีรายชื่อถูกกักบริเวณในสัปดาห์นี้ ต้องเลือกสถานะกักบริเวณเท่านั้น";
         } else if ($status === 'duty' && !in_array($stu_code, $duty_roster_ids)) {
             $alert_type = "error";
             $message = "รหัส " . htmlspecialchars($stu_code) . " ไม่ได้มีรายชื่อปฏิบัติหน้าที่เวรรักษาการณ์ในสัปดาห์นี้ ไม่สามารถเลือกสถานะเวรได้";
@@ -209,9 +222,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       min-height: 100vh;
     }
 
-    /* -------------------------------------------------------------
-       CSS สำหรับ Loading Screen & Animations
-       ------------------------------------------------------------- */
     #page-loader {
       position: fixed;
       top: 0;
@@ -281,7 +291,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     .delay-2 { animation-delay: 0.2s; }
     .delay-3 { animation-delay: 0.3s; }
     .delay-4 { animation-delay: 0.4s; }
-    /* ------------------------------------------------------------- */
 
     .app-container {
       width: 100%;
@@ -335,7 +344,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       color: var(--primary); margin: 0 20px 15px; border: 1px solid #c7d2fe;
     }
 
-    /* Form Styles */
     .form-card {
       background: white; border-radius: 16px; padding: 20px; margin: 0 20px 20px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.03);
@@ -365,7 +373,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       color: var(--primary); pointer-events: none;
     }
 
-    /* Input States */
     .input-readonly { background: #f1f5f9; color: #64748b; border-style: dashed; }
     .input-success { background: #f0fdf4; border-color: #22c55e; color: #15803d; }
     .input-error { background: #fef2f2; border-color: #ef4444; color: #b91c1c; }
@@ -389,7 +396,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
     .btn-submit:active { transform: scale(0.98); background: var(--primary-dark); }
 
-    /* Closed State */
     .closed-state {
       text-align: center; padding: 40px 20px; background: white; border-radius: 16px; 
       margin: 0 20px 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.03);
@@ -417,7 +423,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 </head>
 <body>
 
-  <!-- Loading Screen (จะทำงานต่อเมื่อ $show_loading เป็น true) -->
   <?php if ($show_loading): ?>
   <div id="page-loader">
     <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg?utm_source=th.wikipedia.org&utm_campaign=index&utm_content=thumbnail_unscaled" alt="Loading Logo" class="loader-logo">
@@ -428,7 +433,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
   <div class="app-container">
     
-    <!-- Header -->
     <div class="top-header fade-in-up delay-1">
       <div class="header-left">
         <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg?utm_source=th.wikipedia.org&utm_campaign=index&utm_content=thumbnail_unscaled" alt="Logo" class="school-logo">
@@ -448,7 +452,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       <i class="far fa-calendar-alt"></i> วันศุกร์ที่ <?php echo date('d/m/Y', strtotime($target_date)); ?>
     </div>
 
-    <!-- Main Content Area -->
     <?php if ($is_voting_open): ?>
       <div class="form-card fade-in-up delay-3">
         <form id="statusForm" method="POST" action="">
@@ -525,7 +528,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       </div>
     <?php endif; ?>
 
-    <!-- Bottom Navigation -->
     <div class="bottom-nav">
       <a href="main.php" class="nav-link">
         <i class="fas fa-home"></i>
@@ -540,7 +542,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
   </div>
 
-<!-- Javascript สำหรับซ่อน Loading Screen -->
 <script>
   document.addEventListener("DOMContentLoaded", function() {
     const loader = document.getElementById('page-loader');
@@ -578,6 +579,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 <?php if ($is_voting_open): ?>
     const dutyIds = <?php echo json_encode($duty_roster_ids); ?>;
+    const restrictIds = <?php echo json_encode($restricted_ids); ?>;
 
     async function checkStudentData() {
         const stuInput = document.getElementById('student_code');
@@ -626,7 +628,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             nameInput.className = "form-control input-error";
         }
 
-        if (dutyIds.includes(stuCode)) {
+        // เช็คว่าถูกกักบริเวณหรือไม่
+        if (restrictIds.includes(stuCode)) {
+            Swal.fire({
+                title: 'แจ้งเตือนถูกกักบริเวณ',
+                text: 'รหัสของท่านมีรายชื่อถูกกักบริเวณในสัปดาห์นี้ ระบบจะเลือกสถานะกักบริเวณให้อัตโนมัติ',
+                icon: 'warning',
+                confirmButtonColor: '#ef4444',
+                confirmButtonText: 'รับทราบ'
+            });
+
+            statusSelect.value = "restrict";
+            statusSelect.disabled = true;
+            statusSelect.style.pointerEvents = "none";
+            statusSelect.className = "form-control input-error"; 
+        } 
+        // เช็คว่าเป็นเวรรักษาการณ์หรือไม่
+        else if (dutyIds.includes(stuCode)) {
             Swal.fire({
                 title: 'แจ้งเตือนระบบเวรรักษาการณ์',
                 text: 'รหัสของท่านมีรายชื่อปฏิบัติหน้าที่เวรรักษาการณ์ในสัปดาห์นี้ ระบบจะเลือกสถานะเวรให้อัตโนมัติ',
@@ -643,7 +661,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             statusSelect.disabled = false;
             statusSelect.style.pointerEvents = "auto";
             statusSelect.className = "form-control";
-            if (statusSelect.value === "duty") {
+            if (statusSelect.value === "duty" || statusSelect.value === "restrict") {
                 statusSelect.value = "";
             }
         }
