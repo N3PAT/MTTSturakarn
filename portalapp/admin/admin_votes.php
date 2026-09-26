@@ -351,7 +351,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
                 $status_text = 'เข้าเวร';
                 $badge_class = 'status-duty';
             } elseif ($status_raw === 'restrict') {
-                $status_text = 'กักบริเวณ/อยู่ รรร.';
+                $status_text = 'กักบริเวณ/อยู่ รร.';
                 $badge_class = 'status-stay';
             }
           ?>
@@ -380,7 +380,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
 
     <!-- Bottom Navigation -->
     <div class="bottom-nav">
-      <a href="turakarn.php" class="nav-link">
+      <a href="admin_main.php" class="nav-link">
         <i class="fas fa-home"></i>
         <span>หน้าหลัก</span>
       </a>
