@@ -10,18 +10,102 @@ if (empty($_SESSION['admin_id'])) {
 
 $message = '';
 $message_type = '';
-$step = 1; // ตัวแปรบอกสถานะว่าอยู่หน้ากรอกข้อมูล (1) หรือหน้ายืนยัน (2)
+$step = 1;
 
-$valid_students = []; // เก็บคนที่หาเจอ
-$not_found = [];      // เก็บคนที่หาไม่เจอ
+$valid_students = []; // รายชื่อที่พบ
+$not_found = [];      // รายชื่อที่ไม่พบ
 $weeks = 1;
 $raw_names = '';
 
+/**
+ * ฟังก์ชั่นค้นหารายชื่อแบบฉลาด (Smart Student Search)
+ * รองรับ: ชื่อ + อักษรย่อ นามสกุล (เช่น ธนเดช น.), การันต์ไม่ตรง (ยศพงษ์ -> ยศพงศ์), อักขระซ่อนเร้น (\t)
+ */
+function searchStudent($conn, $clean_name) {
+    $clean_name = trim($clean_name);
+    if (empty($clean_name)) return null;
+
+    // แยกข้อความด้วยช่องว่าง
+    $parts = preg_split('/\s+/', $clean_name);
+    $first_part = $parts[0] ?? '';
+    $second_part = $parts[1] ?? '';
+    $second_clean = rtrim($second_part, '.'); // ตัดจุดออกจากตัวย่อนามสกุล
+
+    // -------------------------------------------------------------
+    // กรณีที่ 1: กรอกแบบ "ชื่อ" + "ตัวย่อนามสกุล" (เช่น ธนเดช น. / ยศพงษ์ จ.)
+    // -------------------------------------------------------------
+    if (!empty($second_clean) && mb_strlen($second_clean, 'UTF-8') === 1) {
+        $initial = $second_clean . '%';
+
+        // 1A. ค้นหา ชื่อตรง + นามสกุลขึ้นต้นด้วยตัวย่อ (ล้าง \t ออกจาก DB ด้วย)
+        $stmt = $conn->prepare("
+            SELECT student_code, first_name, last_name 
+            FROM students 
+            WHERE REPLACE(first_name, '\t', '') = ? AND last_name LIKE ? 
+            LIMIT 1
+        ");
+        $stmt->bind_param("ss", $first_part, $initial);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        if ($row = $res->fetch_assoc()) return $row;
+
+        // 1B. ยืดหยุ่นกรณีสะกดการันต์ผิด (เช่น ยศพงษ์ -> ยศพงศ์)
+        $first_base = preg_replace('/[์\x{0e4c}]/u', '', $first_part); // ลบตัวการันต์ออก
+        if (mb_strlen($first_base, 'UTF-8') >= 3) {
+            $first_prefix = mb_substr($first_base, 0, 4, 'UTF-8') . '%';
+            $stmt = $conn->prepare("
+                SELECT student_code, first_name, last_name 
+                FROM students 
+                WHERE REPLACE(first_name, '\t', '') LIKE ? AND last_name LIKE ? 
+                LIMIT 1
+            ");
+            $stmt->bind_param("ss", $first_prefix, $initial);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($row = $res->fetch_assoc()) return $row;
+        }
+    }
+
+    // -------------------------------------------------------------
+    // กรณีที่ 2: กรอกชื่อ-นามสกุลเต็ม หรือ ค้นจากชื่ออย่างเดียว
+    // -------------------------------------------------------------
+    $search_pattern = "%" . str_replace(' ', '%', $clean_name) . "%";
+    $stmt = $conn->prepare("
+        SELECT student_code, first_name, last_name 
+        FROM students 
+        WHERE REPLACE(CONCAT(first_name, ' ', last_name), '\t', '') LIKE ? 
+           OR REPLACE(first_name, '\t', '') = ? 
+        LIMIT 1
+    ");
+    $stmt->bind_param("ss", $search_pattern, $first_part);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    if ($row = $res->fetch_assoc()) return $row;
+
+    // -------------------------------------------------------------
+    // กรณีที่ 3: ค้นหาจากเค้าโครงชื่อ (Fuzzy First Name Fallback)
+    // -------------------------------------------------------------
+    $first_base = preg_replace('/[์\x{0e4c}]/u', '', $first_part);
+    if (mb_strlen($first_base, 'UTF-8') >= 3) {
+        $first_prefix = mb_substr($first_base, 0, 4, 'UTF-8') . '%';
+        $stmt = $conn->prepare("
+            SELECT student_code, first_name, last_name 
+            FROM students 
+            WHERE REPLACE(first_name, '\t', '') LIKE ? 
+            LIMIT 1
+        ");
+        $stmt->bind_param("s", $first_prefix);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        if ($row = $res->fetch_assoc()) return $row;
+    }
+
+    return null;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
-    // =========================================================
-    // ขั้นตอนที่ 1: ตรวจสอบรายชื่อ (Preview)
-    // =========================================================
+    // Step 1: ตรวจสอบรายชื่อ
     if (isset($_POST['action_preview'])) {
         $raw_names = $_POST['names_list'] ?? '';
         $weeks = (int)($_POST['restrict_weeks'] ?? 1);
@@ -30,48 +114,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $lines = preg_split('/[\r\n,]+/', $raw_names);
 
             foreach ($lines as $line) {
-                // ทำความสะอาดชื่อ
+                // ล้างอักขระพิเศษจากการก๊อปปี้
                 $name = preg_replace('/[\x{200B}-\x{200D}\x{FEFF}\x{00A0}]/u', ' ', $line);
                 $name = trim($name);
                 if (empty($name)) continue;
 
-                // ตัดตัวเลข และ นชท.
+                // ตัดตัวเลขลำดับ และ คำว่า นชท.
                 $clean_name = preg_replace('/^(\d+\.?\s*|นชท\.\s*)+/u', '', $name);
                 $clean_name = trim($clean_name);
                 if (empty($clean_name)) continue;
 
-                // ค้นหาในฐานข้อมูล
-                try {
-                    $search_term = "%" . str_replace(' ', '%', $clean_name) . "%"; 
-                    $stmt = $conn->prepare("SELECT student_code, first_name, last_name FROM students WHERE CONCAT(first_name, ' ', last_name) LIKE ? OR first_name LIKE ? LIMIT 1");
-                    $stmt->bind_param("ss", $search_term, $search_term);
-                    $stmt->execute();
-                    $result = $stmt->get_result();
-                    
-                    if ($row = $result->fetch_assoc()) {
-                        // ถ้าหาเจอ เก็บเข้า Array เพื่อรอยืนยัน
-                        $valid_students[] = [
-                            'code' => $row['student_code'],
-                            'full_name' => $row['first_name'] . ' ' . $row['last_name']
-                        ];
-                    } else {
-                        // ถ้าหาไม่เจอ
-                        $not_found[] = $clean_name;
-                    }
-                } catch (Exception $e) {
-                    error_log("Search error: " . $e->getMessage());
+                // ค้นหาข้อมูลนักเรียน
+                $found_student = searchStudent($conn, $clean_name);
+
+                if ($found_student) {
+                    $valid_students[] = [
+                        'code' => $found_student['student_code'],
+                        'full_name' => trim($found_student['first_name']) . ' ' . trim($found_student['last_name'])
+                    ];
+                } else {
+                    $not_found[] = $clean_name;
                 }
             }
-            $step = 2; // เปลี่ยนไปหน้าแสดงตัวอย่าง
+            $step = 2;
         } else {
             $message = "กรุณาวางรายชื่อที่ต้องการกักบริเวณ";
             $message_type = "error";
         }
     }
 
-    // =========================================================
-    // ขั้นตอนที่ 2: ยืนยันการบันทึกลงฐานข้อมูล (Save)
-    // =========================================================
+    // Step 2: ยืนยันบันทึกลง DB
     elseif (isset($_POST['action_save'])) {
         $student_codes = $_POST['student_codes'] ?? [];
         $weeks = (int)($_POST['weeks'] ?? 1);
@@ -99,7 +171,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = "ไม่มีรายชื่อให้บันทึก";
             $message_type = "error";
         }
-        $step = 1; // กลับไปหน้าแรก
+        $step = 1;
     }
 }
 ?>
@@ -150,7 +222,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     .alert { padding: 12px 16px; border-radius: 10px; margin-bottom: 20px; font-size: 0.85rem; font-weight: 500; display: flex; align-items: center; gap: 10px; }
     .alert-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
     .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
-    .alert-warning { background: #fef9c3; color: #854d0e; border: 1px solid #fef08a; margin-top: 15px;}
 
     .result-box { background: white; border-radius: 14px; padding: 15px; margin-bottom: 15px; border: 1px solid #e2e8f0; }
     .result-box h4 { margin: 0 0 10px 0; font-size: 0.9rem; color: var(--text-dark); border-bottom: 1px solid #f1f5f9; padding-bottom: 8px;}
@@ -194,7 +265,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             class="name-textarea" 
             placeholder="ตัวอย่าง:&#10;นชท.ศักรพัฒน ดวงอินทร์&#10;1.ธนเดช น.&#10;2.รัฐธรรมนูญ ค" 
             required><?= htmlspecialchars($raw_names) ?></textarea>
-          <span class="help-text">* ระบบจะตัดตัวเลข และคำว่า นชท. ออกให้โดยอัตโนมัติ</span>
+          <span class="help-text">* รองรับคำว่า นชท., ตัวเลขลำดับ และอักษรย่อนามสกุล (เช่น ธนเดช น.)</span>
         </div>
 
         <div class="form-group">
@@ -215,9 +286,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       
       <?php elseif ($step === 2): ?>
       <!-- ขั้นตอนที่ 2: แสดงตัวอย่างและยืนยัน -->
-      
       <form method="POST" action="">
-        <!-- ส่งค่าจำนวนสัปดาห์ไปบันทึกด้วย -->
         <input type="hidden" name="weeks" value="<?= $weeks ?>">
 
         <div class="result-box" style="border-color: #bbf7d0;">
@@ -226,7 +295,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php foreach ($valid_students as $student): ?>
               <div class="name-tag success">
                 <?= htmlspecialchars($student['full_name']) ?>
-                <!-- ซ่อนรหัสประจำตัวไว้เพื่อส่งไปบันทึกลงฐานข้อมูล -->
                 <input type="hidden" name="student_codes[]" value="<?= htmlspecialchars($student['code']) ?>">
               </div>
             <?php endforeach; ?>
@@ -238,7 +306,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php if (count($not_found) > 0): ?>
           <div class="result-box" style="border-color: #fecaca; background: #fffcfc;">
             <h4><i class="fas fa-exclamation-triangle" style="color: #991b1b;"></i> รายชื่อที่ไม่พบ (จะไม่ถูกบันทึก)</h4>
-            <p style="font-size: 0.75rem; color: var(--text-gray); margin-top: -5px;">* อาจเกิดจากการสะกดผิด หรือไม่มีในฐานข้อมูล</p>
             <?php foreach ($not_found as $n): ?>
               <div class="name-tag error"><?= htmlspecialchars($n) ?></div>
             <?php endforeach; ?>
@@ -257,7 +324,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </button>
         </a>
       </form>
-      
       <?php endif; ?>
 
     </div>
