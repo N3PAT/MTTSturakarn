@@ -28,8 +28,7 @@ if (!isset($_SESSION['admin_has_seen_loading'])) {$show_loading = true;
     $_SESSION['admin_has_seen_loading'] = true;
 }
 
-$admin_id =$_SESSION['admin_id'];
-$admin_name =$_SESSION['admin_name'] ?? 'ผู้ดูแลระบบ MTTS'; 
+$admin_id = $_SESSION['admin_id'];$admin_name = 'ผู้ดูแลระบบ MTTS'; 
 
 $total_students = 0;
 $voted_count = 0;
@@ -46,14 +45,24 @@ $days_until_friday = 5 -$current_day_of_week;
 if ($days_until_friday < 0) {$days_until_friday += 7;
 }
 
-$target_dt = clone$dt; // แก้ไขช่องว่างตรง clone
+$target_dt = clone$dt; 
 $target_dt->modify("+$days_until_friday days");
 $target_date = $target_dt->format('Y-m-d');$start_date = "2026-07-06"; // วันเริ่มต้นคำนวณเวรหลักการหมุนเวียน
 
-// 5. ดึงข้อมูลสถิติ และ คำนวณเวร
+// 5. ดึงข้อมูลสถิติ, ข้อมูลแอดมิน และ คำนวณเวร
 if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
 
     try {
+        // [เพิ่มใหม่] ดึงข้อมูล Username ของ Admin จากฐานข้อมูล
+        $stmt_admin =$conn->prepare("SELECT username FROM admins WHERE id = ?");
+        if ($stmt_admin) {$stmt_admin->bind_param("i", $admin_id);$stmt_admin->execute();
+            $res_admin =$stmt_admin->get_result();
+            if ($row_admin =$res_admin->fetch_assoc()) {
+                $admin_name =$row_admin['username'];
+            }
+            $stmt_admin->close();
+        }
+
         // ยอดนักเรียนทั้งหมด
         $res_std =$conn->query("SELECT COUNT(*) as total FROM students");
         if ($res_std && $row =$res_std->fetch_assoc()) { 
@@ -84,13 +93,11 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
             if ($diff_days < 0)$diff_days = 0;
             
             // คำนวณหา 16 คนของรอบเวรเป้าหมาย
-            // นำเครื่องหมาย \ ออกจากหน้า %
-            $start_index = ($diff_days * 16) %$total_std_count;
+            $start_index = ($diff_days * 16) \%$total_std_count;
             $today_duty_list = [];
             
             for ($i = 0; $i < 16; $i++) {
-                // นำเครื่องหมาย \ ออกจากหน้า %
-                $idx = ($start_index + $i) %$total_std_count;
+                $idx = ($start_index + $i) \%$total_std_count;
                 if (isset($all_students_for_duty[$idx])) {$today_duty_list[] = $all_students_for_duty[$idx]['student_code'];
                 }
             }
@@ -184,7 +191,7 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
     .admin-card::after { content: '\f3ed'; font-family: 'Font Awesome 6 Free'; font-weight: 900; position: absolute; right: -15px; bottom: -25px; font-size: 8rem; opacity: 0.05; transform: rotate(-15deg); }
     .badges { display: flex; gap: 8px; margin-bottom: 12px; }
     .badge-item { background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.2); padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 500; backdrop-filter: blur(8px); }
-    .admin-card h2 { font-size: 1.3rem; font-weight: 600; margin: 0 0 4px 0; }
+    .admin-card h2 { font-size: 1.3rem; font-weight: 600; margin: 0 0 4px 0; text-transform: uppercase; }
     .admin-card p { font-size: 0.85rem; margin: 0; color: #cbd5e1; display: flex; align-items: center; gap: 6px; opacity: 0.9; }
 
     /* Section Title อิงจาก main.php */
@@ -330,6 +337,10 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
         <div class="icon-box bg-red"><i class="fas fa-file-pdf"></i></div>
         <span class="menu-text">รายงาน</span>
       </a>
+          <a href="admin_restrict.php" class="menu-item">
+    <div class="icon-box bg-red"><i class="fas fa-dungeon"></i></div>
+        <span class="menu-text">กักบริเวณ</span>
+      </a>
     </div>
 
     <!-- Bottom Navigation -->
@@ -359,11 +370,10 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
           setTimeout(function() {
             loader.remove();
           }, 500);
-        }, 1200); // ปรับเวลา Loading ให้เท่ากับไฟล์ฝั่งนักเรียน
+        }, 1200); 
       }
     });
 
-    // โลจิกแจ้งเตือนเดิมของหน้าแอดมิน
     async function triggerPushNotification() {
       if (!confirm("คุณต้องการส่งแจ้งเตือนไปยังผู้ใช้ที่ยังไม่ได้ทำรายการ ใช่หรือไม่?")) {
           return;
