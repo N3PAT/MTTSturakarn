@@ -1,24 +1,12 @@
 <?php
 session_start();
 
-// --- เปิดการแสดงผล Error ชั่วคราว (ถ้าใช้งานได้ปกติแล้ว สามารถใส่ // หน้า 3 บรรทัดนี้เพื่อปิดได้ครับ) ---
+// เปิดการแสดง Error ชั่วคราวกรณีมีปัญหาอื่น
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
-// ----------------------------------------------------------------------
 
 require_once 'db.php';
-
-// --- อัปเดตฐานข้อมูลอัตโนมัติ (เพิ่มคอลัมน์ restrict_type ถ้ายังไม่มี) ---
-try {
-    $check_col = $conn->query("SHOW COLUMNS FROM restrictions LIKE 'restrict_type'");
-    if ($check_col && $check_col->num_rows == 0) {
-        $conn->query("ALTER TABLE restrictions ADD COLUMN restrict_type VARCHAR(20) DEFAULT 'restrict'");
-    }
-} catch (Exception $e) {
-    // ปล่อยผ่านถ้าเซิร์ฟเวอร์ไม่อนุญาตให้รันคำสั่งเช็คโครงสร้าง
-}
-// ---------------------------------------------
 
 // ตรวจสอบสิทธิ์ Admin
 if (empty($_SESSION['admin_id'])) {
@@ -96,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = "ลบข้อมูลสำเร็จ";
             $message_type = "success";
         } else {
-            $message = "เกิดข้อผิดพลาดในการลบ";
+            $message = "เกิดข้อผิดพลาดในการลบ: " . $conn->error;
             $message_type = "error";
         }
         $view = 'manage';
@@ -114,7 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = "อัปเดตข้อมูลสำเร็จ";
             $message_type = "success";
         } else {
-            $message = "เกิดข้อผิดพลาดในการอัปเดต";
+            $message = "เกิดข้อผิดพลาดในการอัปเดต: " . $conn->error;
             $message_type = "error";
         }
         $view = 'manage';
@@ -173,7 +161,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $message = "บันทึกคำสั่ง $type_txt สำเร็จ จำนวน $success_count นาย ($weeks สัปดาห์)";
                 $message_type = "success";
             } catch (Exception $e) {
-                $message = "เกิดข้อผิดพลาดในการบันทึกข้อมูล";
+                $message = "เกิดข้อผิดพลาดในการบันทึกข้อมูล: " . $e->getMessage();
                 $message_type = "error";
             }
         } else {
@@ -187,21 +175,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // โหลดข้อมูลสำหรับโหมด 'manage'
 $active_restrictions = [];
 if ($view === 'manage') {
-    try {
-        $res = $conn->query("
-            SELECT r.id, r.student_code, s.first_name, s.last_name, r.weeks_count, r.restrict_type, r.created_at 
-            FROM restrictions r
-            JOIN students s ON r.student_code = s.student_code
-            ORDER BY r.created_at DESC 
-            LIMIT 50
-        ");
-        if ($res) {
-            while ($row = $res->fetch_assoc()) {
-                $active_restrictions[] = $row;
-            }
+    $res = $conn->query("
+        SELECT r.id, r.student_code, s.first_name, s.last_name, r.weeks_count, r.restrict_type, r.created_at 
+        FROM restrictions r
+        JOIN students s ON r.student_code = s.student_code
+        ORDER BY r.created_at DESC 
+        LIMIT 50
+    ");
+    if ($res) {
+        while ($row = $res->fetch_assoc()) {
+            $active_restrictions[] = $row;
         }
-    } catch (Exception $e) {
-        $message = "เกิดข้อผิดพลาดในการดึงข้อมูลจากฐานข้อมูล (ลองกลับไปหน้าเพิ่มคำสั่งก่อนเพื่อสร้างคอลัมน์ใหม่)";
+    } else {
+        $message = "เกิดข้อผิดพลาดในการดึงข้อมูล: " . $conn->error;
         $message_type = "error";
     }
 }
@@ -410,8 +396,8 @@ if ($view === 'manage') {
                               <div style="flex:1;">
                                   <label style="font-size: 0.75rem; color: var(--text-gray);">ประเภทคำสั่ง</label>
                                   <select name="edit_type" class="manage-select">
-                                      <option value="restrict" <?= $row['restrict_type'] == 'restrict' ? 'selected' : '' ?>>กักบริเวณ</option>
-                                      <option value="stay" <?= $row['restrict_type'] == 'stay' ? 'selected' : '' ?>>บังคับอยู่</option>
+                                      <option value="restrict" <?= ($row['restrict_type'] ?? '') == 'restrict' ? 'selected' : '' ?>>กักบริเวณ</option>
+                                      <option value="stay" <?= ($row['restrict_type'] ?? '') == 'stay' ? 'selected' : '' ?>>บังคับอยู่</option>
                                   </select>
                               </div>
                               <div style="flex:1;">
@@ -457,6 +443,7 @@ if ($view === 'manage') {
         <i class="fas fa-ban"></i>
         <span>คำสั่ง</span>
       </a>
+     
     </div>
 
   </div>
