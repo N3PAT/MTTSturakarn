@@ -305,8 +305,8 @@ if ($view === 'manage') {
             <div class="form-group">
               <label>ประเภทคำสั่ง</label>
               <select name="restrict_type" class="form-control">
-                <option value="restrict" <?= $restrict_type == 'restrict' ? 'selected' : '' ?>>🔴 กักบริเวณ</option>
-                <option value="stay" <?= $restrict_type == 'stay' ? 'selected' : '' ?>>🟡 บังคับอยู่</option>
+                <option value="restrict" <?= $restrict_type == 'restrict' ? 'selected' : '' ?>>กักบริเวณ</option>
+                <option value="stay" <?= $restrict_type == 'stay' ? 'selected' : '' ?>>บังคับอยู่</option>
               </select>
             </div>
 
@@ -414,10 +414,10 @@ if ($view === 'manage') {
                           <div class="manage-card-actions">
                               <button type="submit" name="action_update" class="btn-small btn-save" style="flex:1;"><i class="fas fa-save"></i> บันทึก</button>
                               
-                              <button type="submit" name="action_delete" class="btn-small btn-delete" style="flex:1;" 
-                                      onclick="document.getElementById('del_id').value='<?= $row['id'] ?>'; return confirm('ยืนยันการลบข้อมูลนี้ใช่หรือไม่?');">
-                                  <i class="fas fa-trash"></i> ลบ
-                              </button>
+                              <button type="button" class="btn-small btn-delete" style="flex:1;" 
+        onclick="if(confirm('ยืนยันการลบข้อมูลนี้ใช่หรือไม่?')) { document.getElementById('del_id').value='<?= $row['id'] ?>'; document.getElementById('deleteForm').submit(); }">
+    <i class="fas fa-trash"></i> ลบ
+</button>
                           </div>
                       </form>
                   </div>
