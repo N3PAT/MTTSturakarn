@@ -1,7 +1,7 @@
 <?php
 session_start();
 
-// --- เปิดการแสดงผล Error เพื่อหาจุดพัง (ถ้าใช้งานได้ปกติแล้ว สามารถลบ 3 บรรทัดนี้ทิ้งได้) ---
+// --- เปิดการแสดงผล Error ชั่วคราว (ถ้าใช้งานได้ปกติแล้ว สามารถใส่ // หน้า 3 บรรทัดนี้เพื่อปิดได้ครับ) ---
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
@@ -9,14 +9,14 @@ error_reporting(E_ALL);
 
 require_once 'db.php';
 
-// --- อัปเดตฐานข้อมูลอัตโนมัติ ป้องกัน Error 500 ---
+// --- อัปเดตฐานข้อมูลอัตโนมัติ (เพิ่มคอลัมน์ restrict_type ถ้ายังไม่มี) ---
 try {
     $check_col = $conn->query("SHOW COLUMNS FROM restrictions LIKE 'restrict_type'");
     if ($check_col && $check_col->num_rows == 0) {
         $conn->query("ALTER TABLE restrictions ADD COLUMN restrict_type VARCHAR(20) DEFAULT 'restrict'");
     }
 } catch (Exception $e) {
-    // ปล่อยผ่านถ้าเช็คไม่ได้ (ขึ้นอยู่กับการตั้งค่า Server)
+    // ปล่อยผ่านถ้าเซิร์ฟเวอร์ไม่อนุญาตให้รันคำสั่งเช็คโครงสร้าง
 }
 // ---------------------------------------------
 
@@ -34,7 +34,7 @@ $view = $_GET['view'] ?? 'add'; // 'add' หรือ 'manage'
 $valid_students = []; // รายชื่อที่พบ
 $not_found = [];      // รายชื่อที่ไม่พบ
 $weeks = 1;
-$restrict_type = 'restrict'; // ค่าเริ่มต้น: บังคับอยู่ (restrict)
+$restrict_type = 'restrict'; // ค่าเริ่มต้น: กักบริเวณ (restrict)
 $raw_names = '';
 
 /**
@@ -169,7 +169,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($insert->execute()) $success_count++;
                 }
                 
-                $type_txt = ($restrict_type === 'stay') ? 'บังคับกลับ' : 'บังคับอยู่';
+                $type_txt = ($restrict_type === 'stay') ? 'บังคับอยู่' : 'กักบริเวณ';
                 $message = "บันทึกคำสั่ง $type_txt สำเร็จ จำนวน $success_count นาย ($weeks สัปดาห์)";
                 $message_type = "success";
             } catch (Exception $e) {
@@ -201,7 +201,7 @@ if ($view === 'manage') {
             }
         }
     } catch (Exception $e) {
-        $message = "เกิดข้อผิดพลาดในการดึงข้อมูลจากฐานข้อมูล";
+        $message = "เกิดข้อผิดพลาดในการดึงข้อมูลจากฐานข้อมูล (ลองกลับไปหน้าเพิ่มคำสั่งก่อนเพื่อสร้างคอลัมน์ใหม่)";
         $message_type = "error";
     }
 }
@@ -211,7 +211,7 @@ if ($view === 'manage') {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>จัดการกักบริเวณ - MTTS</title>
+  <title>จัดการคำสั่ง - MTTS</title>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
   
@@ -284,7 +284,7 @@ if ($view === 'manage') {
     <div class="top-header">
       <a href="admin_main.php" class="back-btn"><i class="fas fa-chevron-left"></i></a>
       <div class="page-title">
-        <h1>จัดการคำสั่ง (กักบริเวณ/บังคับกลับ)</h1>
+        <h1>จัดการคำสั่ง (กักบริเวณ/บังคับอยู่)</h1>
       </div>
     </div>
 
@@ -318,8 +318,8 @@ if ($view === 'manage') {
             <div class="form-group">
               <label>ประเภทคำสั่ง</label>
               <select name="restrict_type" class="form-control">
-                <option value="restrict" <?= $restrict_type == 'restrict' ? 'selected' : '' ?>>🔴 บังคับอยู่ (กักบริเวณ / งดกลับบ้าน)</option>
-                <option value="stay" <?= $restrict_type == 'stay' ? 'selected' : '' ?>>🟢 บังคับกลับ (ต้องกลับบ้าน)</option>
+                <option value="restrict" <?= $restrict_type == 'restrict' ? 'selected' : '' ?>>🔴 กักบริเวณ</option>
+                <option value="stay" <?= $restrict_type == 'stay' ? 'selected' : '' ?>>🟡 บังคับอยู่</option>
               </select>
             </div>
 
@@ -348,7 +348,7 @@ if ($view === 'manage') {
             <div class="result-box" style="border-color: #bbf7d0;">
               <h4>
                 <i class="fas fa-user-check" style="color: #166534;"></i> 
-                ยืนยันการบันทึก: <?= $restrict_type === 'restrict' ? 'บังคับอยู่ (กักบริเวณ)' : 'บังคับกลับ' ?> <?= $weeks ?> สัปดาห์
+                ยืนยันการบันทึก: <?= $restrict_type === 'restrict' ? 'กักบริเวณ' : 'บังคับอยู่' ?> <?= $weeks ?> สัปดาห์
               </h4>
               <?php if (count($valid_students) > 0): ?>
                 <?php foreach ($valid_students as $student): ?>
@@ -410,8 +410,8 @@ if ($view === 'manage') {
                               <div style="flex:1;">
                                   <label style="font-size: 0.75rem; color: var(--text-gray);">ประเภทคำสั่ง</label>
                                   <select name="edit_type" class="manage-select">
-                                      <option value="restrict" <?= $row['restrict_type'] == 'restrict' ? 'selected' : '' ?>>บังคับอยู่</option>
-                                      <option value="stay" <?= $row['restrict_type'] == 'stay' ? 'selected' : '' ?>>บังคับกลับ</option>
+                                      <option value="restrict" <?= $row['restrict_type'] == 'restrict' ? 'selected' : '' ?>>กักบริเวณ</option>
+                                      <option value="stay" <?= $row['restrict_type'] == 'stay' ? 'selected' : '' ?>>บังคับอยู่</option>
                                   </select>
                               </div>
                               <div style="flex:1;">
@@ -456,10 +456,6 @@ if ($view === 'manage') {
       <a href="admin_restrict.php" class="nav-link active" style="color: var(--primary);">
         <i class="fas fa-ban"></i>
         <span>คำสั่ง</span>
-      </a>
-      <a href="admin_votes.php" class="nav-link">
-        <i class="fas fa-vote-yea"></i>
-        <span>ผลโหวต</span>
       </a>
     </div>
 
