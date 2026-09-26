@@ -93,14 +93,14 @@ $is_voting_open = (
 $alert_type = "";
 $message = "";
 
-// ---------------- 2. ลอจิกการคำนวณเวร และดึงรายชื่อผู้ถูกกักบริเวณ ----------------
+// ---------------- 2. ลอจิกการคำนวณเวร และดึงรายชื่อผู้ถูกกักบริเวณจากตาราง restrictions ----------------
 $all_students = [];
 $duty_roster_ids = [];
 $restricted_ids = []; // รายชื่อนักเรียนที่โดนกักบริเวณ
 
 try {
     if (isset($conn) && $conn) {
-        // ดึงนักเรียนทั้งหมดเพื่อคำนวณเวร
+        // 2.1 ดึงนักเรียนทั้งหมดเพื่อคำนวณเวรรักษาการณ์
         $res = $conn->query("SELECT student_code FROM students ORDER BY id ASC");
         if ($res) {
             while ($row = $res->fetch_assoc()) {
@@ -108,10 +108,17 @@ try {
             }
         }
 
-        // ดึงรหัสนักเรียนที่ถูกกักบริเวณประจำสัปดาห์นี้
-        $stmt_rest = $conn->prepare("SELECT student_code FROM restricted_students WHERE restrict_date = ? OR is_active = 1");
+        // 2.2 ดึงรหัสนักเรียนที่ถูกกักบริเวณในสัปดาห์นี้จากตาราง restrictions
+        // เงื่อนไข: วันที่เป้าหมาย ($target_date) อยู่ในช่วงตั้งแต่ created_at ถึง created_at + weeks_count สัปดาห์
+        $stmt_rest = $conn->prepare("
+            SELECT DISTINCT student_code 
+            FROM restrictions 
+            WHERE (restrict_type = 'restrict' OR restrict_type IS NULL OR restrict_type = '')
+              AND ? >= DATE(created_at) 
+              AND ? <= DATE_ADD(DATE(created_at), INTERVAL weeks_count WEEK)
+        ");
         if ($stmt_rest) {
-            $stmt_rest->bind_param("s", $target_date);
+            $stmt_rest->bind_param("ss", $target_date, $target_date);
             $stmt_rest->execute();
             $res_rest = $stmt_rest->get_result();
             while ($r_row = $res_rest->fetch_assoc()) {
