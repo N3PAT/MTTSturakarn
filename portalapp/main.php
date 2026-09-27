@@ -765,38 +765,61 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
     </div>
 
 <div class="fade-in-up delay-4">
-        <!-- นำไปใช้ในส่วนแสดงผล HTML -->
-<div class="news-carousel">
-  <?php if (!empty($announcements)): ?>
-    <?php foreach ($announcements as $news): ?>
-      <div class="announcement-card">
-        <div class="announcement-icon">
-          <i class="fas fa-bullhorn"></i>
-        </div>
-        <div class="announcement-content">
-          <h4><?= htmlspecialchars($news['title']) ?></h4>
-          <p><?= nl2br(htmlspecialchars($news['content'])) ?></p>
+  <div class="news-carousel">
+    <?php if (!empty($announcements)): ?>
+      <?php foreach ($announcements as $news): ?>
+        <?php 
+          // 1. จัดการ Path ของไฟล์แนบ (สลับใช้ path เต็ม หรือต่อ prefix 'uploads/news/' หากเก็บแค่ชื่อไฟล์)
+          $attachment_path = $news['attachment'] ?? '';
+          if (!empty($attachment_path) && !preg_match('/^https?:\/\//i', $attachment_path) && !str_starts_with($attachment_path, 'uploads/')) {
+              $attachment_path = 'uploads/news/' . $attachment_path; // เปลี่ยน path โฟลเดอร์ให้ตรงกับระบบของคุณ
+          }
           
-          <?php if (!empty($news['attachment'])): ?>
-            <div style="margin: 10px 0;">
-              <!-- สังเกตการใช้ path รูปที่ดึงมาจากฐานข้อมูลได้เลย -->
-              <a href="<?= htmlspecialchars($news['attachment']) ?>" target="_blank" style="text-decoration: none; color: #007bff;">
-                <i class="fas fa-paperclip"></i> ดูไฟล์แนบ
-              </a>
-            </div>
-          <?php endif; ?>
-          
-          <span class="announcement-date" style="display: block; margin-top: 10px; color: #888; font-size: 0.9em;">
-            <i class="far fa-clock"></i> <?= date('d/m/Y H:i', strtotime($news['created_at'])) ?>
-          </span>
+          // 2. ตรวจสอบว่าไฟล์แนบเป็นรูปภาพหรือไม่
+          $ext = strtolower(pathinfo($attachment_path, PATHINFO_EXTENSION));
+          $is_image = in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp']);
+        ?>
+
+        <div class="announcement-card">
+          <div class="announcement-icon">
+            <i class="fas fa-bullhorn"></i>
+          </div>
+          <div class="announcement-content">
+            <h4><?= htmlspecialchars($news['title']) ?></h4>
+            <p><?= nl2br(htmlspecialchars($news['content'])) ?></p>
+            
+            <?php if (!empty($news['attachment'])): ?>
+              <div class="announcement-attachment" style="margin-top: 10px;">
+                <?php if ($is_image): ?>
+                  <!-- กรณีเป็นรูปภาพ: แสดงตัวอย่างภาพ preview -->
+                  <a href="<?= htmlspecialchars($attachment_path) ?>" target="_blank">
+                    <img src="<?= htmlspecialchars($attachment_path) ?>" alt="ภาพแนบประกาศ" style="max-width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px; margin-top: 5px; border: 1px solid #e2e8f0; display: block;">
+                  </a>
+                <?php else: ?>
+                  <!-- กรณีเป็นไฟล์เอกสารทั่วไป (PDF, Word ฯลฯ): แสดงปุ่มดาวน์โหลด/เปิดดู -->
+                  <a href="<?= htmlspecialchars($attachment_path) ?>" target="_blank" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #f1f5f9; color: #2563eb; border-radius: 6px; font-size: 0.8rem; text-decoration: none; font-weight: 500;">
+                    <i class="fas fa-paperclip"></i> ดูไฟล์แนบ
+                  </a>
+                <?php endif; ?>
+              </div>
+            <?php endif; ?>
+            
+            <span class="announcement-date" style="display: block; margin-top: 10px; color: #94a3b8; font-size: 0.75rem;">
+              <i class="far fa-clock"></i> <?= date('d/m/Y H:i', strtotime($news['created_at'])) ?>
+            </span>
+          </div>
         </div>
+      <?php endforeach; ?>
+
+    <?php else: ?>
+      <!-- การ์ดแสดงสถานะกรณีไม่มีประกาศข่าวสาร -->
+      <div class="empty-news" style="width: 100%; text-align: center; padding: 25px 15px; background: #ffffff; border-radius: 12px; color: #94a3b8; box-shadow: 0 2px 8px rgba(0,0,0,0.03);">
+        <i class="far fa-newspaper" style="font-size: 2rem; margin-bottom: 8px; display: block; opacity: 0.6;"></i>
+        <span style="font-size: 0.85rem;">ไม่มีประกาศข่าวสารในขณะนี้</span>
       </div>
-    <?php endforeach; ?>
-  <?php else: ?>
-    <p>ไม่มีประกาศข่าวสารในขณะนี้</p>
-  <?php endif; ?>
+    <?php endif; ?>
+  </div>
 </div>
-      </div>
       
     <div class="bottom-nav">
       <a href="main.php" class="nav-link active">
