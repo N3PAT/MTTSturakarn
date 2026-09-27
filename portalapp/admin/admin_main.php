@@ -53,12 +53,19 @@ $target_date = $target_dt->format('Y-m-d');$start_date = "2026-07-06"; // วั
 if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
 
     try {
-        // ดึงข้อมูล Username ของ Admin จากฐานข้อมูล
-        $stmt_admin =$conn->prepare("SELECT username FROM admins WHERE id = ?");
+        // ดึงข้อมูล ชื่อ-นามสกุล และ Username ของ Admin จากฐานข้อมูล
+        $stmt_admin =$conn->prepare("SELECT username, first_name, last_name FROM admins WHERE id = ?");
         if ($stmt_admin) {$stmt_admin->bind_param("i", $admin_id);$stmt_admin->execute();
             $res_admin =$stmt_admin->get_result();
             if ($row_admin =$res_admin->fetch_assoc()) {
-                $admin_name =$row_admin['username'];
+                $fname = trim($row_admin['first_name'] ?? '');
+                $lname = trim($row_admin['last_name'] ?? '');
+                
+                // หากมีการระบุชื่อ ให้แสดง ชื่อ-นามสกุล, ถ้าไม่มีให้แสดง Username แทน
+                if (!empty($fname)) {$admin_name = $fname . ' ' .$lname;
+                } else {
+                    $admin_name =$row_admin['username'];
+                }
             }
             $stmt_admin->close();
         }
@@ -90,15 +97,15 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
         
         $total_std_count = count($all_students_for_duty);
         if ($total_std_count > 0) {$start_timestamp = strtotime($start_date);$target_timestamp = strtotime($target_date);$diff_days = floor((($target_timestamp -$start_timestamp) / 86400));
+            
             if ($diff_days < 0) {$diff_days = 0;
             }
             
             // คำนวณหา 16 คนของรอบเวรเป้าหมาย
-$start_index = (int) fmod(($diff_days * 16), $total_std_count);
-            $today_duty_list = [];
+            $start_index = (int) fmod(($diff_days * 16), $total_std_count);$today_duty_list = [];
             
             for ($i = 0; $i < 16; $i++) {
-               $idx = (int) fmod(($start_index + $i), $total_std_count);
+               $idx = (int) fmod(($start_index + $i),$total_std_count);
                 if (isset($all_students_for_duty[$idx])) {$today_duty_list[] = $all_students_for_duty[$idx]['student_code'];
                 }
             }
