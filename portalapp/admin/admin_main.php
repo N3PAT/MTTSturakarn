@@ -324,7 +324,7 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
         <div class="icon-box bg-blue"><i class="fas fa-user-edit"></i></div>
         <span class="menu-text">นร.ชท.</span>
       </a>
-        <div class="menu-grid fade-in-up delay-4">
+      
       <a href="record_discipline.php" class="menu-item">
         <div class="icon-box bg-blue"><i class="fas fa-clipboard-list"></i></div>
         <span class="menu-text">บัตรวินัย.</span>
