@@ -1,51 +1,67 @@
 <?php
-// 1. บังคับเปิดการตั้งค่าแสดง Error ทุกชนิด (เพื่อหาต้นตอของ 500)
+session_start();
+
+// เปิดการแสดง Error ชั่วคราวสำหรับการตรวจสอบระบบ
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-// ครอบโค้ดทั้งหมดด้วย Try-Catch เพื่อป้องกัน Error 500
-try {
-    session_start();
+$message = '';
+$message_type = '';
 
+try {
+    // 1. ตรวจสอบไฟล์เชื่อมต่อฐานข้อมูล
+    if (!file_exists('db.php')) {
+        throw new Exception("ไม่พบไฟล์ 'db.php' กรุณาตรวจสอบการอัปโหลดไฟล์");
+    }
+    require_once 'db.php';
+
+    // 2. ตรวจสอบสิทธิ์ Admin
     if (empty($_SESSION['admin_id'])) {
-        header("Location: admin_login.php");
+        header("Location: admin_main.php");
         exit();
     }
 
-    // 2. ตรวจสอบว่ามีไฟล์ db.php จริงหรือไม่ (Render อ่อนไหวเรื่องตัวพิมพ์เล็ก/ใหญ่)
-    if (!file_exists('db.php')) {
-        throw new Exception("ไม่พบไฟล์ 'db.php' กรุณาตรวจสอบชื่อไฟล์ว่าสะกดด้วยตัวพิมพ์เล็กทั้งหมดหรือไม่");
-    }
-    
-    require_once 'db.php';
-
-    // 3. ตรวจสอบการเชื่อมต่อฐานข้อมูล
     if (!isset($conn)) {
-        throw new Exception("ไม่พบตัวแปร \$conn จากไฟล์ db.php (คุณอาจใช้ PDO หรือตั้งชื่อตัวแปรอื่น?)");
-    }
-    if ($conn instanceof mysqli && $conn->connect_error) {
-        throw new Exception("เชื่อมต่อฐานข้อมูลล้มเหลว: " . $conn->connect_error);
+        throw new Exception("ไม่พบตัวแปร \$conn ใน db.php");
     }
 
-    // 4. จัดการ Request POST
+    $view = $_GET['view'] ?? 'roster'; // 'roster' หรือ 'settings'
+    $target_month = $_GET['month'] ?? date('Y-m');
+
+    // แจ้งเตือนจาก URL Parameter
+    if (isset($_GET['msg'])) {
+        if ($_GET['msg'] === 'settings_updated') {
+            $message = "บันทึกการตั้งค่าเรียบร้อยแล้ว";
+            $message_type = "success";
+        } elseif ($_GET['msg'] === 'duty_swapped') {
+            $message = "ดำเนินการสลับเวรสำเร็จ";
+            $message_type = "success";
+        }
+    }
+
+    // 3. จัดการ POST Request
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        
+        // --- อัปเดตการตั้งค่าระบบ ---
         if (isset($_POST['action']) && $_POST['action'] === 'update_settings') {
             $start_date = $_POST['start_date'];
             $per_day = (int)$_POST['students_per_day'];
-            
+
             $stmt = $conn->prepare("UPDATE duty_settings SET start_date = ?, students_per_day = ? WHERE id = 1");
             if ($stmt) {
                 $stmt->bind_param("si", $start_date, $per_day);
-                $stmt->execute();
-                $stmt->close();
+                if ($stmt->execute()) {
+                    $stmt->close();
+                    header("Location: admin_duties.php?view=settings&msg=settings_updated");
+                    exit();
+                }
             } else {
-                throw new Exception("SQL Prepare Error (update_settings): " . $conn->error);
+                throw new Exception("SQL Error (update_settings): " . $conn->error);
             }
-            header("Location: admin_duties.php?msg=settings_updated");
-            exit();
         }
 
+        // --- สลับเวร ---
         if (isset($_POST['action']) && $_POST['action'] === 'swap_duty') {
             $t_date = $_POST['target_date'];
             $o_student = $_POST['original_student'];
@@ -54,49 +70,54 @@ try {
             $stmt = $conn->prepare("INSERT INTO duty_overrides (target_date, original_student_code, new_student_code) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE new_student_code = ?");
             if ($stmt) {
                 $stmt->bind_param("ssss", $t_date, $o_student, $n_student, $n_student);
-                $stmt->execute();
-                $stmt->close();
+                if ($stmt->execute()) {
+                    $stmt->close();
+                    header("Location: admin_duties.php?view=roster&month=" . date('Y-m', strtotime($t_date)) . "&msg=duty_swapped");
+                    exit();
+                }
             } else {
-                throw new Exception("SQL Prepare Error (swap_duty): " . $conn->error);
+                throw new Exception("SQL Error (swap_duty): " . $conn->error);
             }
-            header("Location: admin_duties.php?month=" . date('Y-m', strtotime($t_date)) . "&msg=duty_swapped");
-            exit();
         }
     }
 
-    // 5. ดึงข้อมูลตั้งค่า
+    // 4. ดึงข้อมูลการตั้งค่า
     $settings_query = $conn->query("SELECT * FROM duty_settings LIMIT 1");
-    if (!$settings_query) throw new Exception("ตาราง duty_settings มีปัญหา: " . $conn->error);
-    
-    $settings = $settings_query->fetch_assoc();
+    $settings = $settings_query ? $settings_query->fetch_assoc() : null;
     $start_date = $settings['start_date'] ?? '2026-07-06';
     $per_day = $settings['students_per_day'] ?? 16;
-    $target_month = $_GET['month'] ?? date('Y-m');
 
-    // 6. ดึงข้อมูลนักเรียน
+    // 5. ดึงข้อมูลนักเรียน (ป้องกัน Collation Error ด้วย COLLATE)
     $active_students = [];
     $student_names = [];
-    $res = $conn->query("SELECT student_code, prefix, first_name, last_name FROM students WHERE student_code NOT IN (SELECT student_code FROM duty_exemptions WHERE is_active = 1) ORDER BY id ASC");
-    
-    if (!$res) throw new Exception("ดึงข้อมูลจากตาราง students/duty_exemptions มีปัญหา: " . $conn->error);
+    $res = $conn->query("
+        SELECT student_code, prefix, first_name, last_name 
+        FROM students 
+        WHERE student_code COLLATE utf8mb4_unicode_ci NOT IN (
+            SELECT student_code COLLATE utf8mb4_unicode_ci FROM duty_exemptions WHERE is_active = 1
+        ) 
+        ORDER BY id ASC
+    ");
+
+    if (!$res) throw new Exception("ดึงข้อมูลนักเรียนล้มเหลว: " . $conn->error);
 
     while ($row = $res->fetch_assoc()) {
         $active_students[] = $row['student_code'];
         $student_names[$row['student_code']] = $row['prefix'] . $row['first_name'] . ' ' . $row['last_name'];
     }
 
-    // 7. โหลดข้อมูลสลับเวร
+    // 6. โหลดข้อมูลสลับเวร (Overrides)
     $overrides = [];
     $target_month_esc = $conn->real_escape_string($target_month);
     $res_override = $conn->query("SELECT target_date, original_student_code, new_student_code FROM duty_overrides WHERE target_date LIKE '{$target_month_esc}%'");
     
-    if (!$res_override) throw new Exception("ตาราง duty_overrides มีปัญหา: " . $conn->error);
+    if (!$res_override) throw new Exception("ดึงข้อมูลการสลับเวรล้มเหลว: " . $conn->error);
 
     while ($row = $res_override->fetch_assoc()) {
         $overrides[$row['target_date']][$row['original_student_code']] = $row['new_student_code'];
     }
 
-    // 8. คำนวณตาราง
+    // 7. คำนวณตารางเวรประจำเดือน
     $monthly_roster = [];
     $days_in_month = date('t', strtotime($target_month . '-01'));
     $total_active = count($active_students);
@@ -132,14 +153,11 @@ try {
     }
 
 } catch (Throwable $e) {
-    // หากเกิด Error ระบบจะหยุดทำงานและแสดงกล่องข้อความนี้แทน Error 500
     die('
-    <div style="background:#fef2f2; border:2px solid #ef4444; padding:20px; margin:20px; border-radius:8px; font-family:sans-serif;">
-        <h2 style="color:#b91c1c; margin-top:0;">🚨 ตรวจพบข้อผิดพลาดของระบบ! (แทนที่ 500)</h2>
-        <p><strong>รายละเอียด:</strong> ' . htmlspecialchars($e->getMessage()) . '</p>
-        <p><strong>ไฟล์ที่พัง:</strong> ' . htmlspecialchars($e->getFile()) . '</p>
-        <p><strong>บรรทัดที่:</strong> ' . $e->getLine() . '</p>
-        <p style="font-size:0.9em; color:#666;">นำข้อความด้านบนมาวิเคราะห์ต่อได้เลยครับ</p>
+    <div style="background:#fee2e2; border:1px solid #fecaca; padding:20px; margin:20px; border-radius:12px; font-family:\'Prompt\', sans-serif;">
+        <h3 style="color:#991b1b; margin-top:0;"><i class="fas fa-exclamation-circle"></i> ตรวจพบข้อผิดพลาดระบบ</h3>
+        <p style="color:#7f1d1d; font-size:0.9rem;"><strong>ข้อความ:</strong> ' . htmlspecialchars($e->getMessage()) . '</p>
+        <p style="color:#7f1d1d; font-size:0.85rem;"><strong>ตำแหน่ง:</strong> ' . htmlspecialchars($e->getFile()) . ' บรรทัดที่ ' . $e->getLine() . '</p>
     </div>
     ');
 }
@@ -147,142 +165,221 @@ try {
 <!DOCTYPE html>
 <html lang="th">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>จัดการเวรรักษาการณ์</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
-    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
-    <style>
-        body { font-family: 'Prompt', sans-serif; background: #f1f5f9; padding: 20px; margin: 0; }
-        .card { background: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .flex-between { display: flex; justify-content: space-between; align-items: center; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; }
-        th, td { border: 1px solid #e2e8f0; padding: 10px; text-align: left; font-size: 0.9rem; }
-        th { background: #1e293b; color: white; }
-        .swapped { color: #ea580c; font-weight: bold; }
-        .btn { padding: 8px 15px; border: none; border-radius: 6px; cursor: pointer; font-family: 'Prompt', sans-serif; }
-        .btn-primary { background: #3b82f6; color: white; }
-        .btn-warning { background: #f59e0b; color: white; font-size: 0.8rem; padding: 4px 8px; }
-        .btn-danger { background: #ef4444; color: white; }
-        
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
-        .modal-content { background: white; width: 400px; margin: 100px auto; padding: 20px; border-radius: 12px; }
-        .form-group { margin-bottom: 15px; }
-        .form-control { width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>จัดการเวรรักษาการณ์ - MTTS</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  
+  <style>
+    :root {
+      --primary: #dc2626; 
+      --primary-hover: #b91c1c;
+      --bg-color: #f8fafc;
+      --text-dark: #1e293b;
+      --text-gray: #64748b;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { font-family: 'Prompt', sans-serif; background-color: #e2e8f0; margin: 0; display: flex; justify-content: center; }
+
+    .app-container { 
+      width: 100%; max-width: 430px; background-color: var(--bg-color); min-height: 100vh; padding-bottom: 100px; box-shadow: 0 0 20px rgba(0,0,0,0.05); position: relative; 
+    }
+
+    .top-header { display: flex; align-items: center; padding: 20px 24px 10px; }
+    .back-btn { font-size: 1.2rem; color: var(--text-dark); text-decoration: none; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 12px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-right: 15px; }
+    .page-title h1 { font-size: 1.1rem; font-weight: 700; color: var(--text-dark); margin: 0; }
+
+    /* Tabs */
+    .tabs-container { display: flex; margin: 10px 24px 0; background: #e2e8f0; border-radius: 12px; padding: 4px; }
+    .tab-btn { flex: 1; text-align: center; padding: 10px; font-size: 0.9rem; font-family: 'Prompt'; font-weight: 600; color: var(--text-gray); border-radius: 10px; text-decoration: none; transition: 0.2s; }
+    .tab-btn.active { background: white; color: var(--text-dark); box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+
+    .form-section { padding: 20px 24px; }
+    .form-group { margin-bottom: 18px; }
+    .form-group label { display: block; font-size: 0.9rem; font-weight: 600; color: var(--text-dark); margin-bottom: 8px; }
+
+    .form-control { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid #cbd5e1; font-family: 'Prompt', sans-serif; font-size: 0.95rem; background: white; outline: none; }
+    .form-control:focus { border-color: var(--primary); }
+
+    .submit-btn { width: 100%; padding: 14px; background: var(--primary); color: white; border: none; border-radius: 14px; font-family: 'Prompt', sans-serif; font-size: 1rem; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3); transition: 0.2s; text-align: center; text-decoration: none; display: block; }
+    .submit-btn:active { transform: scale(0.98); }
+    .btn-secondary { background: #64748b; box-shadow: 0 4px 12px rgba(100, 116, 139, 0.3); margin-top: 10px;}
+
+    .alert { padding: 12px 16px; border-radius: 10px; margin-bottom: 20px; font-size: 0.85rem; font-weight: 500; display: flex; align-items: center; gap: 10px; }
+    .alert-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+
+    /* Roster Cards */
+    .day-card { background: white; border-radius: 14px; padding: 15px; margin-bottom: 15px; border: 1px solid #e2e8f0; box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
+    .day-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; font-weight: 600; font-size: 0.95rem; color: var(--text-dark); }
+    
+    .student-item { display: flex; justify-content: space-between; align-items: center; background: #f8fafc; padding: 8px 12px; border-radius: 10px; margin-bottom: 6px; border: 1px solid #e2e8f0; font-size: 0.85rem; }
+    .student-name { font-weight: 500; color: #0f172a; }
+    .student-name.swapped { color: #ea580c; font-weight: 700; }
+    .btn-swap { padding: 4px 10px; border: none; border-radius: 6px; background: #f59e0b; color: white; font-family: 'Prompt'; font-size: 0.75rem; font-weight: 600; cursor: pointer; }
+
+    /* Modal */
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center; }
+    .modal-content { background: white; width: 90%; max-width: 380px; padding: 20px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+
+    /* Bottom Nav */
+    .bottom-nav { position: fixed; bottom: 0; width: 100%; max-width: 430px; left: 50%; transform: translateX(-50%); height: 70px; background: white; border-top-left-radius: 25px; border-top-right-radius: 25px; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 -5px 20px rgba(0,0,0,0.03); padding: 0 10px; z-index: 1000; }
+    .nav-link { display: flex; flex-direction: column; align-items: center; text-decoration: none; color: #94a3b8; font-size: 0.7rem; font-weight: 600; width: 30%; gap: 4px; }
+    .nav-link.active { color: var(--primary); }
+  </style>
 </head>
 <body>
 
-    <div class="card flex-between">
-        <h2><i class="fas fa-shield-alt"></i> จัดการเวรรักษาการณ์</h2>
-        <div>
-            <form method="GET" style="display:inline-block;">
-                <input type="month" name="month" value="<?= htmlspecialchars($target_month) ?>" class="form-control" style="width: auto; display: inline-block;" onchange="this.form.submit()">
-            </form>
-            <a href="export_pdf.php?month=<?= htmlspecialchars($target_month) ?>" target="_blank">
-                <button class="btn btn-danger"><i class="fas fa-file-pdf"></i> ออกรายงาน PDF</button>
-            </a>
-            <button class="btn btn-primary" onclick="document.getElementById('settingsModal').style.display='block'">
-                <i class="fas fa-cog"></i> ตั้งค่าระบบ
-            </button>
-            <a href="admin_main.php">
-                <button class="btn" style="background:#64748b; color:white;"><i class="fas fa-arrow-left"></i> กลับหน้าหลัก</button>
-            </a>
-        </div>
+  <div class="app-container">
+    <div class="top-header">
+      <a href="admin_main.php" class="back-btn"><i class="fas fa-chevron-left"></i></a>
+      <div class="page-title">
+        <h1>จัดการเวรรักษาการณ์</h1>
+      </div>
     </div>
 
-    <div class="card">
-        <h3>ตารางเวรประจำเดือน <?= date('F Y', strtotime($target_month . '-01')) ?></h3>
-        <table>
-            <thead>
-                <tr>
-                    <th width="120">วันที่</th>
-                    <th>รายชื่อผู้ปฏิบัติหน้าที่ (<?= $per_day ?> นาย)</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($monthly_roster as $date => $students): ?>
-                <tr>
-                    <td valign="top"><strong><?= date('d/m/Y', strtotime($date)) ?></strong></td>
-                    <td>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px;">
-                            <?php foreach ($students as $stu): ?>
-                                <div style="background: #f8fafc; padding: 8px; border: 1px solid #e2e8f0; border-radius: 6px;">
-                                    <span class="<?= $stu['is_swapped'] ? 'swapped' : '' ?>" title="รหัส: <?= htmlspecialchars($stu['actual_code']) ?>">
-                                        <?= htmlspecialchars($stu['actual_name']) ?>
-                                    </span>
-                                    <button class="btn btn-warning" style="float: right;" 
-                                            onclick="openSwapModal('<?= $date ?>', '<?= htmlspecialchars($stu['original_code']) ?>', '<?= htmlspecialchars($stu['actual_name']) ?>')">
-                                        <i class="fas fa-exchange-alt"></i> แลก
-                                    </button>
-                                </div>
-                            <?php endforeach; ?>
+    <!-- แถบเมนูย่อย -->
+    <div class="tabs-container">
+        <a href="?view=roster&month=<?= htmlspecialchars($target_month) ?>" class="tab-btn <?= $view === 'roster' ? 'active' : '' ?>"><i class="fas fa-calendar-alt"></i> ตารางเวร</a>
+        <a href="?view=settings&month=<?= htmlspecialchars($target_month) ?>" class="tab-btn <?= $view === 'settings' ? 'active' : '' ?>"><i class="fas fa-cog"></i> ตั้งค่าระบบ</a>
+    </div>
+
+    <div class="form-section">
+      
+      <?php if (!empty($message)): ?>
+        <div class="alert <?= $message_type === 'success' ? 'alert-success' : 'alert-error' ?>">
+          <i class="fas <?= $message_type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle' ?>"></i>
+          <?= htmlspecialchars($message) ?>
+        </div>
+      <?php endif; ?>
+
+      <!-- ================= หน้าจอตารางเวร (Roster View) ================= -->
+      <?php if ($view === 'roster'): ?>
+        
+        <div style="display:flex; gap: 10px; margin-bottom: 15px;">
+            <form method="GET" style="flex:1;">
+                <input type="hidden" name="view" value="roster">
+                <input type="month" name="month" value="<?= htmlspecialchars($target_month) ?>" class="form-control" onchange="this.form.submit()">
+            </form>
+            <a href="export_pdf.php?month=<?= htmlspecialchars($target_month) ?>" target="_blank" style="text-decoration:none;">
+                <button class="form-control" style="background:#ef4444; color:white; border:none; cursor:pointer; font-weight:600;">
+                    <i class="fas fa-file-pdf"></i> PDF
+                </button>
+            </a>
+        </div>
+
+        <div style="margin-bottom: 10px; font-size: 0.85rem; color: var(--text-gray);">
+            ประจำเดือน: <strong><?= date('F Y', strtotime($target_month . '-01')) ?></strong> (<?= $per_day ?> นาย/วัน)
+        </div>
+
+        <?php if (empty($monthly_roster)): ?>
+            <div style="text-align:center; padding: 40px 10px; color: #94a3b8; background:white; border-radius:14px; border:1px solid #e2e8f0;">
+                <i class="fas fa-calendar-times" style="font-size: 2rem; margin-bottom: 10px; display:block;"></i>
+                ไม่พบข้อมูลรอบเวรในเดือนนี้<br><small>(กรุณาตรวจสอบการตั้งค่า Start Date)</small>
+            </div>
+        <?php else: ?>
+            <?php foreach ($monthly_roster as $date => $students): ?>
+                <div class="day-card">
+                    <div class="day-header">
+                        <span><i class="far fa-calendar-check" style="color:var(--primary);"></i> <?= date('d/m/Y', strtotime($date)) ?></span>
+                        <span style="font-size: 0.75rem; background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 12px;"><?= count($students) ?> นาย</span>
+                    </div>
+
+                    <?php foreach ($students as $stu): ?>
+                        <div class="student-item">
+                            <span class="student-name <?= $stu['is_swapped'] ? 'swapped' : '' ?>" title="รหัส: <?= htmlspecialchars($stu['actual_code']) ?>">
+                                <?= htmlspecialchars($stu['actual_name']) ?>
+                                <?= $stu['is_swapped'] ? '<i class="fas fa-exchange-alt" style="font-size:0.75rem; margin-left:4px;"></i>' : '' ?>
+                            </span>
+                            <button type="button" class="btn-swap" onclick="openSwapModal('<?= $date ?>', '<?= htmlspecialchars($stu['original_code']) ?>', '<?= htmlspecialchars($stu['actual_name']) ?>')">
+                                แลกเวร
+                            </button>
                         </div>
-                    </td>
-                </tr>
-                <?php endforeach; ?>
-                <?php if(empty($monthly_roster)): ?>
-                    <tr><td colspan="2" style="text-align:center; padding: 20px;">ไม่พบข้อมูลรอบเวรในเดือนนี้</td></tr>
-                <?php endif; ?>
-            </tbody>
-        </table>
-    </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endforeach; ?>
+        <?php endif; ?>
 
-    <!-- Modal: ตั้งค่าระบบ -->
-    <div id="settingsModal" class="modal">
-        <div class="modal-content">
-            <h3>ตั้งค่าการคำนวณเวร</h3>
-            <form method="POST">
-                <input type="hidden" name="action" value="update_settings">
-                <div class="form-group">
-                    <label>วันที่เริ่มรันเวรรอบแรก (Start Date):</label>
-                    <input type="date" name="start_date" value="<?= htmlspecialchars($start_date) ?>" class="form-control" required>
-                </div>
-                <div class="form-group">
-                    <label>จำนวนคนเข้าเวรต่อผลัด:</label>
-                    <input type="number" name="students_per_day" value="<?= htmlspecialchars($per_day) ?>" class="form-control" required min="1">
-                </div>
-                <button type="submit" class="btn btn-primary" style="width: 100%;">บันทึกการตั้งค่า</button>
-                <button type="button" class="btn" style="width: 100%; margin-top: 10px;" onclick="document.getElementById('settingsModal').style.display='none'">ยกเลิก</button>
-            </form>
-        </div>
+      <!-- ================= หน้าจอตั้งค่าระบบ (Settings View) ================= -->
+      <?php elseif ($view === 'settings'): ?>
+
+        <form method="POST" action="?view=settings">
+            <input type="hidden" name="action" value="update_settings">
+            
+            <div class="form-group">
+                <label><i class="far fa-calendar-alt"></i> วันที่เริ่มรันเวรรอบแรก (Start Date)</label>
+                <input type="date" name="start_date" value="<?= htmlspecialchars($start_date) ?>" class="form-control" required>
+            </div>
+
+            <div class="form-group">
+                <label><i class="fas fa-users"></i> จำนวนคนเข้าเวรต่อวัน/ผลัด</label>
+                <input type="number" name="students_per_day" value="<?= htmlspecialchars($per_day) ?>" class="form-control" min="1" required>
+            </div>
+
+            <button type="submit" class="submit-btn">
+                <i class="fas fa-save"></i> บันทึกการตั้งค่า
+            </button>
+        </form>
+
+      <?php endif; ?>
+
     </div>
 
     <!-- Modal: สลับเวร -->
     <div id="swapModal" class="modal">
         <div class="modal-content">
-            <h3>สลับเวร (Swap Duty)</h3>
-            <form method="POST">
+            <h3 style="margin-top:0; font-size:1.05rem; color:var(--text-dark);"><i class="fas fa-exchange-alt" style="color:var(--primary);"></i> สลับเวร (Swap Duty)</h3>
+            <form method="POST" action="?view=roster">
                 <input type="hidden" name="action" value="swap_duty">
                 <input type="hidden" name="target_date" id="swap_target_date">
                 <input type="hidden" name="original_student" id="swap_original_student">
                 
                 <div class="form-group">
-                    <label>วันที่:</label>
-                    <input type="text" id="display_swap_date" class="form-control" disabled>
+                    <label style="font-size:0.8rem;">วันที่ปฏิบัติหน้าที่:</label>
+                    <input type="text" id="display_swap_date" class="form-control" readonly style="background:#f1f5f9;">
                 </div>
                 <div class="form-group">
-                    <label>ผู้เข้าเวรเดิม:</label>
-                    <input type="text" id="display_original_name" class="form-control" disabled>
+                    <label style="font-size:0.8rem;">ผู้เข้าเวรเดิม:</label>
+                    <input type="text" id="display_original_name" class="form-control" readonly style="background:#f1f5f9;">
                 </div>
                 <div class="form-group">
-                    <label>รหัสประจำตัวผู้มาเข้าแทน (นชท.):</label>
-                    <input type="text" name="new_student" class="form-control" required placeholder="กรอกรหัสนักเรียน">
+                    <label style="font-size:0.8rem;">รหัสประจำตัวผู้มาเข้าแทน (นชท.):</label>
+                    <input type="text" name="new_student" class="form-control" required placeholder="กรอกรหัสนักเรียน" style="border-color:var(--primary);">
                 </div>
-                <button type="submit" class="btn btn-warning" style="width: 100%;">ยืนยันการสลับเวร</button>
-                <button type="button" class="btn" style="width: 100%; margin-top: 10px;" onclick="document.getElementById('swapModal').style.display='none'">ยกเลิก</button>
+
+                <button type="submit" class="submit-btn" style="background:#f59e0b; box-shadow:0 4px 12px rgba(245, 158, 11, 0.3);">ยืนยันการสลับเวร</button>
+                <button type="button" class="submit-btn btn-secondary" onclick="document.getElementById('swapModal').style.display='none'">ยกเลิก</button>
             </form>
         </div>
     </div>
 
-    <script>
-        function openSwapModal(date, originalCode, originalName) {
-            document.getElementById('swap_target_date').value = date;
-            document.getElementById('swap_original_student').value = originalCode;
-            document.getElementById('display_swap_date').value = date;
-            document.getElementById('display_original_name').value = originalName;
-            document.getElementById('swapModal').style.display = 'block';
-        }
-    </script>
+    <!-- Bottom Navigation -->
+    <div class="bottom-nav">
+      <a href="admin_main.php" class="nav-link">
+        <i class="fas fa-home" style="font-size:1.1rem;"></i>
+        <span>หน้าหลัก</span>
+      </a>
+      <a href="admin_duties.php" class="nav-link active">
+        <i class="fas fa-shield-alt" style="font-size:1.1rem;"></i>
+        <span>เวรรักษาการณ์</span>
+      </a>
+      <a href="admin_restrict.php" class="nav-link">
+        <i class="fas fa-ban" style="font-size:1.1rem;"></i>
+        <span>คำสั่ง</span>
+      </a>
+    </div>
+
+  </div>
+
+  <script>
+    function openSwapModal(date, originalCode, originalName) {
+        document.getElementById('swap_target_date').value = date;
+        document.getElementById('swap_original_student').value = originalCode;
+        document.getElementById('display_swap_date').value = date;
+        document.getElementById('display_original_name').value = originalName;
+        document.getElementById('swapModal').style.display = 'flex';
+    }
+  </script>
 </body>
 </html>
