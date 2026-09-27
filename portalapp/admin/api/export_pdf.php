@@ -160,7 +160,7 @@ $day_names = [1 => 'จันทร์', 2 => 'อังคาร', 3 => 'พุ
     </style>
 </head>
 <body>
-    <button class="btn-print no-print" onclick="window.print()">🖨️ พิมพ์ / บันทึกเป็น PDF</button>
+    <button class="btn-print no-print" onclick="window.print()">บันทึกเป็น PDF</button>
 
     <?php foreach ($weeks as $week_index => $week_days): ?>
     <div class="page">
