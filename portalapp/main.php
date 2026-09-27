@@ -120,21 +120,15 @@ try {
         $stmt_total_disc->close();
     }
 
-    // 5. ดึงข้อมูลข่าวสาร/ประกาศ
-    $sql_news = "SELECT id, title, content, attachment, created_at FROM announcements WHERE status = 'active' ORDER BY id DESC LIMIT 5";
-    $res_news = $conn->query($sql_news);
+   $sql = "SELECT id, title, content, attachment, created_at 
+        FROM announcements 
+        WHERE status = 'active' 
+        ORDER BY created_at DESC 
+        LIMIT 10";
 
-    if ($res_news) {
-        while ($row = $res_news->fetch_assoc()) {
-            $announcements[] = $row;
-        }
-    } else {
-        $news_error = $conn->error;
-    }
-
-} catch (Throwable $e) {
-    error_log("System error: " . $e->getMessage());
-}
+$stmt = $pdo->prepare($sql);
+$stmt->execute();
+$announcements = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // จัดเตรียมตัวแปรสำหรับการแสดงผล
 $name = trim(($student['prefix'] ?? '') . ($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''));
@@ -771,34 +765,37 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
     </div>
 
 <div class="fade-in-up delay-4">
-        <!-- เพิ่มคลาส news-carousel ครอบตรงนี้ -->
-        <div class="news-carousel">
-          <?php foreach ($announcements as $news): ?>
-            <div class="announcement-card">
-              <div class="announcement-icon">
-                <i class="fas fa-bullhorn"></i>
-              </div>
-              <div class="announcement-content">
-                <h4><?= htmlspecialchars($news['title']) ?></h4>
-                
-                <p><?= nl2br(htmlspecialchars($news['content'])) ?></p>
-                
-                <!-- ส่วนแสดงไฟล์แนบ -->
-                <?php if (!empty($news['attachment'])): ?>
-                  <div style="margin: 10px 0;">
-                    <a href="uploads/news/<?= htmlspecialchars($news['attachment']) ?>" target="_blank" style="text-decoration: none; color: #007bff;">
-                      <i class="fas fa-paperclip"></i> ดูไฟล์แนบ
-                    </a>
-                  </div>
-                <?php endif; ?>
-                
-                <span class="announcement-date" style="display: block; margin-top: 10px; color: #888; font-size: 0.9em;">
-                  <i class="far fa-clock"></i> <?= date('d/m/Y H:i', strtotime($news['created_at'])) ?>
-                </span>
-              </div>
-            </div>
-          <?php endforeach; ?>
+        <!-- นำไปใช้ในส่วนแสดงผล HTML -->
+<div class="news-carousel">
+  <?php if (!empty($announcements)): ?>
+    <?php foreach ($announcements as $news): ?>
+      <div class="announcement-card">
+        <div class="announcement-icon">
+          <i class="fas fa-bullhorn"></i>
         </div>
+        <div class="announcement-content">
+          <h4><?= htmlspecialchars($news['title']) ?></h4>
+          <p><?= nl2br(htmlspecialchars($news['content'])) ?></p>
+          
+          <?php if (!empty($news['attachment'])): ?>
+            <div style="margin: 10px 0;">
+              <!-- สังเกตการใช้ path รูปที่ดึงมาจากฐานข้อมูลได้เลย -->
+              <a href="<?= htmlspecialchars($news['attachment']) ?>" target="_blank" style="text-decoration: none; color: #007bff;">
+                <i class="fas fa-paperclip"></i> ดูไฟล์แนบ
+              </a>
+            </div>
+          <?php endif; ?>
+          
+          <span class="announcement-date" style="display: block; margin-top: 10px; color: #888; font-size: 0.9em;">
+            <i class="far fa-clock"></i> <?= date('d/m/Y H:i', strtotime($news['created_at'])) ?>
+          </span>
+        </div>
+      </div>
+    <?php endforeach; ?>
+  <?php else: ?>
+    <p>ไม่มีประกาศข่าวสารในขณะนี้</p>
+  <?php endif; ?>
+</div>
       </div>
       
     <div class="bottom-nav">
