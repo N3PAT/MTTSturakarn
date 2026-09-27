@@ -402,10 +402,7 @@ try {
         <i class="fas fa-chart-bar" style="font-size:1.1rem;"></i>
         <span>รายงาน</span>
       </a>
-      <a href="admin_settings.php" class="nav-link">
-        <i class="fas fa-cog" style="font-size:1.1rem;"></i>
-        <span>ตั้งค่า</span>
-      </a>
+     
     </div>
 
   </div>
