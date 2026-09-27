@@ -1,121 +1,147 @@
 <?php
-// 1. เปิดการแสดง Error (ถ้าใช้งานได้ปกติแล้ว ให้ใส่ // หน้า 2 บรรทัดนี้เพื่อปิด)
-error_reporting(E_ALL);
+// 1. บังคับเปิดการตั้งค่าแสดง Error ทุกชนิด (เพื่อหาต้นตอของ 500)
 ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 
-session_start();
+// ครอบโค้ดทั้งหมดด้วย Try-Catch เพื่อป้องกัน Error 500
+try {
+    session_start();
 
-// 2. ระบบตรวจสอบสิทธิ์ให้ตรงกับ admin_login.php
-if (empty($_SESSION['admin_id'])) {
-    header("Location: admin_login.php");
-    exit();
-}
-
-// 3. เชื่อมต่อฐานข้อมูล (อ้างอิงจากโครงสร้างไฟล์ db.php อยู่ในโฟลเดอร์เดียวกัน)
-require_once 'db.php';
-
-if (!isset($conn) || $conn->connect_error) {
-    die("<h3 style='color:red;'>การเชื่อมต่อฐานข้อมูลล้มเหลว: " . ($conn->connect_error ?? 'ไม่พบตัวแปร $conn') . "</h3>");
-}
-
-// 4. จัดการ Request POST (อัปเดตการตั้งค่า และ สลับเวร)
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['action']) && $_POST['action'] === 'update_settings') {
-        $start_date = $_POST['start_date'];
-        $per_day = (int)$_POST['students_per_day'];
-        
-        $stmt = $conn->prepare("UPDATE duty_settings SET start_date = ?, students_per_day = ? WHERE id = 1");
-        if ($stmt) {
-            $stmt->bind_param("si", $start_date, $per_day);
-            $stmt->execute();
-            $stmt->close();
-        }
-        header("Location: admin_duties.php?msg=settings_updated");
+    if (empty($_SESSION['admin_id'])) {
+        header("Location: admin_login.php");
         exit();
     }
 
-    if (isset($_POST['action']) && $_POST['action'] === 'swap_duty') {
-        $t_date = $_POST['target_date'];
-        $o_student = $_POST['original_student'];
-        $n_student = $_POST['new_student'];
-
-        $stmt = $conn->prepare("INSERT INTO duty_overrides (target_date, original_student_code, new_student_code) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE new_student_code = ?");
-        if ($stmt) {
-            $stmt->bind_param("ssss", $t_date, $o_student, $n_student, $n_student);
-            $stmt->execute();
-            $stmt->close();
-        }
-        header("Location: admin_duties.php?month=" . date('Y-m', strtotime($t_date)) . "&msg=duty_swapped");
-        exit();
+    // 2. ตรวจสอบว่ามีไฟล์ db.php จริงหรือไม่ (Render อ่อนไหวเรื่องตัวพิมพ์เล็ก/ใหญ่)
+    if (!file_exists('db.php')) {
+        throw new Exception("ไม่พบไฟล์ 'db.php' กรุณาตรวจสอบชื่อไฟล์ว่าสะกดด้วยตัวพิมพ์เล็กทั้งหมดหรือไม่");
     }
-}
+    
+    require_once 'db.php';
 
-// 5. ดึงการตั้งค่า
-$settings_query = $conn->query("SELECT * FROM duty_settings LIMIT 1");
-$settings = $settings_query ? $settings_query->fetch_assoc() : null;
-$start_date = $settings['start_date'] ?? '2026-07-06';
-$per_day = $settings['students_per_day'] ?? 16;
-$target_month = $_GET['month'] ?? date('Y-m');
+    // 3. ตรวจสอบการเชื่อมต่อฐานข้อมูล
+    if (!isset($conn)) {
+        throw new Exception("ไม่พบตัวแปร \$conn จากไฟล์ db.php (คุณอาจใช้ PDO หรือตั้งชื่อตัวแปรอื่น?)");
+    }
+    if ($conn instanceof mysqli && $conn->connect_error) {
+        throw new Exception("เชื่อมต่อฐานข้อมูลล้มเหลว: " . $conn->connect_error);
+    }
 
-// 6. ดึงนักเรียนที่ไม่มีชื่อในข้อยกเว้น พร้อมข้อมูลชื่อ-สกุล
-$active_students = [];
-$student_names = [];
-$res = $conn->query("
-    SELECT student_code, prefix, first_name, last_name 
-    FROM students 
-    WHERE student_code NOT IN (SELECT student_code FROM duty_exemptions WHERE is_active = 1)
-    ORDER BY id ASC
-");
+    // 4. จัดการ Request POST
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        if (isset($_POST['action']) && $_POST['action'] === 'update_settings') {
+            $start_date = $_POST['start_date'];
+            $per_day = (int)$_POST['students_per_day'];
+            
+            $stmt = $conn->prepare("UPDATE duty_settings SET start_date = ?, students_per_day = ? WHERE id = 1");
+            if ($stmt) {
+                $stmt->bind_param("si", $start_date, $per_day);
+                $stmt->execute();
+                $stmt->close();
+            } else {
+                throw new Exception("SQL Prepare Error (update_settings): " . $conn->error);
+            }
+            header("Location: admin_duties.php?msg=settings_updated");
+            exit();
+        }
 
-if ($res) {
+        if (isset($_POST['action']) && $_POST['action'] === 'swap_duty') {
+            $t_date = $_POST['target_date'];
+            $o_student = $_POST['original_student'];
+            $n_student = $_POST['new_student'];
+
+            $stmt = $conn->prepare("INSERT INTO duty_overrides (target_date, original_student_code, new_student_code) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE new_student_code = ?");
+            if ($stmt) {
+                $stmt->bind_param("ssss", $t_date, $o_student, $n_student, $n_student);
+                $stmt->execute();
+                $stmt->close();
+            } else {
+                throw new Exception("SQL Prepare Error (swap_duty): " . $conn->error);
+            }
+            header("Location: admin_duties.php?month=" . date('Y-m', strtotime($t_date)) . "&msg=duty_swapped");
+            exit();
+        }
+    }
+
+    // 5. ดึงข้อมูลตั้งค่า
+    $settings_query = $conn->query("SELECT * FROM duty_settings LIMIT 1");
+    if (!$settings_query) throw new Exception("ตาราง duty_settings มีปัญหา: " . $conn->error);
+    
+    $settings = $settings_query->fetch_assoc();
+    $start_date = $settings['start_date'] ?? '2026-07-06';
+    $per_day = $settings['students_per_day'] ?? 16;
+    $target_month = $_GET['month'] ?? date('Y-m');
+
+    // 6. ดึงข้อมูลนักเรียน
+    $active_students = [];
+    $student_names = [];
+    $res = $conn->query("SELECT student_code, prefix, first_name, last_name FROM students WHERE student_code NOT IN (SELECT student_code FROM duty_exemptions WHERE is_active = 1) ORDER BY id ASC");
+    
+    if (!$res) throw new Exception("ดึงข้อมูลจากตาราง students/duty_exemptions มีปัญหา: " . $conn->error);
+
     while ($row = $res->fetch_assoc()) {
         $active_students[] = $row['student_code'];
         $student_names[$row['student_code']] = $row['prefix'] . $row['first_name'] . ' ' . $row['last_name'];
     }
-}
 
-// 7. โหลดข้อมูลการสลับเวร (Overrides)
-$overrides = [];
-$res_override = $conn->query("SELECT target_date, original_student_code, new_student_code FROM duty_overrides WHERE target_date LIKE '$target_month%'");
-if ($res_override) {
+    // 7. โหลดข้อมูลสลับเวร
+    $overrides = [];
+    $target_month_esc = $conn->real_escape_string($target_month);
+    $res_override = $conn->query("SELECT target_date, original_student_code, new_student_code FROM duty_overrides WHERE target_date LIKE '{$target_month_esc}%'");
+    
+    if (!$res_override) throw new Exception("ตาราง duty_overrides มีปัญหา: " . $conn->error);
+
     while ($row = $res_override->fetch_assoc()) {
         $overrides[$row['target_date']][$row['original_student_code']] = $row['new_student_code'];
     }
-}
 
-// 8. คำนวณเวรรายวันในเดือนนั้น
-$monthly_roster = [];
-$days_in_month = date('t', strtotime($target_month . '-01'));
-$total_active = count($active_students);
+    // 8. คำนวณตาราง
+    $monthly_roster = [];
+    $days_in_month = date('t', strtotime($target_month . '-01'));
+    $total_active = count($active_students);
 
-for ($day = 1; $day <= $days_in_month; $day++) {
-    $current_date = date('Y-m-d', strtotime("$target_month-$day"));
-    $diff_days = floor((strtotime($current_date) - strtotime($start_date)) / 86400);
+    for ($day = 1; $day <= $days_in_month; $day++) {
+        $current_date = date('Y-m-d', strtotime("$target_month-$day"));
+        $diff_days = floor((strtotime($current_date) - strtotime($start_date)) / 86400);
 
-    if ($diff_days < 0 || $total_active == 0) continue; 
+        if ($diff_days < 0 || $total_active == 0) continue; 
 
-    $start_index = ($diff_days * $per_day) % $total_active;
-    $daily_duty = [];
+        $start_index = ($diff_days * $per_day) % $total_active;
+        $daily_duty = [];
 
-    for ($i = 0; $i < $per_day; $i++) {
-        $idx = ($start_index + $i) % $total_active;
-        $original_student = $active_students[$idx];
-        $actual_student = $original_student;
-        $is_swapped = false;
+        for ($i = 0; $i < $per_day; $i++) {
+            $idx = ($start_index + $i) % $total_active;
+            $original_student = $active_students[$idx];
+            $actual_student = $original_student;
+            $is_swapped = false;
 
-        if (isset($overrides[$current_date][$original_student])) {
-            $actual_student = $overrides[$current_date][$original_student];
-            $is_swapped = true;
+            if (isset($overrides[$current_date][$original_student])) {
+                $actual_student = $overrides[$current_date][$original_student];
+                $is_swapped = true;
+            }
+
+            $daily_duty[] = [
+                'original_code' => $original_student,
+                'actual_code' => $actual_student,
+                'actual_name' => $student_names[$actual_student] ?? $actual_student,
+                'is_swapped' => $is_swapped
+            ];
         }
-
-        $daily_duty[] = [
-            'original_code' => $original_student,
-            'actual_code' => $actual_student,
-            'actual_name' => $student_names[$actual_student] ?? $actual_student,
-            'is_swapped' => $is_swapped
-        ];
+        $monthly_roster[$current_date] = $daily_duty;
     }
-    $monthly_roster[$current_date] = $daily_duty;
+
+} catch (Throwable $e) {
+    // หากเกิด Error ระบบจะหยุดทำงานและแสดงกล่องข้อความนี้แทน Error 500
+    die('
+    <div style="background:#fef2f2; border:2px solid #ef4444; padding:20px; margin:20px; border-radius:8px; font-family:sans-serif;">
+        <h2 style="color:#b91c1c; margin-top:0;">🚨 ตรวจพบข้อผิดพลาดของระบบ! (แทนที่ 500)</h2>
+        <p><strong>รายละเอียด:</strong> ' . htmlspecialchars($e->getMessage()) . '</p>
+        <p><strong>ไฟล์ที่พัง:</strong> ' . htmlspecialchars($e->getFile()) . '</p>
+        <p><strong>บรรทัดที่:</strong> ' . $e->getLine() . '</p>
+        <p style="font-size:0.9em; color:#666;">นำข้อความด้านบนมาวิเคราะห์ต่อได้เลยครับ</p>
+    </div>
+    ');
 }
 ?>
 <!DOCTYPE html>
@@ -196,7 +222,7 @@ for ($day = 1; $day <= $days_in_month; $day++) {
                 </tr>
                 <?php endforeach; ?>
                 <?php if(empty($monthly_roster)): ?>
-                    <tr><td colspan="2" style="text-align:center; padding: 20px;">ไม่พบข้อมูลรอบเวรในเดือนนี้ (กรุณาตรวจสอบการตั้งค่า Start Date หรือข้อมูลนักเรียน)</td></tr>
+                    <tr><td colspan="2" style="text-align:center; padding: 20px;">ไม่พบข้อมูลรอบเวรในเดือนนี้</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
