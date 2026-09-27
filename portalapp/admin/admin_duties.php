@@ -1,5 +1,5 @@
 <?php
-// 1. เปิดการแสดง Error (ถ้าเว็บใช้งานได้ปกติแล้ว ให้ใส่ // หน้า 2 บรรทัดนี้เพื่อปิด)
+// 1. เปิดการแสดง Error 
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
@@ -11,11 +11,17 @@ if (empty($_SESSION['admin_id'])) {
     exit();
 }
 
-// 3. เชื่อมต่อฐานข้อมูล
-require_once 'db.php';
+// 3. เชื่อมต่อฐานข้อมูล (ค้นหาไฟล์ db.php อัตโนมัติ ป้องกัน Error 500)
+if (file_exists('db.php')) {
+    require_once 'db.php';
+} elseif (file_exists('../db.php')) {
+    require_once '../db.php';
+} else {
+    die("<h3 style='color:red;'>ไม่พบไฟล์ db.php (การเชื่อมต่อฐานข้อมูลล้มเหลว)</h3>");
+}
 
 if (!isset($conn) || $conn->connect_error) {
-    die("การเชื่อมต่อฐานข้อมูลล้มเหลว: " . ($conn->connect_error ?? 'ไม่พบตัวแปร $conn'));
+    die("<h3 style='color:red;'>การเชื่อมต่อฐานข้อมูลล้มเหลว: " . ($conn->connect_error ?? 'ไม่พบตัวแปร $conn') . "</h3>");
 }
 
 // 4. จัดการ Request POST (อัปเดตการตั้งค่า และ สลับเวร)
@@ -30,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute();
             $stmt->close();
         }
-        header("Location: manage_duty.php?msg=settings_updated");
+        header("Location: admin_duties.php?msg=settings_updated");
         exit();
     }
 
@@ -45,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute();
             $stmt->close();
         }
-        header("Location: manage_duty.php?month=" . date('Y-m', strtotime($t_date)) . "&msg=duty_swapped");
+        header("Location: admin_duties.php?month=" . date('Y-m', strtotime($t_date)) . "&msg=duty_swapped");
         exit();
     }
 }
