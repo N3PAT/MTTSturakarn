@@ -120,21 +120,28 @@ try {
         $stmt_total_disc->close();
     }
 
-  $sql = "SELECT id, title, content, attachment, created_at 
-        FROM announcements 
-        WHERE status = 'active' 
-        ORDER BY created_at DESC, id DESC 
-        LIMIT 10";
+    // 5. ดึงข้อมูลข่าวสารประกาศ
+    $sql = "SELECT id, title, content, attachment, created_at 
+            FROM announcements 
+            WHERE status = 'active' 
+            ORDER BY created_at DESC, id DESC 
+            LIMIT 10";
 
-$stmt = $conn->prepare($sql);
-if ($stmt) {
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $announcements = $result->fetch_all(MYSQLI_ASSOC);
-    $stmt->close();
-} else {
-    $announcements = [];
-    error_log("MySQLi Prepare Error: " . $conn->error);
+    $stmt = $conn->prepare($sql);
+    if ($stmt) {
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $announcements = $result->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+    } else {
+        $announcements = [];
+        error_log("MySQLi Prepare Error: " . $conn->error);
+    }
+
+} catch (Exception $e) {
+    // จัดการกรณีเกิดข้อผิดพลาดจากระบบ/ฐานข้อมูล
+    error_log("Database/System Error in main.php: " . $e->getMessage());
+    $news_error = $e->getMessage();
 }
 
 // จัดเตรียมตัวแปรสำหรับการแสดงผล
@@ -343,30 +350,31 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
       backdrop-filter: blur(4px);
     }
 
-.news-carousel {
-  display: flex;
-  overflow-x: auto;
-  gap: 15px;
-  padding: 0 20px 15px 20px;
-  scroll-snap-type: x mandatory;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
+    .news-carousel {
+      display: flex;
+      overflow-x: auto;
+      gap: 15px;
+      padding: 0 20px 15px 20px;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
 
-.news-carousel::-webkit-scrollbar {
-  display: none;
-}
+    .news-carousel::-webkit-scrollbar {
+      display: none;
+    }
 
-.news-carousel .announcement-card {
-  min-width: 85%; 
-  margin: 0; 
-  scroll-snap-align: center; 
-  flex-shrink: 0;
-  display: flex;
-  gap: 15px;
-  align-items: flex-start;
-}
+    .news-carousel .announcement-card {
+      min-width: 85%; 
+      margin: 0; 
+      scroll-snap-align: center; 
+      flex-shrink: 0;
+      display: flex;
+      gap: 15px;
+      align-items: flex-start;
+    }
+
     .badge-danger {
       background: rgba(220, 38, 38, 0.8) !important;
       border-color: #f87171 !important;
@@ -555,7 +563,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
     .bg-purple { background: #f3e8ff; color: #9333ea; }
     .bg-orange { background: #ffedd5; color: #ea580c; }
     .bg-blue { background: #dbeafe; color: #2563eb; }
-    .bg-red { background: #fee2e2; color: #dc2626; } /* สีสำหรับเมนูบัตรวินัย */
+    .bg-red { background: #fee2e2; color: #dc2626; }
 
     .app-container {
       width: 100%;
@@ -651,61 +659,59 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
 
     <div class="duty-alert-container fade-in-up delay-3">
 
- <!-- 1. การ์ดแสดงสถานะบัตรวินัยประจำวันนี้ -->
-<?php if (!empty($today_discipline) && $today_discipline['total_cards'] > 0): ?>
-  <?php 
-    $tot = (int)$today_discipline['total_cards'];
-    $color = isset($today_discipline['status_color']) ? $today_discipline['status_color'] : '';
-    
-    // หาประเภทหมวดที่โดน (ป้องกันแจ้งเตือน Undefined index ด้วย !empty)
-    $items = [];
-    if (!empty($today_discipline['card_bed'])) $items[] = "เตียง";
-    if (!empty($today_discipline['card_cabinet'])) $items[] = "ตู้";
-    if (!empty($today_discipline['card_shoe'])) $items[] = "รองเท้า";
-    $items_str = !empty($items) ? implode(", ", $items) : "ไม่มีรายการ";
-  ?>
+      <!-- 1. การ์ดแสดงสถานะบัตรวินัยประจำวันนี้ -->
+      <?php if (!empty($today_discipline) && $today_discipline['total_cards'] > 0): ?>
+        <?php 
+          $tot = (int)$today_discipline['total_cards'];
+          $color = isset($today_discipline['status_color']) ? $today_discipline['status_color'] : '';
+          
+          $items = [];
+          if (!empty($today_discipline['card_bed'])) $items[] = "เตียง";
+          if (!empty($today_discipline['card_cabinet'])) $items[] = "ตู้";
+          if (!empty($today_discipline['card_shoe'])) $items[] = "รองเท้า";
+          $items_str = !empty($items) ? implode(", ", $items) : "ไม่มีรายการ";
+        ?>
 
-  <?php if ($tot >= 3 || $color == 'red'): ?>
-    <div class="duty-alert-card urgent">
-      <div class="alert-icon"><i class="fas fa-id-card-alt"></i></div>
-      <div class="alert-info">
-        <h4>วันนี้สถานะบัตร: แดง (โดน <?= $tot ?> ใบ)</h4>
-        <p>รายการ: <?= htmlspecialchars($items_str) ?></p>
-      </div>
-      <a href="discipline_history.php" class="btn-action-alert">ดูรายละเอียด</a>
-    </div>
+        <?php if ($tot >= 3 || $color == 'red'): ?>
+          <div class="duty-alert-card urgent">
+            <div class="alert-icon"><i class="fas fa-id-card-alt"></i></div>
+            <div class="alert-info">
+              <h4>วันนี้สถานะบัตร: แดง (โดน <?= $tot ?> ใบ)</h4>
+              <p>รายการ: <?= htmlspecialchars($items_str) ?></p>
+            </div>
+            <a href="discipline_history.php" class="btn-action-alert">ดูรายละเอียด</a>
+          </div>
 
-  <?php elseif ($tot == 2 || $color == 'yellow'): ?>
-    <div class="duty-alert-card warning">
-      <div class="alert-icon"><i class="fas fa-id-card-alt"></i></div>
-      <div class="alert-info">
-        <h4>วันนี้สถานะบัตร: เหลือง (โดน <?= $tot ?> ใบ)</h4>
-        <p>รายการ: <?= htmlspecialchars($items_str) ?></p>
-      </div>
-      <a href="discipline_history.php" class="btn-action-warning">ดูรายละเอียด</a>
-    </div>
+        <?php elseif ($tot == 2 || $color == 'yellow'): ?>
+          <div class="duty-alert-card warning">
+            <div class="alert-icon"><i class="fas fa-id-card-alt"></i></div>
+            <div class="alert-info">
+              <h4>วันนี้สถานะบัตร: เหลือง (โดน <?= $tot ?> ใบ)</h4>
+              <p>รายการ: <?= htmlspecialchars($items_str) ?></p>
+            </div>
+            <a href="discipline_history.php" class="btn-action-warning">ดูรายละเอียด</a>
+          </div>
 
-  <?php else: ?>
-    <!-- เพิ่มกรณีโดน 1 ใบ (หรือกรณีอื่นๆ) เพื่อไม่ให้หน้าเว็บว่างเปล่า -->
-    <div class="duty-alert-card warning" style="background-color: #fff3cd; color: #856404; border-color: #ffeeba;">
-      <div class="alert-icon"><i class="fas fa-exclamation-triangle"></i></div>
-      <div class="alert-info">
-        <h4>วันนี้สถานะบัตร: เตือน (โดน <?= $tot ?> ใบ)</h4>
-        <p>รายการ: <?= htmlspecialchars($items_str) ?></p>
-      </div>
-      <a href="discipline_history.php" class="btn-action-warning">ดูรายละเอียด</a>
-    </div>
-  <?php endif; ?>
+        <?php else: ?>
+          <div class="duty-alert-card warning" style="background-color: #fff3cd; color: #856404; border-color: #ffeeba;">
+            <div class="alert-icon"><i class="fas fa-exclamation-triangle"></i></div>
+            <div class="alert-info">
+              <h4>วันนี้สถานะบัตร: เตือน (โดน <?= $tot ?> ใบ)</h4>
+              <p>รายการ: <?= htmlspecialchars($items_str) ?></p>
+            </div>
+            <a href="discipline_history.php" class="btn-action-warning">ดูรายละเอียด</a>
+          </div>
+        <?php endif; ?>
 
-<?php else: ?>
-  <div class="duty-alert-card success">
-    <div class="alert-icon"><i class="fas fa-shield-alt"></i></div>
-    <div class="alert-info">
-      <h4>สถานะบัตรวินัยวันนี้: ปกติ</h4>
-      <p>ยังไม่มีรายการโดนตัดบัตรวินัยประจำวันนี้</p>
-    </div>
-  </div>
-<?php endif; ?>
+      <?php else: ?>
+        <div class="duty-alert-card success">
+          <div class="alert-icon"><i class="fas fa-shield-alt"></i></div>
+          <div class="alert-info">
+            <h4>สถานะบัตรวินัยวันนี้: ปกติ</h4>
+            <p>ยังไม่มีรายการโดนตัดบัตรวินัยประจำวันนี้</p>
+          </div>
+        </div>
+      <?php endif; ?>
 
       <!-- 2. แจ้งเตือนโหวต -->
       <?php if (!$has_voted): ?>
@@ -764,69 +770,63 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
         <span class="menu-text">เปลี่ยนเวร</span>
       </a>
 
-      <!-- [เพิ่มใหม่] เมนูประวัติบัตรวินัย -->
       <a href="discipline_history.php" class="menu-item">
         <div class="icon-box bg-red"><i class="fas fa-id-card"></i></div>
         <span class="menu-text">ประวัติบัตรวินัย</span>
       </a>
     </div>
 
-<div class="fade-in-up delay-4">
-  <div class="news-carousel">
-    <?php if (!empty($announcements)): ?>
-      <?php foreach ($announcements as $news): ?>
-        <?php 
-          // 1. จัดการ Path ของไฟล์แนบ (สลับใช้ path เต็ม หรือต่อ prefix 'uploads/news/' หากเก็บแค่ชื่อไฟล์)
-          $attachment_path = $news['attachment'] ?? '';
-          if (!empty($attachment_path) && !preg_match('/^https?:\/\//i', $attachment_path) && !str_starts_with($attachment_path, 'uploads/')) {
-              $attachment_path = 'uploads/news/' . $attachment_path; // เปลี่ยน path โฟลเดอร์ให้ตรงกับระบบของคุณ
-          }
-          
-          // 2. ตรวจสอบว่าไฟล์แนบเป็นรูปภาพหรือไม่
-          $ext = strtolower(pathinfo($attachment_path, PATHINFO_EXTENSION));
-          $is_image = in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp']);
-        ?>
+    <div class="fade-in-up delay-4">
+      <div class="news-carousel">
+        <?php if (!empty($announcements)): ?>
+          <?php foreach ($announcements as $news): ?>
+            <?php 
+              $attachment_path = $news['attachment'] ?? '';
+              if (!empty($attachment_path) && !preg_match('/^https?:\/\//i', $attachment_path) && !str_starts_with($attachment_path, 'uploads/')) {
+                  $attachment_path = 'uploads/news/' . $attachment_path;
+              }
+              
+              $ext = strtolower(pathinfo($attachment_path, PATHINFO_EXTENSION));
+              $is_image = in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp']);
+            ?>
 
-        <div class="announcement-card">
-          <div class="announcement-icon">
-            <i class="fas fa-bullhorn"></i>
-          </div>
-          <div class="announcement-content">
-            <h4><?= htmlspecialchars($news['title']) ?></h4>
-            <p><?= nl2br(htmlspecialchars($news['content'])) ?></p>
-            
-            <?php if (!empty($news['attachment'])): ?>
-              <div class="announcement-attachment" style="margin-top: 10px;">
-                <?php if ($is_image): ?>
-                  <!-- กรณีเป็นรูปภาพ: แสดงตัวอย่างภาพ preview -->
-                  <a href="<?= htmlspecialchars($attachment_path) ?>" target="_blank">
-                    <img src="<?= htmlspecialchars($attachment_path) ?>" alt="ภาพแนบประกาศ" style="max-width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px; margin-top: 5px; border: 1px solid #e2e8f0; display: block;">
-                  </a>
-                <?php else: ?>
-                  <!-- กรณีเป็นไฟล์เอกสารทั่วไป (PDF, Word ฯลฯ): แสดงปุ่มดาวน์โหลด/เปิดดู -->
-                  <a href="<?= htmlspecialchars($attachment_path) ?>" target="_blank" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #f1f5f9; color: #2563eb; border-radius: 6px; font-size: 0.8rem; text-decoration: none; font-weight: 500;">
-                    <i class="fas fa-paperclip"></i> ดูไฟล์แนบ
-                  </a>
-                <?php endif; ?>
+            <div class="announcement-card">
+              <div class="announcement-icon">
+                <i class="fas fa-bullhorn"></i>
               </div>
-            <?php endif; ?>
-            
-            <span class="announcement-date" style="display: block; margin-top: 10px; color: #94a3b8; font-size: 0.75rem;">
-              <i class="far fa-clock"></i> <?= date('d/m/Y H:i', strtotime($news['created_at'])) ?>
-            </span>
-          </div>
-        </div>
-      <?php endforeach; ?>
+              <div class="announcement-content">
+                <h4><?= htmlspecialchars($news['title']) ?></h4>
+                <p><?= nl2br(htmlspecialchars($news['content'])) ?></p>
+                
+                <?php if (!empty($news['attachment'])): ?>
+                  <div class="announcement-attachment" style="margin-top: 10px;">
+                    <?php if ($is_image): ?>
+                      <a href="<?= htmlspecialchars($attachment_path) ?>" target="_blank">
+                        <img src="<?= htmlspecialchars($attachment_path) ?>" alt="ภาพแนบประกาศ" style="max-width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px; margin-top: 5px; border: 1px solid #e2e8f0; display: block;">
+                      </a>
+                    <?php else: ?>
+                      <a href="<?= htmlspecialchars($attachment_path) ?>" target="_blank" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #f1f5f9; color: #2563eb; border-radius: 6px; font-size: 0.8rem; text-decoration: none; font-weight: 500;">
+                        <i class="fas fa-paperclip"></i> ดูไฟล์แนบ
+                      </a>
+                    <?php endif; ?>
+                  </div>
+                <?php endif; ?>
+                
+                <span class="announcement-date" style="display: block; margin-top: 10px; color: #94a3b8; font-size: 0.75rem;">
+                  <i class="far fa-clock"></i> <?= date('d/m/Y H:i', strtotime($news['created_at'])) ?>
+                </span>
+              </div>
+            </div>
+          <?php endforeach; ?>
 
-    <?php else: ?>
-      <!-- การ์ดแสดงสถานะกรณีไม่มีประกาศข่าวสาร -->
-      <div class="empty-news" style="width: 100%; text-align: center; padding: 25px 15px; background: #ffffff; border-radius: 12px; color: #94a3b8; box-shadow: 0 2px 8px rgba(0,0,0,0.03);">
-        <i class="far fa-newspaper" style="font-size: 2rem; margin-bottom: 8px; display: block; opacity: 0.6;"></i>
-        <span style="font-size: 0.85rem;">ไม่มีประกาศข่าวสารในขณะนี้</span>
+        <?php else: ?>
+          <div class="empty-news" style="width: 100%; text-align: center; padding: 25px 15px; background: #ffffff; border-radius: 12px; color: #94a3b8; box-shadow: 0 2px 8px rgba(0,0,0,0.03);">
+            <i class="far fa-newspaper" style="font-size: 2rem; margin-bottom: 8px; display: block; opacity: 0.6;"></i>
+            <span style="font-size: 0.85rem;">ไม่มีประกาศข่าวสารในขณะนี้</span>
+          </div>
+        <?php endif; ?>
       </div>
-    <?php endif; ?>
-  </div>
-</div>
+    </div>
       
     <div class="bottom-nav">
       <a href="main.php" class="nav-link active">
