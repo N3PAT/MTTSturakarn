@@ -6,8 +6,8 @@ ini_set('display_errors', 1);
 session_start();
 
 // 2. ระบบตรวจสอบสิทธิ์การเข้าใช้งาน (Authentication Check)
-if (!isset($_SESSION['user_id']) && !isset($_SESSION['username'])) {
-    header("Location: admiin_login.php");
+if (!isset($_SESSION['admin_id']) && !isset($_SESSION['username'])) {
+    header("Location: admin_login.php");
     exit;
 }
 
