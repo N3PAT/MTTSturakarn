@@ -120,15 +120,22 @@ try {
         $stmt_total_disc->close();
     }
 
-   $sql = "SELECT id, title, content, attachment, created_at 
+  $sql = "SELECT id, title, content, attachment, created_at 
         FROM announcements 
         WHERE status = 'active' 
-        ORDER BY created_at DESC 
+        ORDER BY created_at DESC, id DESC 
         LIMIT 10";
 
-$stmt = $pdo->prepare($sql);
-$stmt->execute();
-$announcements = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$stmt = $conn->prepare($sql);
+if ($stmt) {
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $announcements = $result->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+} else {
+    $announcements = [];
+    error_log("MySQLi Prepare Error: " . $conn->error);
+}
 
 // จัดเตรียมตัวแปรสำหรับการแสดงผล
 $name = trim(($student['prefix'] ?? '') . ($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''));
