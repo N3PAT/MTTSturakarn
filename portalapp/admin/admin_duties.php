@@ -1,24 +1,14 @@
 <?php
-// 1. เปิดการแสดง Error ทั้งหมด (ชั่วคราว) เพื่อแก้ปัญหา HTTP 500 ให้เห็นบรรทัดที่มีปัญหาชัดเจน
+// 1. เปิดการแสดง Error (ถ้าเว็บใช้งานได้ปกติแล้ว ให้ใส่ // หน้า 2 บรรทัดนี้เพื่อปิด)
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 session_start();
 
-// 2. ระบบตรวจสอบสิทธิ์การเข้าใช้งาน (Authentication Check)
-if (!isset($_SESSION['admin_id']) && !isset($_SESSION['username'])) {
+// 2. ระบบตรวจสอบสิทธิ์ให้ตรงกับ admin_login.php
+if (empty($_SESSION['admin_id'])) {
     header("Location: admin_login.php");
-    exit;
-}
-
-// ตรวจสอบระดับสิทธิ์ (Role) - ปรับเปลี่ยนชื่อตัวแปรให้ตรงกับระบบ Login ของคุณ
-if (isset($_SESSION['role']) && !in_array($_SESSION['role'], ['admin', 'staff'])) {
-    http_response_code(403);
-    die("<div style='font-family: sans-serif; text-align: center; margin-top: 50px;'>
-            <h2 style='color: #ef4444;'>ปฏิเสธการเข้าถึง (403 Forbidden)</h2>
-            <p>คุณไม่มีสิทธิ์ใช้งานหน้าจัดการเวรรักษาการณ์</p>
-            <a href='index.php'>กลับหน้าหลัก</a>
-         </div>");
+    exit();
 }
 
 // 3. เชื่อมต่อฐานข้อมูล
@@ -29,8 +19,8 @@ if (!isset($conn) || $conn->connect_error) {
 }
 
 // 4. จัดการ Request POST (อัปเดตการตั้งค่า และ สลับเวร)
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    if (isset($_POST['action']) && $_POST['action'] == 'update_settings') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['action']) && $_POST['action'] === 'update_settings') {
         $start_date = $_POST['start_date'];
         $per_day = (int)$_POST['students_per_day'];
         
@@ -41,10 +31,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt->close();
         }
         header("Location: manage_duty.php?msg=settings_updated");
-        exit;
+        exit();
     }
 
-    if (isset($_POST['action']) && $_POST['action'] == 'swap_duty') {
+    if (isset($_POST['action']) && $_POST['action'] === 'swap_duty') {
         $t_date = $_POST['target_date'];
         $o_student = $_POST['original_student'];
         $n_student = $_POST['new_student'];
@@ -56,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt->close();
         }
         header("Location: manage_duty.php?month=" . date('Y-m', strtotime($t_date)) . "&msg=duty_swapped");
-        exit;
+        exit();
     }
 }
 
@@ -135,6 +125,7 @@ for ($day = 1; $day <= $days_in_month; $day++) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>จัดการเวรรักษาการณ์</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
     <style>
         body { font-family: 'Prompt', sans-serif; background: #f1f5f9; padding: 20px; margin: 0; }
         .card { background: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
@@ -168,6 +159,9 @@ for ($day = 1; $day <= $days_in_month; $day++) {
             <button class="btn btn-primary" onclick="document.getElementById('settingsModal').style.display='block'">
                 <i class="fas fa-cog"></i> ตั้งค่าระบบ
             </button>
+            <a href="admin_main.php">
+                <button class="btn" style="background:#64748b; color:white;"><i class="fas fa-arrow-left"></i> กลับหน้าหลัก</button>
+            </a>
         </div>
     </div>
 
@@ -246,7 +240,7 @@ for ($day = 1; $day <= $days_in_month; $day++) {
                     <input type="text" id="display_original_name" class="form-control" disabled>
                 </div>
                 <div class="form-group">
-                    <label>รหัสประจำตัวผู้มาเข้าแทน นชท:</label>
+                    <label>รหัสประจำตัวผู้มาเข้าแทน (นชท.):</label>
                     <input type="text" name="new_student" class="form-control" required placeholder="กรอกรหัสนักเรียน">
                 </div>
                 <button type="submit" class="btn btn-warning" style="width: 100%;">ยืนยันการสลับเวร</button>
