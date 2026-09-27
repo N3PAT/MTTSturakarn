@@ -121,7 +121,7 @@ try {
     }
 
     // 5. ดึงข้อมูลข่าวสาร/ประกาศ
-    $sql_news = "SELECT id, title, content, created_at FROM announcements WHERE status = 'active' ORDER BY id DESC LIMIT 5";
+    $sql_news = "SELECT id, title, content, attachment, created_at FROM announcements WHERE status = 'active' ORDER BY id DESC LIMIT 5";
     $res_news = $conn->query($sql_news);
 
     if ($res_news) {
@@ -750,20 +750,31 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
       </div>
       
       <div class="fade-in-up delay-4">
-        <?php foreach ($announcements as $news): ?>
-          <div class="announcement-card">
-            <div class="announcement-icon">
-              <i class="fas fa-bullhorn"></i>
-            </div>
-            <div class="announcement-content">
-              <h4><?= htmlspecialchars($news['title']) ?></h4>
-              <p><?= nl2br(htmlspecialchars($news['content'])) ?></p>
-              <span class="announcement-date">
-                <i class="far fa-clock"></i> <?= date('d/m/Y H:i', strtotime($news['created_at'])) ?>
-              </span>
-            </div>
-          </div>
-        <?php endforeach; ?>
+      <?php foreach ($announcements as $news): ?>
+  <div class="announcement-card">
+    <div class="announcement-icon">
+      <i class="fas fa-bullhorn"></i>
+    </div>
+    <div class="announcement-content">
+      <h4><?= htmlspecialchars($news['title']) ?></h4>
+      
+      <p><?= nl2br(htmlspecialchars($news['content'])) ?></p>
+      
+      <!-- ส่วนแสดงไฟล์แนบ -->
+      <?php if (!empty($news['attachment'])): ?>
+        <div style="margin: 10px 0;">
+          <a href="uploads/news/<?= htmlspecialchars($news['attachment']) ?>" target="_blank" style="text-decoration: none; color: #007bff;">
+            <i class="fas fa-paperclip"></i> ดูไฟล์แนบ
+          </a>
+        </div>
+      <?php endif; ?>
+      
+      <span class="announcement-date" style="display: block; margin-top: 10px; color: #888; font-size: 0.9em;">
+        <i class="far fa-clock"></i> <?= date('d/m/Y H:i', strtotime($news['created_at'])) ?>
+      </span>
+    </div>
+  </div>
+<?php endforeach; ?>
       </div>
     <?php else: ?>
       <?php if(empty($news_error)): ?>
