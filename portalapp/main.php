@@ -342,6 +342,30 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
       backdrop-filter: blur(4px);
     }
 
+.news-carousel {
+  display: flex;
+  overflow-x: auto;
+  gap: 15px;
+  padding: 0 20px 15px 20px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.news-carousel::-webkit-scrollbar {
+  display: none;
+}
+
+.news-carousel .announcement-card {
+  min-width: 85%; 
+  margin: 0; 
+  scroll-snap-align: center; 
+  flex-shrink: 0;
+  display: flex;
+  gap: 15px;
+  align-items: flex-start;
+}
     .badge-danger {
       background: rgba(220, 38, 38, 0.8) !important;
       border-color: #f87171 !important;
@@ -746,56 +770,37 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
       </a>
     </div>
 
-<!-- ส่วนแสดงประกาศ / ข่าวสาร -->
-    <?php if (!empty($news_error)): ?>
-      <div style="margin: 0 20px 15px; padding: 15px; background: #fee2e2; border: 1px solid #ef4444; border-radius: 8px; color: #b91c1c;">
-        <strong><i class="fas fa-exclamation-circle"></i> เกิดข้อผิดพลาดในการโหลดประกาศ:</strong><br>
-        <?= htmlspecialchars($news_error) ?>
-      </div>
-    <?php endif; ?>
-
-    <?php if (!empty($announcements)): ?>
-      <div class="section-title fade-in-up delay-3">
-        <div class="section-title-left" style="display: flex; gap: 10px; align-items: center;">
-          <div class="section-pill" style="background: #3b82f6;"></div>
-          <h3>ประกาศ / ข่าวสาร</h3>
+<div class="fade-in-up delay-4">
+        <!-- เพิ่มคลาส news-carousel ครอบตรงนี้ -->
+        <div class="news-carousel">
+          <?php foreach ($announcements as $news): ?>
+            <div class="announcement-card">
+              <div class="announcement-icon">
+                <i class="fas fa-bullhorn"></i>
+              </div>
+              <div class="announcement-content">
+                <h4><?= htmlspecialchars($news['title']) ?></h4>
+                
+                <p><?= nl2br(htmlspecialchars($news['content'])) ?></p>
+                
+                <!-- ส่วนแสดงไฟล์แนบ -->
+                <?php if (!empty($news['attachment'])): ?>
+                  <div style="margin: 10px 0;">
+                    <a href="uploads/news/<?= htmlspecialchars($news['attachment']) ?>" target="_blank" style="text-decoration: none; color: #007bff;">
+                      <i class="fas fa-paperclip"></i> ดูไฟล์แนบ
+                    </a>
+                  </div>
+                <?php endif; ?>
+                
+                <span class="announcement-date" style="display: block; margin-top: 10px; color: #888; font-size: 0.9em;">
+                  <i class="far fa-clock"></i> <?= date('d/m/Y H:i', strtotime($news['created_at'])) ?>
+                </span>
+              </div>
+            </div>
+          <?php endforeach; ?>
         </div>
       </div>
       
-      <div class="fade-in-up delay-4">
-      <?php foreach ($announcements as $news): ?>
-  <div class="announcement-card">
-    <div class="announcement-icon">
-      <i class="fas fa-bullhorn"></i>
-    </div>
-    <div class="announcement-content">
-      <h4><?= htmlspecialchars($news['title']) ?></h4>
-      
-      <p><?= nl2br(htmlspecialchars($news['content'])) ?></p>
-      
-      <!-- ส่วนแสดงไฟล์แนบ -->
-      <?php if (!empty($news['attachment'])): ?>
-        <div style="margin: 10px 0;">
-          <a href="uploads/news/<?= htmlspecialchars($news['attachment']) ?>" target="_blank" style="text-decoration: none; color: #007bff;">
-            <i class="fas fa-paperclip"></i> ดูไฟล์แนบ
-          </a>
-        </div>
-      <?php endif; ?>
-      
-      <span class="announcement-date" style="display: block; margin-top: 10px; color: #888; font-size: 0.9em;">
-        <i class="far fa-clock"></i> <?= date('d/m/Y H:i', strtotime($news['created_at'])) ?>
-      </span>
-    </div>
-  </div>
-<?php endforeach; ?>
-      </div>
-    <?php else: ?>
-      <?php if(empty($news_error)): ?>
-        <div style="text-align: center; color: #94a3b8; padding: 20px;">
-          ( ไม่มีประกาศหรือข่าวสารในขณะนี้ )
-        </div>
-      <?php endif; ?>
-    <?php endif; ?>
     <div class="bottom-nav">
       <a href="main.php" class="nav-link active">
         <i class="fas fa-home"></i>
