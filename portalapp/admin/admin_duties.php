@@ -7,7 +7,7 @@ session_start();
 
 // 2. ระบบตรวจสอบสิทธิ์การเข้าใช้งาน (Authentication Check)
 if (!isset($_SESSION['user_id']) && !isset($_SESSION['username'])) {
-    header("Location: login.php?error=please_login");
+    header("Location: admiin_login.php");
     exit;
 }
 
