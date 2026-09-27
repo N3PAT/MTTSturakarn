@@ -2,6 +2,7 @@
 session_start();
 require_once 'db.php';
 
+// ตรวจสอบการล็อกอิน
 if (empty($_SESSION['student_code'])) {
     header("Location: login.php");
     exit();
@@ -22,7 +23,8 @@ $announcements = [];
 $has_voted = true; 
 $news_error = ""; 
 $today_discipline = null; 
-$total_cards_history = 0; // เพิ่มตัวแปรเก็บยอดสะสมบัตรวินัย
+$total_cards_history = 0; 
+$student = [];
 
 try {
     if (!isset($conn) || !($conn instanceof mysqli)) {
@@ -33,12 +35,15 @@ try {
 
     // 1. ดึงข้อมูลนักเรียน
     $stmt = $conn->prepare("SELECT student_code, prefix, first_name, last_name, platoon, company, battalion, section, image FROM students WHERE student_code = ? LIMIT 1");
-    $stmt->bind_param("s", $studentCode);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $student = $result->fetch_assoc();
-    $stmt->close();
+    if ($stmt) {
+        $stmt->bind_param("s", $studentCode);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $student = $result->fetch_assoc();
+        $stmt->close();
+    }
 
+    // หากไม่พบข้อมูลนักเรียน ให้บังคับล็อกอินใหม่
     if (!$student) {
         session_destroy();
         header("Location: login.php");
@@ -53,7 +58,6 @@ try {
           AND DATEDIFF(duty_date, CURDATE()) IN (1, 3)
         ORDER BY duty_date ASC
     ");
-    
     if ($stmt_duty) {
         $stmt_duty->bind_param("s", $studentCode);
         $stmt_duty->execute();
@@ -100,7 +104,7 @@ try {
         $stmt_disc->close();
     }
 
-    // 4.1 [เพิ่มใหม่] ดึงข้อมูลยอดรวมบัตรวินัยสะสมทั้งหมดของนักเรียนคนนี้
+    // 4.1 ดึงข้อมูลยอดรวมบัตรวินัยสะสมทั้งหมดของนักเรียนคนนี้
     $stmt_total_disc = $conn->prepare("
         SELECT SUM(total_cards) as all_cards 
         FROM discipline_cards 
@@ -132,8 +136,9 @@ try {
     error_log("System error: " . $e->getMessage());
 }
 
-$name = trim(($student['prefix'] ?? '') . $student['first_name'] . ' ' . $student['last_name']);
-$student_code_display = "รหัสนักเรียน " . $student['student_code'];
+// จัดเตรียมตัวแปรสำหรับการแสดงผล
+$name = trim(($student['prefix'] ?? '') . ($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''));
+$student_code_display = "รหัสนักเรียน " . ($student['student_code'] ?? '');
 $profile_image = $student['image'] ?? '';
 
 $unit_parts = [];
@@ -143,11 +148,12 @@ if (!empty($student['platoon']))   $unit_parts[] = "หมวด " . $student['p
 if (!empty($student['section']))   $unit_parts[] = "ตอนเรียนที่ " . $student['section'];
 $student_unit = !empty($unit_parts) ? implode(" ", $unit_parts) : "นักเรียนทหาร";
 
+// หากไม่มีรูปโปรไฟล์ ให้ใช้ Default Avatar สุ่มตามชื่อ
 if (empty($profile_image) || $profile_image === "default_student.png" || $profile_image === "0") {
     $profile_image = "https://ui-avatars.com/api/?name=" . urlencode($name) . "&background=5a42a0&color=fff&size=128";
 }
 
-// นับการแจ้งเตือน (รวมถ้าโดนบัตรวินัยตั้งแต่ 1 ใบขึ้นไป)
+// นับการแจ้งเตือน
 $has_discipline_alert = ($today_discipline && $today_discipline['total_cards'] > 0);
 $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipline_alert ? 1 : 0);
 ?>
