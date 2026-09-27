@@ -262,7 +262,7 @@ try {
                 <input type="hidden" name="view" value="roster">
                 <input type="month" name="month" value="<?= htmlspecialchars($target_month) ?>" class="form-control" onchange="this.form.submit()">
             </form>
-            <a href="export_pdf.php?month=<?= htmlspecialchars($target_month) ?>" target="_blank" style="text-decoration:none;">
+            <a href="api/export_pdf.php?month=<?= htmlspecialchars($target_month) ?>" target="_blank" style="text-decoration:none;">
                 <button class="form-control" style="background:#ef4444; color:white; border:none; cursor:pointer; font-weight:600;">
                     <i class="fas fa-file-pdf"></i> PDF
                 </button>
