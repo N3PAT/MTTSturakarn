@@ -399,10 +399,6 @@ try {
         <i class="fas fa-shield-alt" style="font-size:1.1rem;"></i>
         <span>เวรรักษาการณ์</span>
       </a>
-      <a href="admin_restrict.php" class="nav-link">
-        <i class="fas fa-ban" style="font-size:1.1rem;"></i>
-        <span>คำสั่ง</span>
-      </a>
     </div>
 
   </div>
