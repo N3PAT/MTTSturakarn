@@ -1,6 +1,6 @@
 <?php
 session_start();
-require_once 'db.php';
+require_once '/db.php';
 
 if (empty($_SESSION['admin_id'])) {
     die("Unauthorized Access");
