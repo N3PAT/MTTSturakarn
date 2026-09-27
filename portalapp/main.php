@@ -117,13 +117,8 @@ try {
     }
 
     // 5. ดึงข้อมูลข่าวสาร/ประกาศ
-    $sql_news = "SELECT * FROM announcements WHERE status = 'active' OR status = '1' ORDER BY id DESC LIMIT 5";
+    $sql_news = "SELECT id, title, content, created_at FROM announcements WHERE status = 'active' ORDER BY id DESC LIMIT 5";
     $res_news = $conn->query($sql_news);
-
-    if (!$res_news) {
-        $sql_fallback = "SELECT * FROM announcements ORDER BY id DESC LIMIT 5";
-        $res_news = $conn->query($sql_fallback);
-    }
 
     if ($res_news) {
         while ($row = $res_news->fetch_assoc()) {
@@ -732,7 +727,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
       </a>
     </div>
 
-    <!-- ส่วนแสดงประกาศ / ข่าวสาร -->
+<!-- ส่วนแสดงประกาศ / ข่าวสาร -->
     <?php if (!empty($news_error)): ?>
       <div style="margin: 0 20px 15px; padding: 15px; background: #fee2e2; border: 1px solid #ef4444; border-radius: 8px; color: #b91c1c;">
         <strong><i class="fas fa-exclamation-circle"></i> เกิดข้อผิดพลาดในการโหลดประกาศ:</strong><br>
@@ -750,20 +745,15 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
       
       <div class="fade-in-up delay-4">
         <?php foreach ($announcements as $news): ?>
-          <?php 
-            $news_title = $news['title'] ?? $news['topic'] ?? $news['subject'] ?? 'ประกาศ';
-            $news_content = $news['content'] ?? $news['detail'] ?? $news['description'] ?? '';
-            $news_date = $news['created_at'] ?? $news['date'] ?? $news['created_date'] ?? date('Y-m-d H:i:s');
-          ?>
           <div class="announcement-card">
             <div class="announcement-icon">
               <i class="fas fa-bullhorn"></i>
             </div>
             <div class="announcement-content">
-              <h4><?= htmlspecialchars($news_title) ?></h4>
-              <p><?= nl2br(htmlspecialchars($news_content)) ?></p>
+              <h4><?= htmlspecialchars($news['title']) ?></h4>
+              <p><?= nl2br(htmlspecialchars($news['content'])) ?></p>
               <span class="announcement-date">
-                <i class="far fa-clock"></i> <?= date('d/m/Y H:i', strtotime($news_date)) ?>
+                <i class="far fa-clock"></i> <?= date('d/m/Y H:i', strtotime($news['created_at'])) ?>
               </span>
             </div>
           </div>
@@ -776,7 +766,6 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
         </div>
       <?php endif; ?>
     <?php endif; ?>
-
     <div class="bottom-nav">
       <a href="main.php" class="nav-link active">
         <i class="fas fa-home"></i>
