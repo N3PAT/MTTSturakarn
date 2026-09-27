@@ -1,5 +1,5 @@
 <?php
-// 1. เปิดการแสดง Error 
+// 1. เปิดการแสดง Error (ถ้าใช้งานได้ปกติแล้ว ให้ใส่ // หน้า 2 บรรทัดนี้เพื่อปิด)
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
@@ -11,14 +11,8 @@ if (empty($_SESSION['admin_id'])) {
     exit();
 }
 
-// 3. เชื่อมต่อฐานข้อมูล (ค้นหาไฟล์ db.php อัตโนมัติ ป้องกัน Error 500)
-if (file_exists('db.php')) {
-    require_once 'db.php';
-} elseif (file_exists('../db.php')) {
-    require_once '../db.php';
-} else {
-    die("<h3 style='color:red;'>ไม่พบไฟล์ db.php (การเชื่อมต่อฐานข้อมูลล้มเหลว)</h3>");
-}
+// 3. เชื่อมต่อฐานข้อมูล (อ้างอิงจากโครงสร้างไฟล์ db.php อยู่ในโฟลเดอร์เดียวกัน)
+require_once 'db.php';
 
 if (!isset($conn) || $conn->connect_error) {
     die("<h3 style='color:red;'>การเชื่อมต่อฐานข้อมูลล้มเหลว: " . ($conn->connect_error ?? 'ไม่พบตัวแปร $conn') . "</h3>");
