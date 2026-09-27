@@ -3,10 +3,16 @@ session_start();
 require_once 'db.php';
 
 // สมมติว่ามีระบบเช็คสิทธิ์ Admin
-// if (empty($_SESSION['admin_id'])) {
-//     header("Location: admin_login.php");
-//     exit();
-// }
+if (empty($_SESSION['admin_id'])) {
+      header("Location: admin_login.php");
+      exit();
+ }
+
+// สร้างโฟลเดอร์สำหรับเก็บไฟล์อัปโหลดถ้ายังไม่มี
+$upload_dir = 'uploads/announcements/';
+if (!is_dir($upload_dir)) {
+    mkdir($upload_dir, 0777, true);
+}
 
 // -------------------------------------------------------------
 // 1. จัดการการเพิ่มประกาศใหม่ (POST Request)
@@ -15,12 +21,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $title = trim($_POST['title'] ?? '');
     $content = trim($_POST['content'] ?? '');
     $status = $_POST['status'] ?? 'active';
+    $attachment_path = null;
 
     if (!empty($title) && !empty($content)) {
         try {
-            // 1.1 บันทึกลงตาราง announcements
-            $stmt = $conn->prepare("INSERT INTO announcements (title, content, status) VALUES (?, ?, ?)");
-            $stmt->bind_param("sss", $title, $content, $status);
+            // --- จัดการอัปโหลดไฟล์ ---
+            if (isset($_FILES['attachment']) && $_FILES['attachment']['error'] === UPLOAD_ERR_OK) {
+                $file_tmp = $_FILES['attachment']['tmp_name'];
+                $file_name = $_FILES['attachment']['name'];
+                $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
+                
+                // นามสกุลไฟล์ที่อนุญาต
+                $allowed_exts = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx'];
+                
+                if (in_array($file_ext, $allowed_exts)) {
+                    $new_filename = uniqid('news_') . '.' . $file_ext;
+                    $dest_path = $upload_dir . $new_filename;
+                    
+                    if (move_uploaded_file($file_tmp, $dest_path)) {
+                        $attachment_path = $dest_path;
+                    } else {
+                        throw new Exception("ไม่สามารถบันทึกไฟล์แนบได้");
+                    }
+                } else {
+                    throw new Exception("รองรับเฉพาะไฟล์รูปภาพ, PDF, Word และ Excel เท่านั้น");
+                }
+            }
+
+            // 1.1 บันทึกลงตาราง announcements (เพิ่ม $attachment_path)
+            $stmt = $conn->prepare("INSERT INTO announcements (title, content, status, attachment) VALUES (?, ?, ?, ?)");
+            $stmt->bind_param("ssss", $title, $content, $status, $attachment_path);
             $stmt->execute();
             $stmt->close();
             
@@ -32,7 +62,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
             // 1.3 ถ้าสถานะเป็น Active ให้ส่ง Web Push Notification เข้ามือถือผู้ใช้ทุกคน
             if ($status === 'active') {
-                // ค้นหาไฟล์ vendor/autoload.php สำหรับ WebPush
                 $autoloadPath = __DIR__ . '/../../vendor/autoload.php';
                 if (!file_exists($autoloadPath)) {
                     $autoloadPath = __DIR__ . '/../vendor/autoload.php';
@@ -43,7 +72,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
                 if (file_exists($autoloadPath)) {
                     require_once $autoloadPath;
-
                     if (class_exists('Minishlink\WebPush\WebPush')) {
                         $auth = [
                             'VAPID' => [
@@ -52,14 +80,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                                 'privateKey' => 'w86Ccb6pIc6w6EMWun3uVj9zfDe0Q-44hA2asE_RUSs',
                             ],
                         ];
-
                         $webPush = new \Minishlink\WebPush\WebPush($auth);
-
-                        // ดึง Token ผู้รับทั้งหมดจาก push_subscriptions
                         $sub_res = $conn->query("SELECT id, endpoint, p256dh, auth FROM push_subscriptions");
+                        
                         if ($sub_res && $sub_res->num_rows > 0) {
-                            
-                            // จัดเตรียมข้อมูลแจ้งเตือน (ตัดข้อความเนื้อหาไม่ให้ยาวเกินไปบนหน้าจอโทรศัพท์)
                             $short_content = mb_substr($content, 0, 90, 'UTF-8') . (mb_strlen($content, 'UTF-8') > 90 ? '...' : '');
                             
                             $payload = json_encode([
@@ -76,16 +100,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                                     'publicKey' => $sub_row['p256dh'],
                                     'authToken' => $sub_row['auth'],
                                 ]);
-
                                 $report = $webPush->sendOneNotification($subscription, $payload);
-                                
-                                // หาก Token หมดอายุ ให้เก็บ ID ไว้ลบออก
                                 if (!$report->isSuccess() && $report->isSubscriptionExpired()) {
                                     $failedIds[] = $sub_row['id'];
                                 }
                             }
-
-                            // ลบ Token ที่หมดอายุออกจาก DB
                             if (!empty($failedIds)) {
                                 $idsList = implode(',', array_map('intval', $failedIds));
                                 $conn->query("DELETE FROM push_subscriptions WHERE id IN ($idsList)");
@@ -94,13 +113,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     }
                 }
             }
-
-            // รีเฟรชหน้าเพื่อป้องกันการส่งฟอร์มซ้ำ
             header("Location: admin_announcements.php?success=1");
             exit();
-
         } catch (Exception $e) {
-            $error_msg = "เกิดข้อผิดพลาด: " . $e->getMessage();
+            $error_msg = $e->getMessage();
         }
     } else {
         $error_msg = "กรุณากรอกหัวข้อและเนื้อหาประกาศให้ครบถ้วน";
@@ -113,6 +129,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 if (isset($_GET['delete_id'])) {
     $del_id = intval($_GET['delete_id']);
     try {
+        // ค้นหาไฟล์แนบเพื่อลบออกจากเซิร์ฟเวอร์
+        $stmt_file = $conn->prepare("SELECT attachment FROM announcements WHERE id = ?");
+        $stmt_file->bind_param("i", $del_id);
+        $stmt_file->execute();
+        $res_file = $stmt_file->get_result();
+        if ($row_file = $res_file->fetch_assoc()) {
+            if (!empty($row_file['attachment']) && file_exists($row_file['attachment'])) {
+                unlink($row_file['attachment']); // ลบไฟล์
+            }
+        }
+        $stmt_file->close();
+
+        // ลบข้อมูลจาก Database
         $stmt = $conn->prepare("DELETE FROM announcements WHERE id = ?");
         $stmt->bind_param("i", $del_id);
         $stmt->execute();
@@ -126,11 +155,11 @@ if (isset($_GET['delete_id'])) {
 }
 
 // -------------------------------------------------------------
-// 3. ดึงข้อมูลประกาศทั้งหมดมาแสดง (เรียงจากใหม่ไปเก่า)
+// 3. ดึงข้อมูลประกาศทั้งหมดมาแสดง (เพิ่มคอลัมน์ attachment)
 // -------------------------------------------------------------
 $announcements = [];
 try {
-    $sql = "SELECT id, title, content, status, created_at FROM announcements ORDER BY created_at DESC";
+    $sql = "SELECT id, title, content, status, attachment, created_at FROM announcements ORDER BY created_at DESC";
     $res = $conn->query($sql);
     if ($res && $res->num_rows > 0) {
         while ($row = $res->fetch_assoc()) {
@@ -159,7 +188,6 @@ try {
       --danger: #ef4444;
       --success: #10b981;
     }
-
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     
     body {
@@ -169,7 +197,6 @@ try {
       display: flex;
       justify-content: center;
     }
-
     .app-container {
       width: 100%;
       max-width: 430px;
@@ -179,8 +206,6 @@ try {
       padding-bottom: 90px;
       box-shadow: 0 0 20px rgba(0,0,0,0.1);
     }
-
-    /* Header */
     .top-header {
       display: flex;
       align-items: center;
@@ -192,20 +217,17 @@ try {
       top: 0;
       z-index: 10;
     }
-
     .header-left h1 {
       font-size: 1.1rem;
       font-weight: 700;
       color: var(--primary);
       margin: 0;
     }
-    
     .header-left p {
       font-size: 0.75rem;
       color: var(--text-gray);
       margin: 0;
     }
-
     .section-title {
       display: flex;
       align-items: center;
@@ -224,8 +246,6 @@ try {
       color: var(--text-dark);
       margin: 0;
     }
-
-    /* Form Card */
     .form-card {
       background: white;
       border-radius: 16px;
@@ -233,7 +253,6 @@ try {
       margin: 0 20px 20px;
       box-shadow: 0 4px 15px rgba(0,0,0,0.03);
     }
-
     .form-group { margin-bottom: 15px; }
     .form-label {
       display: block;
@@ -256,6 +275,10 @@ try {
       border-color: var(--primary);
       box-shadow: 0 0 0 3px rgba(90, 66, 160, 0.1);
     }
+    .form-control-file {
+      padding: 8px 10px;
+      background: #f8fafc;
+    }
     textarea.form-control {
       resize: vertical;
       min-height: 80px;
@@ -275,7 +298,6 @@ try {
     }
     .btn-submit:active { transform: scale(0.98); }
 
-    /* Announcement List */
     .admin-news-card {
       background: white;
       border-left: 4px solid var(--primary);
@@ -313,6 +335,29 @@ try {
       margin: 0;
       line-height: 1.4;
     }
+    .attachment-preview {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid #f1f5f9;
+    }
+    .attachment-img {
+      max-width: 100%;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+    }
+    .attachment-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 8px 12px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      color: var(--primary);
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-decoration: none;
+    }
     
     .admin-news-footer {
       display: flex;
@@ -338,9 +383,9 @@ try {
       display: inline-flex;
       align-items: center;
       gap: 5px;
+      text-decoration: none;
     }
 
-    /* Alert Messages */
     .alert {
       padding: 10px 15px;
       border-radius: 8px;
@@ -351,7 +396,6 @@ try {
     .alert-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
     .alert-danger { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
 
-    /* Bottom Nav */
     .bottom-nav {
       position: fixed; 
       bottom: 0;
@@ -417,14 +461,14 @@ try {
       <div class="alert alert-danger fade-in-up"><i class="fas fa-exclamation-triangle"></i> <?= htmlspecialchars($error_msg) ?></div>
     <?php endif; ?>
 
-    <!-- ฟอร์มเพิ่มประกาศใหม่ -->
+    <!-- ฟอร์มเพิ่มประกาศใหม่ (เพิ่ม enctype="multipart/form-data") -->
     <div class="section-title fade-in-up">
       <div class="section-pill"></div>
       <h3>สร้างประกาศใหม่</h3>
     </div>
 
     <div class="form-card fade-in-up">
-      <form method="POST" action="admin_announcements.php">
+      <form method="POST" action="admin_announcements.php" enctype="multipart/form-data">
         <input type="hidden" name="action" value="add">
         
         <div class="form-group">
@@ -435,6 +479,12 @@ try {
         <div class="form-group">
           <label class="form-label">เนื้อหา / รายละเอียด <span style="color:red;">*</span></label>
           <textarea name="content" class="form-control" placeholder="พิมพ์รายละเอียดข่าวสารที่นี่..." required></textarea>
+        </div>
+
+        <!-- ช่องอัปโหลดไฟล์แนบ -->
+        <div class="form-group">
+          <label class="form-label">ไฟล์แนบ / รูปภาพประกอบ (ไม่บังคับ)</label>
+          <input type="file" name="attachment" class="form-control form-control-file" accept=".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx,.xls,.xlsx">
         </div>
 
         <div class="form-group">
@@ -473,6 +523,22 @@ try {
           <div class="admin-news-content">
             <?= nl2br(htmlspecialchars($news['content'])) ?>
           </div>
+
+          <!-- แสดงผลไฟล์แนบ ถ้ามี -->
+          <?php if (!empty($news['attachment']) && file_exists($news['attachment'])): ?>
+            <div class="attachment-preview">
+              <?php 
+                $ext = strtolower(pathinfo($news['attachment'], PATHINFO_EXTENSION));
+                if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif'])): 
+              ?>
+                <img src="<?= $news['attachment'] ?>" class="attachment-img" alt="รูปภาพประกอบ">
+              <?php else: ?>
+                <a href="<?= $news['attachment'] ?>" target="_blank" class="attachment-link">
+                  <i class="fas fa-paperclip"></i> ดาวน์โหลดไฟล์แนบ
+                </a>
+              <?php endif; ?>
+            </div>
+          <?php endif; ?>
           
           <div class="admin-news-footer">
             <span class="news-date">
