@@ -1,26 +1,20 @@
 <?php
-// เปิดการแสดง Error ชั่วคราวเพื่อใช้วิเคราะห์ปัญหา
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
+session_start();
 
-// 1. ดักจับและเรียกไฟล์เชื่อมต่อฐานข้อมูล (รองรับทั้ง /admin/ และโฟลเดอร์หลัก)
-if (file_exists('../db.php')) {
-    require_once '../db.php';
-} elseif (file_exists('db.php')) {
-    require_once 'db.php';
-} elseif (file_exists('../config.php')) {
-    require_once '../config.php';
-} else {
-    die("ไม่พบไฟล์เชื่อมต่อฐานข้อมูล (db.php หรือ config.php)");
+// ตรวจสอบสิทธิ์ Admin (หากไม่ได้ล็อกอินให้กลับไปหน้าหลัก)
+if (empty($_SESSION['admin_id'])) {
+    header("Location: admin_main.php");
+    exit();
 }
 
-// ตรวจสอบการเชื่อมต่อ $conn
-if (!isset($conn) || $conn->connect_error) {
-    die("การเชื่อมต่อฐานข้อมูลล้มเหลว: " . ($conn->connect_error ?? 'ไม่พบตัวแปร $conn'));
+require_once 'db.php';
+
+// ตั้งค่า Charset การเชื่อมต่อ
+if (isset($conn) && $conn instanceof mysqli) {
+    $conn->set_charset("utf8mb4");
 }
 
-// 2. ดึงสถิติภาพรวม
+// 1. ดึงสถิติภาพรวม
 $sql_stat = "
     SELECT 
         COUNT(s.student_code) AS total_students,
@@ -31,20 +25,21 @@ $sql_stat = "
 ";
 
 $res_stat = $conn->query($sql_stat);
+$stat = ($res_stat && $res_stat->num_rows > 0) ? $res_stat->fetch_assoc() : [
+    'total_students' => 0,
+    'registered_count' => 0,
+    'unregistered_count' => 0
+];
 
-if (!$res_stat) {
-    die("SQL Error (Stat): " . $conn->error);
-}
-$stat = $res_stat->fetch_assoc();
-
-// 3. ดึงรายชื่อผู้ที่ยังไม่ลงทะเบียน PWA
+// 2. ดึงรายชื่อผู้ที่ยังไม่ลงทะเบียน PWA
 $sql_unregistered = "
     SELECT 
         s.student_code, 
         s.prefix, 
         s.first_name, 
         s.last_name,
-        s.company
+        s.company,
+        s.platoon
     FROM students s
     LEFT JOIN push_subscriptions p ON s.student_code = p.student_id
     WHERE p.student_id IS NULL
@@ -52,73 +47,82 @@ $sql_unregistered = "
 ";
 
 $result = $conn->query($sql_unregistered);
-
-if (!$result) {
-    die("SQL Error (Unregistered): " . $conn->error);
-}
 ?>
-
 <!DOCTYPE html>
 <html lang="th">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>รายงานการลงทะเบียน PWA</title>
+    <title>รายงานการลงทะเบียน PWA - MTTS</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Prompt', sans-serif; background-color: #f8fafc; }
+    </style>
 </head>
 <body class="bg-light">
 
-<div class="container py-4">
-    <h3 class="mb-4">📱 รายงานสถานะการลงทะเบียนใช้งาน PWA Notification</h3>
+<div class="container py-4" style="max-width: 900px;">
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <div class="d-flex align-items-center gap-3">
+            <a href="turakarn.php" class="btn btn-outline-secondary btn-sm"><i class="fas fa-chevron-left"></i> ย้อนกลับ</a>
+            <h3 class="mb-0 fw-bold">📱 รายงานการลงทะเบียน PWA</h3>
+        </div>
+        <button onclick="window.print()" class="btn btn-sm btn-dark"><i class="fas fa-print"></i> พิมพ์รายงาน</button>
+    </div>
 
     <!-- การ์ดแสดงสถิติ -->
     <div class="row g-3 mb-4">
         <div class="col-md-4">
-            <div class="card bg-primary text-white p-3 shadow-sm">
-                <h5>นักเรียนทั้งหมด</h5>
-                <h2 class="mb-0"><?= number_format($stat['total_students'] ?? 0); ?> คน</h2>
+            <div class="card bg-primary text-white p-3 shadow-sm border-0">
+                <div class="small opacity-75">นักเรียนทั้งหมด</div>
+                <h2 class="mb-0 fw-bold"><?= number_format($stat['total_students'] ?? 0); ?> <span class="fs-6 fw-normal">นาย</span></h2>
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card bg-success text-white p-3 shadow-sm">
-                <h5>ลงทะเบียน PWA แล้ว</h5>
-                <h2 class="mb-0"><?= number_format($stat['registered_count'] ?? 0); ?> คน</h2>
+            <div class="card bg-success text-white p-3 shadow-sm border-0">
+                <div class="small opacity-75">ลงทะเบียน PWA แล้ว</div>
+                <h2 class="mb-0 fw-bold"><?= number_format($stat['registered_count'] ?? 0); ?> <span class="fs-6 fw-normal">นาย</span></h2>
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card bg-danger text-white p-3 shadow-sm">
-                <h5>ยังไม่ลงทะเบียน</h5>
-                <h2 class="mb-0"><?= number_format($stat['unregistered_count'] ?? 0); ?> คน</h2>
+            <div class="card bg-danger text-white p-3 shadow-sm border-0">
+                <div class="small opacity-75">ยังไม่ลงทะเบียน</div>
+                <h2 class="mb-0 fw-bold"><?= number_format($stat['unregistered_count'] ?? 0); ?> <span class="fs-6 fw-normal">นาย</span></h2>
             </div>
         </div>
     </div>
 
     <!-- ตารางรายชื่อผู้ยังไม่ลงทะเบียน -->
-    <div class="card shadow-sm">
-        <div class="card-header bg-white d-flex justify-content-between align-items-center">
-            <h5 class="mb-0 text-danger">รายชื่อผู้ที่ยังไม่ได้ลงทะเบียนรับแจ้งเตือน PWA</h5>
-            <button onclick="window.print()" class="btn btn-sm btn-outline-secondary">🖨️ พิมพ์ / Export PDF</button>
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-white py-3">
+            <h5 class="mb-0 text-danger fw-bold"><i class="fas fa-user-times me-2"></i>รายชื่อผู้ที่ยังไม่ได้ลงทะเบียนรับแจ้งเตือน PWA</h5>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-striped table-hover mb-0 align-middle">
                     <thead class="table-dark">
                         <tr>
-                            <th width="80" class="text-center">ลำดับ</th>
-                            <th width="150">รหัสนักเรียน</th>
-                            <th>ยศ - ชื่อ - นามสกุล</th>
-                            <th width="150">สังกัด/หน่วย</th>
-                            <th width="150" class="text-center">สถานะ PWA</th>
+                            <th width="70" class="text-center">ลำดับ</th>
+                            <th width="140">รหัสนักเรียน</th>
+                            <th>ชื่อ - นามสกุล</th>
+                            <th width="180">สังกัด (กองร้อย/หมวด)</th>
+                            <th width="140" class="text-center">สถานะ PWA</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php if ($result && $result->num_rows > 0): ?>
                             <?php $i = 1; while ($row = $result->fetch_assoc()): ?>
+                                <?php 
+                                    $fullname = trim(($row['prefix'] ?? '') . $row['first_name'] . ' ' . $row['last_name']);
+                                    $unit = (!empty($row['company']) ? 'ร้อย.' . $row['company'] : '') . (!empty($row['platoon']) ? ' หมวด ' . $row['platoon'] : '-');
+                                ?>
                                 <tr>
                                     <td class="text-center"><?= $i++; ?></td>
-                                    <td><strong><?= htmlspecialchars($row['student_code'] ?? ''); ?></strong></td>
-                                    <td><?= htmlspecialchars(($row['prefix'] ?? '') . ($row['first_name'] ?? '') . " " . ($row['last_name'] ?? '')); ?></td>
-                                    <td><?= htmlspecialchars($row['company'] ?? '-'); ?></td>
+                                    <td><strong><?= htmlspecialchars($row['student_code']); ?></strong></td>
+                                    <td><?= htmlspecialchars($fullname); ?></td>
+                                    <td><?= htmlspecialchars($unit); ?></td>
                                     <td class="text-center">
                                         <span class="badge bg-danger">ยังไม่ลงทะเบียน</span>
                                     </td>
@@ -126,8 +130,8 @@ if (!$result) {
                             <?php endwhile; ?>
                         <?php else: ?>
                             <tr>
-                                <td colspan="5" class="text-center py-4 text-success">
-                                    นักเรียนทุกคนลงทะเบียนใช้งาน PWA ครบแล้ว
+                                <td colspan="5" class="text-center py-4 text-success fw-bold">
+                                    <i class="fas fa-check-circle me-1"></i> นักเรียนทุกคนลงทะเบียนใช้งาน PWA ครบแล้ว
                                 </td>
                             </tr>
                         <?php endif; ?>
