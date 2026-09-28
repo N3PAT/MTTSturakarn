@@ -146,6 +146,9 @@ try {
     .back-btn { font-size: 1.2rem; color: var(--text-dark); text-decoration: none; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 12px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-right: 15px; transition: 0.2s ease; }
     .page-title h1 { font-size: 1.1rem; font-weight: 700; color: var(--text-dark); margin: 0; }
 
+    .print-btn { margin-left: auto; background: var(--primary); color: white; border: none; padding: 8px 12px; border-radius: 8px; font-family: 'Prompt', sans-serif; font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 5px; box-shadow: 0 2px 5px rgba(139, 92, 246, 0.3); transition: 0.2s; }
+    .print-btn:hover { background: var(--primary-hover); }
+
     /* Scrollable Tabs */
     .tabs-wrapper { margin: 10px 24px 0; overflow-x: auto; white-space: nowrap; -ms-overflow-style: none; scrollbar-width: none; border-radius: 12px; background: #e2e8f0; padding: 4px; display: flex; gap: 4px; }
     .tabs-wrapper::-webkit-scrollbar { display: none; }
@@ -190,6 +193,49 @@ try {
     .bottom-nav { position: fixed; bottom: 0; width: 100%; max-width: 430px; left: 50%; transform: translateX(-50%); height: 70px; background: white; border-top-left-radius: 25px; border-top-right-radius: 25px; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 -5px 20px rgba(0,0,0,0.03); padding: 0 10px; z-index: 1000; }
     .nav-link { display: flex; flex-direction: column; align-items: center; text-decoration: none; color: #94a3b8; font-size: 0.7rem; font-weight: 600; width: 30%; gap: 4px; }
     .nav-link.active { color: var(--primary); }
+
+    /* ========================================================
+       PRINT CSS สำหรับพิมพ์เป็น PDF
+       ======================================================== */
+    @media print {
+      body {
+        background-color: white !important;
+      }
+      .app-container {
+        max-width: 100% !important;
+        box-shadow: none !important;
+        padding-bottom: 0 !important;
+      }
+      /* ซ่อนส่วนที่ไม่จำเป็นต้องใช้ตอน Print PDF */
+      .back-btn, .print-btn, .tabs-wrapper, .bottom-nav {
+        display: none !important;
+      }
+      .top-header {
+        padding: 10px 0 !important;
+        border-bottom: 2px solid #000;
+        margin-bottom: 20px;
+      }
+      .page-title h1 {
+        font-size: 1.5rem !important;
+        color: #000 !important;
+      }
+      .content-section {
+        padding: 0 !important;
+      }
+      .stat-box, .ranking-list {
+        border: 1px solid #ccc !important;
+        box-shadow: none !important;
+        break-inside: avoid; /* ป้องกันไม่ให้ตารางขาดครึ่งหน้า */
+      }
+      .progress-bar {
+        background: #eee !important;
+      }
+      .progress-fill {
+        /* บังคับพิมพ์สี Background สำหรับกราฟ (ขึ้นอยู่กับตั้งค่า Browser ด้วย) */
+        -webkit-print-color-adjust: exact; 
+        print-color-adjust: exact;
+      }
+    }
   </style>
 </head>
 <body>
@@ -200,6 +246,8 @@ try {
       <div class="page-title">
         <h1>รายงานและสถิติ</h1>
       </div>
+      <!-- ปุ่มสั่งพิมพ์/บันทึกเป็น PDF -->
+      <button class="print-btn" onclick="window.print()"><i class="fas fa-file-pdf"></i> บันทึก PDF</button>
     </div>
 
     <!-- แถบเมนูแบบเลื่อนได้ (Scrollable) -->
@@ -402,7 +450,7 @@ try {
         <i class="fas fa-chart-bar" style="font-size:1.1rem;"></i>
         <span>รายงาน</span>
       </a>
-     
+      
     </div>
 
   </div>
