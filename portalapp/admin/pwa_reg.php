@@ -1,8 +1,26 @@
 <?php
-// เชื่อมต่อฐานข้อมูล (ใช้ $conn จากไฟล์ config เดิมของคุณ)
-require_once 'db.php'; 
+// เปิดการแสดง Error ชั่วคราวเพื่อใช้วิเคราะห์ปัญหา
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 
-// 1. ดึงสถิติภาพรวม
+// 1. ดักจับและเรียกไฟล์เชื่อมต่อฐานข้อมูล (รองรับทั้ง /admin/ และโฟลเดอร์หลัก)
+if (file_exists('../db.php')) {
+    require_once '../db.php';
+} elseif (file_exists('db.php')) {
+    require_once 'db.php';
+} elseif (file_exists('../config.php')) {
+    require_once '../config.php';
+} else {
+    die("ไม่พบไฟล์เชื่อมต่อฐานข้อมูล (db.php หรือ config.php)");
+}
+
+// ตรวจสอบการเชื่อมต่อ $conn
+if (!isset($conn) || $conn->connect_error) {
+    die("การเชื่อมต่อฐานข้อมูลล้มเหลว: " . ($conn->connect_error ?? 'ไม่พบตัวแปร $conn'));
+}
+
+// 2. ดึงสถิติภาพรวม
 $sql_stat = "
     SELECT 
         COUNT(s.student_code) AS total_students,
@@ -11,10 +29,15 @@ $sql_stat = "
     FROM students s
     LEFT JOIN push_subscriptions p ON s.student_code = p.student_id
 ";
+
 $res_stat = $conn->query($sql_stat);
+
+if (!$res_stat) {
+    die("SQL Error (Stat): " . $conn->error);
+}
 $stat = $res_stat->fetch_assoc();
 
-// 2. ดึงรายชื่อผู้ที่ยังไม่ลงทะเบียน PWA
+// 3. ดึงรายชื่อผู้ที่ยังไม่ลงทะเบียน PWA
 $sql_unregistered = "
     SELECT 
         s.student_code, 
@@ -27,13 +50,19 @@ $sql_unregistered = "
     WHERE p.student_id IS NULL
     ORDER BY s.student_code ASC
 ";
+
 $result = $conn->query($sql_unregistered);
+
+if (!$result) {
+    die("SQL Error (Unregistered): " . $conn->error);
+}
 ?>
 
 <!DOCTYPE html>
 <html lang="th">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>รายงานการลงทะเบียน PWA</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
@@ -47,19 +76,19 @@ $result = $conn->query($sql_unregistered);
         <div class="col-md-4">
             <div class="card bg-primary text-white p-3 shadow-sm">
                 <h5>นักเรียนทั้งหมด</h5>
-                <h2 class="mb-0"><?= number_format($stat['total_students']); ?> คน</h2>
+                <h2 class="mb-0"><?= number_format($stat['total_students'] ?? 0); ?> คน</h2>
             </div>
         </div>
         <div class="col-md-4">
             <div class="card bg-success text-white p-3 shadow-sm">
                 <h5>ลงทะเบียน PWA แล้ว</h5>
-                <h2 class="mb-0"><?= number_format($stat['registered_count']); ?> คน</h2>
+                <h2 class="mb-0"><?= number_format($stat['registered_count'] ?? 0); ?> คน</h2>
             </div>
         </div>
         <div class="col-md-4">
             <div class="card bg-danger text-white p-3 shadow-sm">
                 <h5>ยังไม่ลงทะเบียน</h5>
-                <h2 class="mb-0"><?= number_format($stat['unregistered_count']); ?> คน</h2>
+                <h2 class="mb-0"><?= number_format($stat['unregistered_count'] ?? 0); ?> คน</h2>
             </div>
         </div>
     </div>
@@ -83,12 +112,12 @@ $result = $conn->query($sql_unregistered);
                         </tr>
                     </thead>
                     <tbody>
-                        <?php if ($result->num_rows > 0): ?>
+                        <?php if ($result && $result->num_rows > 0): ?>
                             <?php $i = 1; while ($row = $result->fetch_assoc()): ?>
                                 <tr>
                                     <td class="text-center"><?= $i++; ?></td>
-                                    <td><strong><?= htmlspecialchars($row['student_code']); ?></strong></td>
-                                    <td><?= htmlspecialchars($row['prefix'] . $row['first_name'] . " " . $row['last_name']); ?></td>
+                                    <td><strong><?= htmlspecialchars($row['student_code'] ?? ''); ?></strong></td>
+                                    <td><?= htmlspecialchars(($row['prefix'] ?? '') . ($row['first_name'] ?? '') . " " . ($row['last_name'] ?? '')); ?></td>
                                     <td><?= htmlspecialchars($row['company'] ?? '-'); ?></td>
                                     <td class="text-center">
                                         <span class="badge bg-danger">ยังไม่ลงทะเบียน</span>
