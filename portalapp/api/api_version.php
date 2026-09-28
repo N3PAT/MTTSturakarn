@@ -16,8 +16,8 @@ $appVersion = [
         'ปรับปรุงประสิทธิภาพการโหลดหน้าหลัก',
         'แก้ไขข้อผิดพลาดระบบสถิติการเข้าเวร'
     ],
-    'apkUrl' => '../downloads/mtts-app-v1.2.0.apk',
-    'apk_download_url' => '../downloads/mtts-app-v1.2.0.apk',
+    'apkUrl' => 'downloads/MTTS-1001.apk',
+    'apk_download_url' => 'downloads/MTTS-1001.apk',
     'pwa_manifest_url' => 'manifest.json'
 ];
 
