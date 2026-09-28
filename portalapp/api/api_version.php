@@ -16,9 +16,11 @@ $appVersion = [
         'ปรับปรุงประสิทธิภาพการโหลดหน้าหลัก',
         'แก้ไขข้อผิดพลาดระบบสถิติการเข้าเวร'
     ],
-    'apkUrl' => 'downloads/MTTS-1001.apk',
-    'apk_download_url' => 'downloads/MTTS-1001.apk',
-    'pwa_manifest_url' => 'manifest.json'
+    // เติม api/ ด้านหน้า เพื่อให้อ้างอิงจากหน้าเว็บหลัก (index.html) ได้ถูกต้อง
+    'apkUrl' => 'api/downloads/MTTS-1001.apk',
+    'apk_download_url' => 'api/downloads/MTTS-1001.apk',
+    // manifest.json มักจะอยู่ที่หน้าแรก (Root) อยู่แล้ว จึงใช้ path เดิมได้
+    'pwa_manifest_url' => 'manifest.json' 
 ];
 
 echo json_encode($appVersion, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
