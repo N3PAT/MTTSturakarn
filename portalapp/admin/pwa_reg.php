@@ -2,10 +2,10 @@
 session_start();
 
 // ตรวจสอบสิทธิ์ Admin (หากไม่ได้ล็อกอินให้กลับไปหน้าหลัก)
-if (empty($_SESSION['admin_id'])) {
-    header("Location: admin_main.php");
-    exit();
-}
+// if (empty($_SESSION['admin_id'])) {
+//    header("Location: admin_main.php");
+//    exit();
+// }
 
 require_once 'db.php';
 
