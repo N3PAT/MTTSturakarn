@@ -196,7 +196,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <div class="footer">
         <div class="version">
           &copy; 2026 กระทิงมึน Production<br>
-          เวอร์ชัน 1.0.0
+          เวอร์ชัน 1.2.0
         </div>
       </div>
     </div>
