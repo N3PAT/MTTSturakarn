@@ -7,10 +7,10 @@ ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
 // ปิดเช็คสิทธิ์ไว้ชั่วคราวตามที่คุณต้องการ
-// if (empty($_SESSION['admin_id'])) {
-//    header("Location: admin_main.php");
-//    exit();
-// }
+ if (empty($_SESSION['admin_id'])) {
+    header("Location: admin_main.php");
+    exit();
+ }
 
 require_once 'db.php';
 
@@ -81,7 +81,7 @@ try {
     <div class="d-flex align-items-center justify-content-between mb-4">
         <div class="d-flex align-items-center gap-3">
             <a href="turakarn.php" class="btn btn-outline-secondary btn-sm"><i class="fas fa-chevron-left"></i> ย้อนกลับ</a>
-            <h3 class="mb-0 fw-bold">📱 รายงานการลงทะเบียน PWA</h3>
+            <h3 class="mb-0 fw-bold">รายงานการลงทะเบียน PWA</h3>
         </div>
         <button onclick="window.print()" class="btn btn-sm btn-dark"><i class="fas fa-print"></i> พิมพ์รายงาน</button>
     </div>
