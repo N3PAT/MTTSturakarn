@@ -1,13 +1,26 @@
 <?php
-// 1. ตั้งค่าความปลอดภัยของ Session ขั้นสูง (ทำงานก่อน session_start)
+// 1. ตั้งค่าความปลอดภัยและอายุของ Session ให้อยู่ได้นาน 30 วัน
+$session_lifetime = 2592000; // 30 วัน (วินาที)
+ini_set('session.gc_maxlifetime', $session_lifetime);
+ini_set('session.cookie_lifetime', $session_lifetime);
 ini_set('session.cookie_httponly', 1);
 ini_set('session.use_only_cookies', 1);
 ini_set('session.cookie_samesite', 'Lax');
+ini_set('session.cookie_secure', 1); // แนะนำให้ใช้ 1 หากเว็บไซต์คุณรันบน HTTPS
 
 // 2. ปิดการแสดง Error บนหน้าเว็บจริง
 ini_set('display_errors', 0);
 ini_set('display_startup_errors', 0);
 error_reporting(E_ALL);
+
+// ตั้งค่า session_set_cookie_params เพื่อให้สอดคล้องกับค่าด้านบน
+session_set_cookie_params([
+    'lifetime' => $session_lifetime,
+    'path' => '/',
+    'secure' => true, // ต้องเป็น HTTPS
+    'httponly' => true,
+    'samesite' => 'Lax'
+]);
 
 session_start();
 require_once 'db.php';
@@ -99,7 +112,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
-    /* CSS เดิมทั้งหมดของคุณ */
     :root {
       --primary-color: #503896;
       --text-dark: #1f2937;
@@ -135,85 +147,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     .footer a { color: var(--primary-color); text-decoration: none; font-weight: 500; }
     .version { margin-top: 15px; font-size: 0.7rem; color: #9ca3af; }
 
-    /* CSS สำหรับ PWA Install Banner */
-    .pwa-banner {
-      position: fixed;
-      bottom: -100px; /* ซ่อนไว้ก่อน */
-      left: 50%;
-      transform: translateX(-50%);
-      width: 90%;
-      max-width: 400px;
-      background-color: #ffffff;
-      box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
-      border-radius: 16px;
-      padding: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      transition: bottom 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-      z-index: 1000;
-    }
-    
-    .pwa-banner.show {
-      bottom: 20px; /* แสดงขึ้นมา */
-    }
-
-    .pwa-content {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .pwa-icon {
-      width: 48px;
-      height: 48px;
-      border-radius: 12px;
-      object-fit: cover;
-    }
-
-    .pwa-text {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .pwa-title {
-      font-weight: 600;
-      font-size: 0.95rem;
-      color: var(--text-dark);
-      margin: 0;
-    }
-
-    .pwa-subtitle {
-      font-size: 0.8rem;
-      color: var(--text-gray);
-      margin: 0;
-    }
-
-    .pwa-actions {
-      display: flex;
-      gap: 8px;
-    }
-
-    .btn-pwa-install {
-      background-color: var(--primary-color);
-      color: white;
-      border: none;
-      padding: 8px 16px;
-      border-radius: 20px;
-      font-family: 'Prompt', sans-serif;
-      font-weight: 600;
-      font-size: 0.85rem;
-      cursor: pointer;
-    }
-
-    .btn-pwa-close {
-      background: none;
-      border: none;
-      color: var(--text-gray);
-      font-size: 1.2rem;
-      cursor: pointer;
-      padding: 4px;
-    }
+    /* PWA Install Banner */
+    .pwa-banner { position: fixed; bottom: -100px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 400px; background-color: #ffffff; box-shadow: 0 -4px 20px rgba(0,0,0,0.15); border-radius: 16px; padding: 16px; display: flex; align-items: center; justify-content: space-between; transition: bottom 0.5s cubic-bezier(0.16, 1, 0.3, 1); z-index: 1000; }
+    .pwa-banner.show { bottom: 20px; }
+    .pwa-content { display: flex; align-items: center; gap: 12px; }
+    .pwa-icon { width: 48px; height: 48px; border-radius: 12px; object-fit: cover; }
+    .pwa-text { display: flex; flex-direction: column; }
+    .pwa-title { font-weight: 600; font-size: 0.95rem; color: var(--text-dark); margin: 0; }
+    .pwa-subtitle { font-size: 0.8rem; color: var(--text-gray); margin: 0; }
+    .pwa-actions { display: flex; gap: 8px; }
+    .btn-pwa-install { background-color: var(--primary-color); color: white; border: none; padding: 8px 16px; border-radius: 20px; font-family: 'Prompt', sans-serif; font-weight: 600; font-size: 0.85rem; cursor: pointer; }
+    .btn-pwa-close { background: none; border: none; color: var(--text-gray); font-size: 1.2rem; cursor: pointer; padding: 4px; }
   </style>
 </head>
 <body>
@@ -221,7 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="top-background"></div>
     <div class="login-panel">
       <div class="school-logo"></div>
-      <h1 class="title">ระบบนักเรียน รุ่น 67</h1>
+      <h1 class="title" id="pageTitle">ระบบนักเรียน รุ่น 67</h1>
 
       <form method="POST" action="" class="login-form">
         <?php if (!empty($error)): ?>
@@ -258,7 +202,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
   </div>
 
-  <!-- PWA Install Banner -->
   <div class="pwa-banner" id="pwaBanner">
     <div class="pwa-content">
       <img src="icon-192x192.png" alt="App Icon" class="pwa-icon" onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg?utm_source=th.wikipedia.org&utm_campaign=index&utm_content=thumbnail_unscaled'">
@@ -307,70 +250,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     passwordInput.addEventListener('input', checkInputs);
     window.addEventListener('DOMContentLoaded', checkInputs);
 
-    // ลงทะเบียน Service Worker
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('sw.js')
-          .then(registration => {
-            console.log('ServiceWorker registered successfully');
-          })
-          .catch(error => {
-            console.log('ServiceWorker registration failed: ', error);
-          });
+          .catch(error => console.log('ServiceWorker registration failed: ', error));
       });
     }
 
-    // จัดการ PWA Installation
     let deferredPrompt;
     const pwaBanner = document.getElementById('pwaBanner');
     const btnInstallPwa = document.getElementById('btnInstallPwa');
     const btnClosePwa = document.getElementById('btnClosePwa');
 
-    // ตรวจจับเหตุการณ์เมื่อเบราว์เซอร์พร้อมให้ติดตั้ง PWA
+    // ตรวจสอบสถานะการเปิดแอป
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    const hasInstalledBefore = localStorage.getItem('pwaInstalled') === 'true';
+
     window.addEventListener('beforeinstallprompt', (e) => {
-      // ป้องกันไม่ให้ Chrome แสดง mini-infobar อัตโนมัติ (บางเวอร์ชัน)
       e.preventDefault();
-      // เก็บ event ไว้ใช้เมื่อผู้ใช้กดปุ่ม
       deferredPrompt = e;
       
-      // ตรวจสอบว่าผู้ใช้เคยปิด banner ไปแล้วหรือไม่ใน session นี้
-      if (!sessionStorage.getItem('pwaBannerDismissed')) {
-        // เลื่อน banner ขึ้นมาแสดง
-        setTimeout(() => {
-          pwaBanner.classList.add('show');
-        }, 1500); // ดีเลย์ 1.5 วินาทีเพื่อให้หน้าเว็บโหลดเสร็จก่อน
+      // ถ้าเปิดในเบราว์เซอร์ และยังไม่เคยติดตั้งแอป ให้แสดง Banner
+      if (!isStandalone && !hasInstalledBefore && !sessionStorage.getItem('pwaBannerDismissed')) {
+        setTimeout(() => pwaBanner.classList.add('show'), 1500); 
       }
     });
 
-    // เมื่อผู้ใช้กดปุ่ม "ติดตั้ง"
     btnInstallPwa.addEventListener('click', async () => {
       if (deferredPrompt) {
-        // ซ่อน banner ทันที
         pwaBanner.classList.remove('show');
-        
-        // แสดง dialog ติดตั้งของระบบ
         deferredPrompt.prompt();
-        
-        // รอรับผลลัพธ์ว่าผู้ใช้กดยอมรับหรือปฏิเสธ
         const { outcome } = await deferredPrompt.userChoice;
-        console.log(`User response to the install prompt: ${outcome}`);
-        
-        // ล้างค่า event เพราะใช้ได้แค่ครั้งเดียว
+        if (outcome === 'accepted') {
+          // บันทึกสถานะว่าผู้ใช้อนุมัติติดตั้งแอปแล้ว
+          localStorage.setItem('pwaInstalled', 'true');
+        }
         deferredPrompt = null;
       }
     });
 
-    // เมื่อผู้ใช้กดปุ่ม "ปิด" (กากบาท)
     btnClosePwa.addEventListener('click', () => {
       pwaBanner.classList.remove('show');
-      // บันทึกไว้ใน sessionStorage เพื่อไม่ให้แสดงอีกจนกว่าจะปิดเบราว์เซอร์
       sessionStorage.setItem('pwaBannerDismissed', 'true');
     });
     
-    // ตรวจจับว่าแอปถูกติดตั้งและเปิดใช้งานผ่านโหมด PWA (Standalone) สำเร็จแล้ว
     window.addEventListener('appinstalled', () => {
       console.log('PWA was installed successfully');
       pwaBanner.classList.remove('show');
+      localStorage.setItem('pwaInstalled', 'true'); // บันทึกถาวรว่ามีแอปในเครื่องแล้ว
     });
   </script>
 </body>
