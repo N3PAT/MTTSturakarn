@@ -20,13 +20,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $reason = $_POST['override_reason'] ?? '';
 
     if ($new_status === 'clear') {
-        // ยกเลิกการแก้ไข (กลับไปใช้สถานะเดิมของระบบ)
+        // 1. ยกเลิกการแก้ไข (กลับไปใช้สถานะเดิมของระบบ)
         $stmt_del = $conn->prepare("DELETE FROM admin_overrides WHERE student_code = ? AND target_date = ?");
         $stmt_del->bind_param("ss", $target_stu, $target_d);
         $stmt_del->execute();
         $stmt_del->close();
+
+        // [เพิ่มใหม่] ลบรายชื่อออกจาก restrictions ด้วยเมื่อกดยกเลิก
+        $stmt_del_rest = $conn->prepare("DELETE FROM restrictions WHERE student_code = ?");
+        $stmt_del_rest->bind_param("s", $target_stu);
+        $stmt_del_rest->execute();
+        $stmt_del_rest->close();
     } else {
-        // เช็คว่ามีข้อมูลเดิมไหม ถ้ามีให้อัปเดต ถ้าไม่มีให้เพิ่มใหม่
+        // เช็คว่ามีข้อมูลเดิมไหม ถ้ามีให้อัปเดต ถ้าไม่มีให้เพิ่มใหม่ ในตาราง admin_overrides
         $stmt_chk = $conn->prepare("SELECT id FROM admin_overrides WHERE student_code = ? AND target_date = ?");
         $stmt_chk->bind_param("ss", $target_stu, $target_d);
         $stmt_chk->execute();
@@ -44,6 +50,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $stmt_ins->close();
         }
         $stmt_chk->close();
+
+        // ==========================================
+        // [เพิ่มใหม่] จัดการข้อมูลลงตาราง restrictions
+        // ==========================================
+        if ($new_status === 'restrict') {
+            // เช็คว่ามีการบันทึกกักบริเวณในวันนี้ไปแล้วหรือยัง (ป้องกันการ Insert ซ้ำเวลาแอดมินกดบันทึกหลายรอบ)
+            $stmt_chk_rest = $conn->prepare("SELECT id FROM restrictions WHERE student_code = ? AND restrict_type = 'restrict' AND DATE(created_at) = CURRENT_DATE");
+            $stmt_chk_rest->bind_param("s", $target_stu);
+            $stmt_chk_rest->execute();
+            
+            if ($stmt_chk_rest->get_result()->num_rows == 0) {
+                // ถ้ายังไม่มีให้ Insert ใหม่ (weeks_count เป็น 1 สัปดาห์อัตโนมัติ ตาม Default ของตาราง)
+                $stmt_ins_rest = $conn->prepare("INSERT INTO restrictions (student_code, weeks_count, restrict_type) VALUES (?, 1, 'restrict')");
+                $stmt_ins_rest->bind_param("s", $target_stu);
+                $stmt_ins_rest->execute();
+                $stmt_ins_rest->close();
+            }
+            $stmt_chk_rest->close();
+        } else {
+            // หากแอดมินเปลี่ยนใจ แก้จาก "กักบริเวณ" เป็น "กลับบ้าน/อยู่ รร./เข้าเวร" ให้ลบข้อมูลกักบริเวณออก
+            $stmt_del_rest = $conn->prepare("DELETE FROM restrictions WHERE student_code = ? AND restrict_type = 'restrict'");
+            $stmt_del_rest->bind_param("s", $target_stu);
+            $stmt_del_rest->execute();
+            $stmt_del_rest->close();
+        }
     }
     
     // Refresh หน้าจอ
