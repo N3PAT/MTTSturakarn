@@ -8,7 +8,7 @@ if (empty($_SESSION['admin_id'])) {
     exit();
 }
 
-$admin_name = $_SESSION['admin_name'] ?? 'ผู้ดูแลระบบ';
+$admin_name = $_SESSION['admin_id'] ?? '';
 
 // ==========================================
 // 0. จัดการ การแก้ไขสถานะ (Admin Override)
