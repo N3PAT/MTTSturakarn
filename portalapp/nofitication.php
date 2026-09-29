@@ -1,22 +1,84 @@
 <?php
 session_start();
+// เรียกใช้การเชื่อมต่อฐานข้อมูล (ต้องมั่นใจว่า db.php สร้างตัวแปร $conn แบบ mysqli ไว้)
 require_once 'db.php';
 
+// 1. ตรวจสอบการเข้าสู่ระบบ
 if (empty($_SESSION['student_code'])) {
+    // หากเป็นการเรียกผ่าน API/Fetch ให้ตอบกลับเป็น JSON
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['success' => false, 'error' => 'Unauthorized: กรุณาเข้าสู่ระบบ']);
+        exit();
+    }
+    // หากเข้าหน้าเว็บปกติให้เด้งไปหน้า login
     header("Location: login.php");
     exit();
 }
 
 $studentCode = $_SESSION['student_code'];
+
+// ====================================================================================
+// ส่วนที่ 1: การจัดการ API สำหรับบันทึก Push Subscription (รับข้อมูลจากการกดลงทะเบียน)
+// ====================================================================================
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['endpoint'])) {
+    // บังคับให้ตอบกลับเป็น JSON เท่านั้น
+    header('Content-Type: application/json; charset=utf-8');
+    ini_set('display_errors', 0); // ป้องกัน Error ปะปนกับ JSON
+
+    $endpoint = $_POST['endpoint'];
+    $p256dh = $_POST['p256dh'] ?? '';
+    $auth = $_POST['auth'] ?? '';
+
+    try {
+        // เช็คว่ามี student_id นี้ในตารางแล้วหรือไม่
+        $checkStmt = $conn->prepare("SELECT id FROM push_subscriptions WHERE student_id = ? LIMIT 1");
+        $checkStmt->bind_param("s", $studentCode);
+        $checkStmt->execute();
+        $res = $checkStmt->get_result();
+
+        if ($res->num_rows > 0) {
+            // ถ้าเจอ student_id ซ้ำ ให้ตอบกลับว่าสำเร็จไปเลย โดยไม่ต้องบันทึกใหม่
+            echo json_encode(['success' => true, 'message' => 'มีข้อมูลนักเรียนนี้ในระบบแล้ว ไม่บันทึกซ้ำ']);
+            $checkStmt->close();
+            exit();
+        }
+        $checkStmt->close();
+
+        // เพิ่มข้อมูลลงในฐานข้อมูล
+        $stmt = $conn->prepare("INSERT INTO push_subscriptions (student_id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?)");
+        $stmt->bind_param("ssss", $studentCode, $endpoint, $p256dh, $auth);
+        $stmt->execute();
+        $stmt->close();
+
+        // ตอบกลับ JavaScript ว่าบันทึกสำเร็จ
+        echo json_encode(['success' => true, 'message' => 'บันทึกการแจ้งเตือนสำเร็จ']);
+    } catch (Exception $e) {
+        // Error code 1062 คือ Duplicate entry สำหรับ MySQLi
+        if ($conn->errno === 1062) {
+            echo json_encode(['success' => true, 'message' => 'มีข้อมูล endpoint นี้ในระบบแล้ว']);
+        } else {
+            error_log("Database Error: " . $e->getMessage());
+            echo json_encode(['success' => false, 'error' => 'DB Error: ' . $e->getMessage()]);
+        }
+    }
+    
+    // สำคัญ: สั่ง exit() เพื่อหยุดการทำงานตรงนี้ ไม่ให้รันโค้ด HTML ด้านล่างไปปนใน JSON
+    exit(); 
+}
+
+
+// ====================================================================================
+// ส่วนที่ 2: การดึงข้อมูลเพื่อแสดงผลบนหน้าเว็บ (UI)
+// ====================================================================================
 $duty_notifications = [];
 $announcements = []; 
 $system_notifications = []; 
 $has_voted = true; 
 $error_message = ""; 
 $today_discipline = null; 
-$student_restriction = null; // [เพิ่มใหม่] ตัวแปรเก็บข้อมูลกักบริเวณ
-
-$push_messages = []; // [เพิ่มใหม่] เก็บข้อความสำหรับทำ Push Notification
+$student_restriction = null; 
+$push_messages = []; 
 
 try {
     if (!isset($conn) || !($conn instanceof mysqli)) {
@@ -25,7 +87,7 @@ try {
 
     $conn->set_charset("utf8mb4");
 
-    // 1. ดึงข้อมูลนักเรียน (เช็คว่ามีตัวตนอยู่จริงหรือไม่)
+    // ตรวจสอบข้อมูลนักเรียน
     $stmt = $conn->prepare("SELECT student_code FROM students WHERE student_code = ? LIMIT 1");
     if (!$stmt) throw new Exception("Query ข้อมูลนักเรียนผิดพลาด: " . $conn->error);
     $stmt->bind_param("s", $studentCode);
@@ -40,7 +102,7 @@ try {
         exit();
     }
 
-    // 2. [เพิ่มใหม่] ดึงข้อมูลกักบริเวณ (ดึงรายการล่าสุด)
+    // ดึงข้อมูลกักบริเวณ
     $stmt_restrict = $conn->prepare("
         SELECT weeks_count, created_at 
         FROM restrictions 
@@ -53,7 +115,6 @@ try {
         $res_restrict = $stmt_restrict->get_result();
         if ($row_restrict = $res_restrict->fetch_assoc()) {
             $student_restriction = $row_restrict;
-            // เตรียมข้อความสำหรับ Push Notification
             $push_messages[] = [
                 "title" => "ด่วน! แจ้งเตือนกักบริเวณ",
                 "body" => "คุณถูกสั่งกักบริเวณจำนวน " . $row_restrict['weeks_count'] . " สัปดาห์"
@@ -62,7 +123,7 @@ try {
         $stmt_restrict->close();
     }
 
-    // 3. ดึงข้อมูลการเข้าเวรทั้งหมดที่กำลังจะมาถึง
+    // ดึงข้อมูลการเข้าเวรทั้งหมดที่กำลังจะมาถึง
     $stmt_duty = $conn->prepare("
         SELECT duty_name, duty_date, DATEDIFF(duty_date, CURDATE()) AS days_left 
         FROM student_duties 
@@ -82,7 +143,7 @@ try {
         $stmt_duty->close();
     }
 
-    // 4. ตรวจสอบโหวตประสงค์กลับบ้าน
+    // ตรวจสอบโหวตประสงค์กลับบ้าน
     $stmt_vote = $conn->prepare("
         SELECT COUNT(*) as vote_count 
         FROM weekly_votes 
@@ -100,7 +161,7 @@ try {
         $stmt_vote->close();
     }
 
-    // 5. ตรวจสอบบัตรวินัยวันนี้
+    // ตรวจสอบบัตรวินัยวันนี้
     $stmt_disc = $conn->prepare("
         SELECT card_bed, card_shoe, card_cabinet, total_cards, status_color 
         FROM discipline_cards 
@@ -122,7 +183,7 @@ try {
         $stmt_disc->close();
     }
 
-    // 6. ดึงประกาศ/ข่าวสาร
+    // ดึงประกาศ/ข่าวสาร
     $sql_news = "SELECT * FROM announcements WHERE status = 'active' OR status = '1' ORDER BY id DESC LIMIT 10";
     $res_news = $conn->query($sql_news);
     if (!$res_news) {
@@ -135,7 +196,7 @@ try {
         }
     }
 
-    // 7. ดึงการแจ้งเตือนจากตาราง notifications
+    // ดึงการแจ้งเตือนจากตาราง notifications
     $stmt_noti = $conn->prepare("
         SELECT * FROM notifications 
         WHERE student_code = ? OR student_code IS NULL OR student_code = '' 
@@ -155,7 +216,6 @@ try {
     $error_message = "System Error: " . htmlspecialchars($e->getMessage());
 }
 
-// นับจำนวนรายการแจ้งเตือนทั้งหมด
 $has_discipline_alert = ($today_discipline !== null);
 $has_restriction = ($student_restriction !== null);
 $total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + count($announcements) + count($system_notifications) + ($has_discipline_alert ? 1 : 0) + ($has_restriction ? 1 : 0);
@@ -201,7 +261,7 @@ $total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + coun
     .noti-item.urgent { border-left: 4px solid #ef4444; background-color: #fef2f2; }
     .noti-item.warning { border-left: 4px solid #f97316; background-color: #fff7ed; }
     .noti-item.info { border-left: 4px solid #3b82f6; background-color: #ffffff; }
-    .noti-item.danger { border-left: 5px solid #991b1b; background-color: #fef2f2; } /* สีเข้มพิเศษสำหรับกักบริเวณ */
+    .noti-item.danger { border-left: 5px solid #991b1b; background-color: #fef2f2; }
     
     .noti-icon { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; }
     .noti-item.urgent .noti-icon { background: #fee2e2; color: #dc2626; }
@@ -267,8 +327,8 @@ $total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + coun
             <i class="fas fa-ban"></i>
           </div>
           <div class="noti-content">
-            <h4 style="color: #991b1b;">คุณถูกสั่งกักบริเวณ!</h4>
-            <p><strong>งดกลับบ้าน:</strong> คุณถูกพิจารณาโทษกักบริเวณเป็นจำนวน <strong><?= htmlspecialchars($student_restriction['weeks_count']) ?> สัปดาห์</strong></p>
+            <h4 style="color: #991b1b;">คุณถูกกักบริเวณ</h4>
+            <p><strong>งดกลับบ้าน:</strong> คุณถูกโทษกักบริเวณเป็นจำนวน <strong><?= htmlspecialchars($student_restriction['weeks_count']) ?> สัปดาห์</strong></p>
             <div class="noti-time">
               <i class="far fa-calendar-times"></i> วันที่สั่งกัก: <?= date('d/m/Y', strtotime($student_restriction['created_at'])) ?>
             </div>
@@ -384,14 +444,12 @@ $total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + coun
     </div>
   </div>
 
-  <!-- Script สำหรับ Web Push Notification -->
+  <!-- Script สำหรับ Local Notification ของนักเรียนคนนั้น -->
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // รับข้อความจาก PHP (เช่น โดนกักบริเวณ, เวรวันนี้)
         const pushMessages = <?= json_encode($push_messages) ?>;
         
         if (pushMessages.length > 0 && "Notification" in window) {
-            // ขออนุญาตผู้ใช้ส่งแจ้งเตือน (ถ้ายังไม่เคยอนุญาต)
             if (Notification.permission === "default") {
                 Notification.requestPermission().then(permission => {
                     if (permission === "granted") {
@@ -399,19 +457,17 @@ $total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + coun
                     }
                 });
             } else if (Notification.permission === "granted") {
-                // ถ้าอนุญาตไว้แล้ว ส่งแจ้งเตือนได้เลย
                 sendPushes(pushMessages);
             }
         }
         
         function sendPushes(messages) {
             messages.forEach((msg, index) => {
-                // หน่วงเวลาให้แจ้งเตือนเด้งทีละอันห่างกัน 1 วินาที
                 setTimeout(() => {
                     new Notification(msg.title, {
                         body: msg.body,
-                        icon: 'https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg',
-                        vibrate: [200, 100, 200, 100, 200] // สั่นโทรศัพท์
+                        icon: 'https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg?utm_source=th.wikipedia.org&utm_campaign=imageinfo&utm_content=original',
+                        vibrate: [200, 100, 200, 100, 200]
                     });
                 }, index * 1000);
             });
