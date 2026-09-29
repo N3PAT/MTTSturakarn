@@ -399,106 +399,50 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
       margin: 0 20px 15px;
     }
 
-   .news-carousel {
-        padding: 0 20px;
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-      }
-      
-      .announcement-card {
-        background: #ffffff;
-        border-radius: 16px;
-        padding: 16px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02);
-        display: flex;
-        flex-direction: column;
-        position: relative;
-        overflow: hidden;
-        border: 1px solid rgba(226, 232, 240, 0.6);
-      }
-      
-      /* เส้นขอบสีไล่ระดับด้านบน เพิ่มความหรูหรา */
-      .announcement-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 4px;
-        background: linear-gradient(90deg, #5a42a0, #8b5cf6); /* สีม่วงตามธีมแอป */
-      }
-      
-      .announcement-header {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin-bottom: 12px;
-      }
-      
-      .announcement-icon {
-        width: 38px;
-        height: 38px;
-        background: #f5f3ff;
-        color: #7c3aed;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.1rem;
-        flex-shrink: 0;
-      }
-      
-      .announcement-title {
-        margin: 0;
-        font-size: 1rem;
-        font-weight: 600;
-        color: #1e293b;
-        letter-spacing: 0.2px;
-      }
-      
-      .announcement-attachment img {
-        width: 100%;
-        height: 190px;
-        object-fit: cover;
-        border-radius: 12px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        display: block;
-        border: 1px solid #f1f5f9;
-      }
-      
-      .announcement-date {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 0.75rem;
-        color: #94a3b8;
-        margin-top: 12px;
-        font-weight: 500;
-      }
+    .announcement-card {
+      background: #ffffff;
+      border-left: 4px solid #3b82f6;
+      border-radius: 12px;
+      padding: 15px;
+      margin: 0 20px 15px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+      display: flex;
+      gap: 15px;
+      align-items: flex-start;
+    }
+    
+    .announcement-icon {
+      color: #3b82f6;
+      font-size: 1.5rem;
+      margin-top: 2px;
+    }
+    
+    .announcement-content {
+      flex: 1;
+    }
 
-      /* จุด Indicator ด้านล่าง */
-      .carousel-dots {
-        display: flex;
-        justify-content: center;
-        gap: 6px;
-        margin-top: 5px;
-        margin-bottom: 15px;
-      }
-      
-      .carousel-dot {
-        width: 6px;
-        height: 6px;
-        background: #cbd5e1;
-        border-radius: 50%;
-        transition: all 0.3s ease;
-      }
-      
-      .carousel-dot.active {
-        background: #5a42a0;
-        width: 18px;
-        border-radius: 4px;
-      }
+    .announcement-content h4 {
+      margin: 0 0 5px 0;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text-dark);
+    }
+    
+    .announcement-content p {
+      margin: 0;
+      font-size: 0.8rem;
+      color: var(--text-gray);
+      line-height: 1.4;
+      word-break: break-word;
+    }
+    
+    .announcement-date {
+      display: block;
+      font-size: 0.7rem;
+      color: #94a3b8;
+      margin-top: 8px;
+    }
+
     .section-pill {
       width: 5px;
       height: 24px;
@@ -832,55 +776,55 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
       </a>
     </div>
 
-   <div class="fade-in-up delay-4">
+    <div class="fade-in-up delay-4">
       <div class="news-carousel">
+        <?php if (!empty($announcements)): ?>
+          <?php foreach ($announcements as $news): ?>
+            <?php 
+              $attachment_path = $news['attachment'] ?? '';
+              if (!empty($attachment_path) && !preg_match('/^https?:\/\//i', $attachment_path) && !str_starts_with($attachment_path, 'uploads/')) {
+                  $attachment_path = 'uploads/news/' . $attachment_path;
+              }
+              
+              $ext = strtolower(pathinfo($attachment_path, PATHINFO_EXTENSION));
+              $is_image = in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp']);
+            ?>
 
-        <!-- ประกาศที่ 1: มารยาท นชท -->
-        <div class="announcement-card">
-          <div class="announcement-header">
-            <div class="announcement-icon">
-              <i class="fas fa-bullhorn"></i>
+            <div class="announcement-card">
+              <div class="announcement-icon">
+                <i class="fas fa-bullhorn"></i>
+              </div>
+              <div class="announcement-content">
+                <h4><?= htmlspecialchars($news['title']) ?></h4>
+                <p><?= nl2br(htmlspecialchars($news['content'])) ?></p>
+                
+                <?php if (!empty($news['attachment'])): ?>
+                  <div class="announcement-attachment" style="margin-top: 10px;">
+                    <?php if ($is_image): ?>
+                      <a href="<?= htmlspecialchars($attachment_path) ?>" target="_blank">
+                        <img src="<?= htmlspecialchars($attachment_path) ?>" alt="ภาพแนบประกาศ" style="max-width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px; margin-top: 5px; border: 1px solid #e2e8f0; display: block;">
+                      </a>
+                    <?php else: ?>
+                      <a href="<?= htmlspecialchars($attachment_path) ?>" target="_blank" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #f1f5f9; color: #2563eb; border-radius: 6px; font-size: 0.8rem; text-decoration: none; font-weight: 500;">
+                        <i class="fas fa-paperclip"></i> ดูไฟล์แนบ
+                      </a>
+                    <?php endif; ?>
+                  </div>
+                <?php endif; ?>
+                
+                <span class="announcement-date" style="display: block; margin-top: 10px; color: #94a3b8; font-size: 0.75rem;">
+                  <i class="far fa-clock"></i> <?= date('d/m/Y H:i', strtotime($news['created_at'])) ?>
+                </span>
+              </div>
             </div>
-            <h4 class="announcement-title">มารยาท นชท</h4>
-          </div>
-          
-          <div class="announcement-attachment">
-            <a href="https://taothetutor.wordpress.com/wp-content/uploads/2026/09/e0b8a1e0b8b2e0b8a3e0b8a2e0b8a2e0b8b2e0b897-e0b899e0b88ae0b897-2.png" target="_blank">
-              <img src="https://taothetutor.wordpress.com/wp-content/uploads/2026/09/e0b8a1e0b8b2e0b8a3e0b8a2e0b8a2e0b8b2e0b897-e0b899e0b88ae0b897-2.png" alt="มารยาท นชท">
-            </a>
-          </div>
-          
-          <div class="announcement-date">
-            <i class="far fa-clock"></i> 29 ก.ย. 2026 • 19:56 น.
-          </div>
-        </div>
+          <?php endforeach; ?>
 
-        <!-- ประกาศที่ 2: วินัยทหาร 9 ข้อ -->
-        <div class="announcement-card">
-          <div class="announcement-header">
-            <div class="announcement-icon">
-              <i class="fas fa-bullhorn"></i>
-            </div>
-            <h4 class="announcement-title">วินัยทหาร 9 ข้อ</h4>
+        <?php else: ?>
+          <div class="empty-news" style="width: 100%; text-align: center; padding: 25px 15px; background: #ffffff; border-radius: 12px; color: #94a3b8; box-shadow: 0 2px 8px rgba(0,0,0,0.03);">
+            <i class="far fa-newspaper" style="font-size: 2rem; margin-bottom: 8px; display: block; opacity: 0.6;"></i>
+            <span style="font-size: 0.85rem;">ไม่มีประกาศข่าวสารในขณะนี้</span>
           </div>
-          
-          <div class="announcement-attachment">
-            <a href="https://taothetutor.wordpress.com/wp-content/uploads/2026/09/e0b8a1e0b8b2e0b8a3e0b8a2e0b8a2e0b8b2e0b897-e0b899e0b88ae0b897-3.png" target="_blank">
-              <img src="https://taothetutor.wordpress.com/wp-content/uploads/2026/09/e0b8a1e0b8b2e0b8a3e0b8a2e0b8a2e0b8b2e0b897-e0b899e0b88ae0b897-3.png" alt="วินัยทหาร 9 ข้อ">
-            </a>
-          </div>
-          
-          <div class="announcement-date">
-            <i class="far fa-clock"></i> 29 ก.ย. 2026 • 19:56 น.
-          </div>
-        </div>
-
-      </div>
-
-      <!-- จุดไข่ปลา (Dots) -->
-      <div class="carousel-dots">
-        <div class="carousel-dot active"></div>
-        <div class="carousel-dot"></div>
+        <?php endif; ?>
       </div>
     </div>
       
