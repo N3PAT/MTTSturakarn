@@ -1,17 +1,21 @@
 <?php
+// เริ่ม Output Buffering เพื่อป้องกันปัญหาช่องว่างหลุดไปรบกวนการส่ง JSON หรือ Header
+ob_start();
 session_start();
-// เรียกใช้การเชื่อมต่อฐานข้อมูล (ต้องมั่นใจว่า db.php สร้างตัวแปร $conn แบบ mysqli ไว้)
+
+// เรียกใช้การเชื่อมต่อฐานข้อมูล
 require_once 'db.php';
 
-// 1. ตรวจสอบการเข้าสู่ระบบ
+// ====================================================================================
+// ตรวจสอบการเข้าสู่ระบบ
+// ====================================================================================
 if (empty($_SESSION['student_code'])) {
-    // หากเป็นการเรียกผ่าน API/Fetch ให้ตอบกลับเป็น JSON
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        if (ob_get_length()) ob_clean(); // ล้างข้อมูลแปลกปลอมก่อนหน้าทิ้ง
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode(['success' => false, 'error' => 'Unauthorized: กรุณาเข้าสู่ระบบ']);
         exit();
     }
-    // หากเข้าหน้าเว็บปกติให้เด้งไปหน้า login
     header("Location: login.php");
     exit();
 }
@@ -19,54 +23,60 @@ if (empty($_SESSION['student_code'])) {
 $studentCode = $_SESSION['student_code'];
 
 // ====================================================================================
-// ส่วนที่ 1: การจัดการ API สำหรับบันทึก Push Subscription (รับข้อมูลจากการกดลงทะเบียน)
+// ส่วนที่ 1: การจัดการ API สำหรับบันทึก Push Subscription
 // ====================================================================================
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['endpoint'])) {
-    // บังคับให้ตอบกลับเป็น JSON เท่านั้น
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // ปิดการแสดงผล Error ของ PHP ไม่ให้ปนกับ JSON
+    ini_set('display_errors', 0);
+    error_reporting(0);
+    
+    // ล้างข้อมูลที่อาจมีช่องว่างหรือ BOM (Byte Order Mark) ปะปนมาจากการ include ไฟล์ db.php
+    if (ob_get_length()) ob_clean();
     header('Content-Type: application/json; charset=utf-8');
-    ini_set('display_errors', 0); // ป้องกัน Error ปะปนกับ JSON
 
-    $endpoint = $_POST['endpoint'];
-    $p256dh = $_POST['p256dh'] ?? '';
-    $auth = $_POST['auth'] ?? '';
+    // ตรวจสอบว่ามีข้อมูลส่งมาครบถ้วนหรือไม่
+    if (isset($_POST['endpoint'])) {
+        $endpoint = $_POST['endpoint'];
+        $p256dh = $_POST['p256dh'] ?? '';
+        $auth = $_POST['auth'] ?? '';
 
-    try {
-        // เช็คว่ามี student_id นี้ในตารางแล้วหรือไม่
-        $checkStmt = $conn->prepare("SELECT id FROM push_subscriptions WHERE student_id = ? LIMIT 1");
-        $checkStmt->bind_param("s", $studentCode);
-        $checkStmt->execute();
-        $res = $checkStmt->get_result();
+        try {
+            // เช็คว่ามี student_id นี้ในตารางแล้วหรือไม่
+            $checkStmt = $conn->prepare("SELECT id FROM push_subscriptions WHERE student_id = ? LIMIT 1");
+            $checkStmt->bind_param("s", $studentCode);
+            $checkStmt->execute();
+            $res = $checkStmt->get_result();
 
-        if ($res->num_rows > 0) {
-            // ถ้าเจอ student_id ซ้ำ ให้ตอบกลับว่าสำเร็จไปเลย โดยไม่ต้องบันทึกใหม่
-            echo json_encode(['success' => true, 'message' => 'มีข้อมูลนักเรียนนี้ในระบบแล้ว ไม่บันทึกซ้ำ']);
+            if ($res->num_rows > 0) {
+                echo json_encode(['success' => true, 'message' => 'มีข้อมูลนักเรียนนี้ในระบบแล้ว']);
+                $checkStmt->close();
+                exit();
+            }
             $checkStmt->close();
-            exit();
-        }
-        $checkStmt->close();
 
-        // เพิ่มข้อมูลลงในฐานข้อมูล
-        $stmt = $conn->prepare("INSERT INTO push_subscriptions (student_id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?)");
-        $stmt->bind_param("ssss", $studentCode, $endpoint, $p256dh, $auth);
-        $stmt->execute();
-        $stmt->close();
+            // เพิ่มข้อมูลลงในฐานข้อมูล
+            $stmt = $conn->prepare("INSERT INTO push_subscriptions (student_id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?)");
+            $stmt->bind_param("ssss", $studentCode, $endpoint, $p256dh, $auth);
+            $stmt->execute();
+            $stmt->close();
 
-        // ตอบกลับ JavaScript ว่าบันทึกสำเร็จ
-        echo json_encode(['success' => true, 'message' => 'บันทึกการแจ้งเตือนสำเร็จ']);
-    } catch (Exception $e) {
-        // Error code 1062 คือ Duplicate entry สำหรับ MySQLi
-        if ($conn->errno === 1062) {
-            echo json_encode(['success' => true, 'message' => 'มีข้อมูล endpoint นี้ในระบบแล้ว']);
-        } else {
-            error_log("Database Error: " . $e->getMessage());
-            echo json_encode(['success' => false, 'error' => 'DB Error: ' . $e->getMessage()]);
+            echo json_encode(['success' => true, 'message' => 'บันทึกการแจ้งเตือนสำเร็จ']);
+        } catch (Exception $e) {
+            // Error code 1062 คือ Duplicate entry สำหรับ MySQLi
+            if ($conn->errno === 1062) {
+                echo json_encode(['success' => true, 'message' => 'มีข้อมูล endpoint นี้ในระบบแล้ว']);
+            } else {
+                echo json_encode(['success' => false, 'error' => 'DB Error: ' . $e->getMessage()]);
+            }
         }
+    } else {
+        // หาก POST มาแต่ไม่มี endpoint ให้ตอบกลับเป็น JSON Error เพื่อให้ฝั่ง JS รู้ตัว
+        echo json_encode(['success' => false, 'error' => 'ข้อมูลไม่ครบถ้วน (Missing endpoint)']);
     }
     
-    // สำคัญ: สั่ง exit() เพื่อหยุดการทำงานตรงนี้ ไม่ให้รันโค้ด HTML ด้านล่างไปปนใน JSON
+    // สำคัญ: บังคับหยุดการทำงานตรงนี้ เพื่อไม่ให้รันโค้ด HTML ด้านล่าง
     exit(); 
 }
-
 
 // ====================================================================================
 // ส่วนที่ 2: การดึงข้อมูลเพื่อแสดงผลบนหน้าเว็บ (UI)
@@ -82,7 +92,7 @@ $push_messages = [];
 
 try {
     if (!isset($conn) || !($conn instanceof mysqli)) {
-        throw new Exception("ไม่พบการเชื่อมต่อฐานข้อมูล (Database connection error) หรือไฟล์ db.php ไม่ได้ใช้ MySQLi");
+        throw new Exception("ไม่พบการเชื่อมต่อฐานข้อมูล หรือไฟล์ db.php ไม่ได้ใช้ MySQLi");
     }
 
     $conn->set_charset("utf8mb4");
@@ -123,7 +133,7 @@ try {
         $stmt_restrict->close();
     }
 
-    // ดึงข้อมูลการเข้าเวรทั้งหมดที่กำลังจะมาถึง
+    // ดึงข้อมูลการเข้าเวร
     $stmt_duty = $conn->prepare("
         SELECT duty_name, duty_date, DATEDIFF(duty_date, CURDATE()) AS days_left 
         FROM student_duties 
@@ -219,6 +229,9 @@ try {
 $has_discipline_alert = ($today_discipline !== null);
 $has_restriction = ($student_restriction !== null);
 $total_notifications = count($duty_notifications) + (!$has_voted ? 1 : 0) + count($announcements) + count($system_notifications) + ($has_discipline_alert ? 1 : 0) + ($has_restriction ? 1 : 0);
+
+// Flush buffer ส่งข้อมูลหน้าเว็บไปยังเบราว์เซอร์
+if (ob_get_length()) ob_end_flush();
 ?>
 <!DOCTYPE html>
 <html lang="th">
