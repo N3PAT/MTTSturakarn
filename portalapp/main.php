@@ -631,7 +631,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
         </div>
       </div>
 
-      <a href="nofitication.php" class="noti-btn" id="notiBellBtn" title="ดูการแจ้งเตือน">
+ <a href="nofitication.php" class="noti-btn" id="notiBellBtn" title="ดูการแจ้งเตือน">
         <i class="far fa-bell"></i>
         <?php if ($noti_count > 0): ?>
           <span class="noti-badge"><?= $noti_count ?></span>
@@ -865,59 +865,67 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
       .catch(err => console.error('SW Error:', err));
   }
 
-  document.getElementById('notiBellBtn').addEventListener('click', async function() {
+  document.getElementById('notiBellBtn').addEventListener('click', async function(e) {
+    // 1. ถ้าเบราว์เซอร์ไม่รองรับ ให้ข้ามไป ปล่อยให้ลิงก์ <a> ทำงานเปลี่ยนหน้าตามปกติ
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      alert('เบราว์เซอร์ของคุณไม่รองรับการแจ้งเตือนเด้งเข้าตัวเครื่อง');
-      return;
+      return; 
     }
 
-    try {
-      const permission = await Notification.requestPermission();
-      if (permission === 'granted') {
-        const registration = await navigator.serviceWorker.ready;
-        
-        const publicVapidKey = 'BDcVYH88lfTwHxM-yyzWmQzIc6_orJpWxXr156VsSppe-srH4z1gYGz0W6z9I67JHkBkcnnbrwqoLuBZLAzC7HA'; 
-        
-        const subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
-        });
+    // 2. ถ้าสถานะเป็น default (ยังไม่เคยถามสิทธิ์) ให้ดักการเปลี่ยนหน้าเว็บไว้ก่อน
+    if (Notification.permission === 'default') {
+      e.preventDefault(); // ระงับการเปลี่ยนหน้าของแท็ก <a> ไว้ชั่วคราว
+      
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+          const registration = await navigator.serviceWorker.ready;
+          const publicVapidKey = 'BDcVYH88lfTwHxM-yyzWmQzIc6_orJpWxXr156VsSppe-srH4z1gYGz0W6z9I67JHkBkcnnbrwqoLuBZLAzC7HA'; 
+          
+          const subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
+          });
 
-        const subData = subscription.toJSON();
-        
-        const formData = new FormData();
-        formData.append('endpoint', subData.endpoint);
-        formData.append('p256dh', subData.keys.p256dh);
-        formData.append('auth', subData.keys.auth);
+          const subData = subscription.toJSON();
+          const formData = new FormData();
+          formData.append('endpoint', subData.endpoint);
+          formData.append('p256dh', subData.keys.p256dh);
+          formData.append('auth', subData.keys.auth);
 
-        const res = await fetch('save_subscription.php', {
-          method: 'POST',
-          body: formData,
-          credentials: 'same-origin'
-        });
+          // 3. ส่งข้อมูลไปบันทึก (เปลี่ยนเป้าหมายเป็น notification.php ตามที่มีการรวมไฟล์ไว้)
+          const res = await fetch('notification.php', {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin'
+          });
 
-        const text = await res.text();
-        
-        try {
-            const data = JSON.parse(text);
-            if (data.success) {
-              alert('เปิดการแจ้งเตือนสำเร็จแล้ว!');
-            } else {
-              alert('เซิร์ฟเวอร์แจ้งข้อผิดพลาด: ' + (data.error || 'ไม่ทราบสาเหตุ'));
-            }
-        } catch (parseError) {
-            console.error('PHP ตอบกลับมาผิดปกติ:', text);
-            alert('บันทึกไม่สำเร็จ: PHP มี Error (ดูรายละเอียดใน Console)');
+          const text = await res.text();
+          
+          try {
+              const data = JSON.parse(text);
+              if (data.success) {
+                // บันทึกสำเร็จ พาผู้ใช้ไปที่หน้าแจ้งเตือน
+                window.location.href = this.href;
+              } else {
+                alert('เซิร์ฟเวอร์แจ้งข้อผิดพลาด: ' + (data.error || 'ไม่ทราบสาเหตุ'));
+              }
+          } catch (parseError) {
+              console.error('PHP ตอบกลับมาผิดปกติ:', text);
+              alert('บันทึกไม่สำเร็จ: PHP มี Error (ดูรายละเอียดใน Console)');
+          }
+
+        } else if (permission === 'denied') {
+          alert('คุณได้ปฏิเสธการแจ้งเตือน หากต้องการใช้งานโปรดเปิดสิทธิ์ในการตั้งค่าของเบราว์เซอร์');
         }
-
-      } else if (permission === 'denied') {
-        alert('คุณได้ปฏิเสธการแจ้งเตือน โปรดเปิดสิทธิ์ในการตั้งค่าของเบราว์เซอร์');
+      } catch (err) {
+        alert('เกิดข้อผิดพลาดของระบบ: ' + err.message);
       }
-    } catch (err) {
-      alert('เกิดข้อผิดพลาดของระบบ: ' + err.message);
     }
+    // 3. ถ้าสถานะเป็น granted (อนุญาตแล้ว) หรือ denied (ปฏิเสธไปแล้ว) 
+    // โปรแกรมจะไม่เข้า if ด้านบน และจะปล่อยให้แท็ก <a> พาเปลี่ยนหน้าไปตามปกติ
   });
 
+  // ส่วนของ Loader
   document.addEventListener("DOMContentLoaded", function() {
     const loader = document.getElementById('page-loader');
     if (loader) {
@@ -929,6 +937,8 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
       }, 1200);
     }
   });
+
+  
 </script>
    
 </body>
