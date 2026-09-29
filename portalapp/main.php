@@ -776,55 +776,49 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
       </a>
     </div>
 
-    <div class="fade-in-up delay-4">
+   <div class="fade-in-up delay-4">
       <div class="news-carousel">
-        <?php if (!empty($announcements)): ?>
-          <?php foreach ($announcements as $news): ?>
-            <?php 
-              $attachment_path = $news['attachment'] ?? '';
-              if (!empty($attachment_path) && !preg_match('/^https?:\/\//i', $attachment_path) && !str_starts_with($attachment_path, 'uploads/')) {
-                  $attachment_path = 'uploads/news/' . $attachment_path;
-              }
-              
-              $ext = strtolower(pathinfo($attachment_path, PATHINFO_EXTENSION));
-              $is_image = in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp']);
-            ?>
 
-            <div class="announcement-card">
-              <div class="announcement-icon">
-                <i class="fas fa-bullhorn"></i>
-              </div>
-              <div class="announcement-content">
-                <h4><?= htmlspecialchars($news['title']) ?></h4>
-                <p><?= nl2br(htmlspecialchars($news['content'])) ?></p>
-                
-                <?php if (!empty($news['attachment'])): ?>
-                  <div class="announcement-attachment" style="margin-top: 10px;">
-                    <?php if ($is_image): ?>
-                      <a href="<?= htmlspecialchars($attachment_path) ?>" target="_blank">
-                        <img src="<?= htmlspecialchars($attachment_path) ?>" alt="ภาพแนบประกาศ" style="max-width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px; margin-top: 5px; border: 1px solid #e2e8f0; display: block;">
-                      </a>
-                    <?php else: ?>
-                      <a href="<?= htmlspecialchars($attachment_path) ?>" target="_blank" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #f1f5f9; color: #2563eb; border-radius: 6px; font-size: 0.8rem; text-decoration: none; font-weight: 500;">
-                        <i class="fas fa-paperclip"></i> ดูไฟล์แนบ
-                      </a>
-                    <?php endif; ?>
-                  </div>
-                <?php endif; ?>
-                
-                <span class="announcement-date" style="display: block; margin-top: 10px; color: #94a3b8; font-size: 0.75rem;">
-                  <i class="far fa-clock"></i> <?= date('d/m/Y H:i', strtotime($news['created_at'])) ?>
-                </span>
-              </div>
-            </div>
-          <?php endforeach; ?>
-
-        <?php else: ?>
-          <div class="empty-news" style="width: 100%; text-align: center; padding: 25px 15px; background: #ffffff; border-radius: 12px; color: #94a3b8; box-shadow: 0 2px 8px rgba(0,0,0,0.03);">
-            <i class="far fa-newspaper" style="font-size: 2rem; margin-bottom: 8px; display: block; opacity: 0.6;"></i>
-            <span style="font-size: 0.85rem;">ไม่มีประกาศข่าวสารในขณะนี้</span>
+        <!-- ประกาศที่ 1: มารยาท นชท -->
+        <div class="announcement-card">
+          <div class="announcement-icon">
+            <i class="fas fa-bullhorn"></i>
           </div>
-        <?php endif; ?>
+          <div class="announcement-content">
+            <h4>มารยาท นชท</h4>
+            
+            <div class="announcement-attachment" style="margin-top: 10px;">
+              <a href="https://taothetutor.wordpress.com/wp-content/uploads/2026/09/e0b8a1e0b8b2e0b8a3e0b8a2e0b8a2e0b8b2e0b897-e0b899e0b88ae0b897-2.png" target="_blank">
+                <img src="https://taothetutor.wordpress.com/wp-content/uploads/2026/09/e0b8a1e0b8b2e0b8a3e0b8a2e0b8a2e0b8b2e0b897-e0b899e0b88ae0b897-2.png" alt="ภาพแนบประกาศ" style="max-width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px; margin-top: 5px; border: 1px solid #e2e8f0; display: block;">
+              </a>
+            </div>
+            
+            <span class="announcement-date" style="display: block; margin-top: 10px; color: #94a3b8; font-size: 0.75rem;">
+              <i class="far fa-clock"></i> 29/09/2026 19:56
+            </span>
+          </div>
+        </div>
+
+        <!-- ประกาศที่ 2: วินัยทหาร 9 ข้อ -->
+        <div class="announcement-card">
+          <div class="announcement-icon">
+            <i class="fas fa-bullhorn"></i>
+          </div>
+          <div class="announcement-content">
+            <h4>วินัยทหาร 9 ข้อ</h4>
+            
+            <div class="announcement-attachment" style="margin-top: 10px;">
+              <a href="https://taothetutor.wordpress.com/wp-content/uploads/2026/09/e0b8a1e0b8b2e0b8a3e0b8a2e0b8a2e0b8b2e0b897-e0b899e0b88ae0b897-3.png" target="_blank">
+                <img src="https://taothetutor.wordpress.com/wp-content/uploads/2026/09/e0b8a1e0b8b2e0b8a3e0b8a2e0b8a2e0b8b2e0b897-e0b899e0b88ae0b897-3.png" alt="ภาพแนบประกาศ" style="max-width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px; margin-top: 5px; border: 1px solid #e2e8f0; display: block;">
+              </a>
+            </div>
+            
+            <span class="announcement-date" style="display: block; margin-top: 10px; color: #94a3b8; font-size: 0.75rem;">
+              <i class="far fa-clock"></i> 29/09/2026 19:56
+            </span>
+          </div>
+        </div>
+
       </div>
     </div>
       
