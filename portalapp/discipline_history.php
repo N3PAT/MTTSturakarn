@@ -349,10 +349,6 @@ function formatThaiDate($dateStr) {
         <span>ประวัติบัตรวินัย</span>
       </a>
 
-      <a href="logout.php" class="nav-link">
-        <i class="far fa-user"></i>
-        <span>ออกจากระบบ</span>
-      </a>
     </div>
 
   </div>
