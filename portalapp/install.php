@@ -309,7 +309,7 @@
                     document.getElementById('changelogSection').style.display = 'block';
                 }
             } catch (error) {
-                nameEl.textContent = 'แอพพลิเคชั่น พัน นร. 1 - MTTS';
+                nameEl.textContent = 'แอปพลิเคชัน พัน นร. 1 - MTTS';
                 versionEl.textContent = 'Web Application';
             }
         }
