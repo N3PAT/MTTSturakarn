@@ -893,7 +893,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
           formData.append('auth', subData.keys.auth);
 
           // 3. ส่งข้อมูลไปบันทึก (เปลี่ยนเป้าหมายเป็น notification.php ตามที่มีการรวมไฟล์ไว้)
-          const res = await fetch('notification.php', {
+          const res = await fetch('nofitication.php', {
             method: 'POST',
             body: formData,
             credentials: 'same-origin'
