@@ -2,6 +2,12 @@
 header('Content-Type: application/json; charset=utf-8');
 
 // ------------------------------------------------------------------
+// ปรับแต่ง Performance เพื่อรองรับการส่งพร้อมกัน 300+ รายการ
+// ------------------------------------------------------------------
+set_time_limit(120);          // ขยายเวลาประมวลผลสูงสุดเป็น 2 นาที ป้องกัน PHP Timeout
+ini_set('memory_limit', '256M'); // ขยาย RAM เผื่อการดึงข้อมูลและดึงคิวจำนวนมาก
+
+// ------------------------------------------------------------------
 // 1. ความปลอดภัยขั้นที่ 1: ป้องกันการกดเข้าผ่าน Web URL โดยตรง (อนุญาตเฉพาะ POST)
 // ------------------------------------------------------------------
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -18,7 +24,6 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 // ------------------------------------------------------------------
 define('SECRET_API_KEY', getenv('API_SECRET_KEY') ?: 'N4tthap41!nwza');
 
-// ฟังก์ชันดึง Header แบบครอบคลุมทุก Server (รองรับเคสตัวพิมพ์เล็ก-ใหญ่)
 $providedKey = '';
 if (isset($_SERVER['HTTP_X_API_KEY'])) {
     $providedKey = $_SERVER['HTTP_X_API_KEY'];
@@ -32,7 +37,6 @@ if (isset($_SERVER['HTTP_X_API_KEY'])) {
     }
 }
 
-// ตรวจสอบกับ SECRET_API_KEY หรือ Private Key (เผื่อหน้าบ้านส่งรหัสเดิมมา)
 $fallbackKey = 'w86Ccb6pIc6w6EMWun3uVj9zfDe0Q-44hA2asE_RUSs';
 if (empty($providedKey) || ($providedKey !== SECRET_API_KEY && $providedKey !== $fallbackKey)) {
     http_response_code(401);
@@ -103,33 +107,51 @@ try {
     $webPush = new WebPush($auth);
 
     // ------------------------------------------------------------------
-    // 6. ดึงข้อมูลผู้รับแจ้งเตือนจากตาราง push_subscriptions
+    // 6. ดึงและทำความสะอาด Input Data
     // ------------------------------------------------------------------
-    $stmt = $conn->prepare("SELECT id, endpoint, p256dh, auth FROM push_subscriptions");
+    $inputData  = json_decode(file_get_contents('php://input'), true) ?? [];
+    
+    $studentId  = isset($inputData['student_id']) ? trim($inputData['student_id']) : null;
+    $rawDate    = isset($inputData['target_date']) ? $inputData['target_date'] : date('d/m/Y');
+    $targetDate = htmlspecialchars(strip_tags($rawDate), ENT_QUOTES, 'UTF-8');
+
+    // รองรับการระบุหัวข้อ และข้อความ (หากไม่ระบุจะใช้ค่าเริ่มต้น)
+    $title = isset($inputData['title']) ? $inputData['title'] : 'ประกาศ: ยังไม่ได้ทำรายการ';
+    $body  = isset($inputData['body']) ? $inputData['body'] : "ระบบตรวจสอบพบว่าคุณยังไม่ได้ทำรายการประจำวันที่ {$targetDate}\n\nกรุณาเข้าสู่ระบบเพื่อดำเนินการให้เรียบร้อย";
+    $url   = isset($inputData['url']) ? $inputData['url'] : '/main.php';
+
+    // ------------------------------------------------------------------
+    // 7. ดึงข้อมูลผู้รับแจ้งเตือนจากตาราง push_subscriptions
+    // ------------------------------------------------------------------
+    if (!empty($studentId)) {
+        // กรณีระบุ student_id (ส่งเตือนเฉพาะบุคคล เช่น โดนบัตร/เข้าเวร)
+        $stmt = $conn->prepare("SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE student_id = ?");
+        $stmt->bind_param("s", $studentId);
+    } else {
+        // กรณีกระจายข่าวสารทั่วไป (ส่งหาทุกคน)
+        $stmt = $conn->prepare("SELECT id, endpoint, p256dh, auth FROM push_subscriptions");
+    }
+    
     $stmt->execute();
     $result = $stmt->get_result();
 
     if ($result->num_rows === 0) {
         echo json_encode([
             'success' => false, 
-            'message' => 'ไม่พบข้อมูลเครื่องที่ลงทะเบียนรับแจ้งเตือนในระบบ (push_subscriptions เป็นค่าว่าง)'
+            'message' => 'ไม่พบข้อมูลเครื่องที่ลงทะเบียนรับแจ้งเตือนในระบบ'
         ], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
     // ------------------------------------------------------------------
-    // 7. ดึงและทำความสะอาด Input Data (Prevent Injection/XSS)
+    // 8. เตรียม Payload
     // ------------------------------------------------------------------
-    $inputData = json_decode(file_get_contents('php://input'), true);
-    $rawDate = isset($inputData['target_date']) ? $inputData['target_date'] : date('d/m/Y');
-    $targetDate = htmlspecialchars(strip_tags($rawDate), ENT_QUOTES, 'UTF-8');
-
     $payload = json_encode([
-        'title' => 'ประกาศ: ยังไม่ได้ทำรายการ',
-        'body'  => "ระบบตรวจสอบพบว่าคุณยังไม่ได้ทำรายการประจำวันที่ {$targetDate}\n\nกรุณาเข้าสู่ระบบเพื่อดำเนินการให้เรียบร้อย",
+        'title' => $title,
+        'body'  => $body,
         'icon'  => 'https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg',
-        'image' => 'https://taothetutor.wordpress.com/wp-content/uploads/2026/09/wp-17898328944611784106779603276252.jpg',
-        'url'   => '/main.php',
+        'image' => isset($inputData['image']) ? $inputData['image'] : 'https://taothetutor.wordpress.com/wp-content/uploads/2026/09/wp-17898328944611784106779603276252.jpg',
+        'url'   => $url,
         'requireInteraction' => true,
         'vibrate' => [200, 100, 200],
         'actions' => [
@@ -141,10 +163,9 @@ try {
     ], JSON_UNESCAPED_UNICODE);
 
     // ------------------------------------------------------------------
-    // 8. วนลูปส่งการแจ้งเตือน
+    // 9. เข้าคิวแจ้งเตือน (Queue Batching)
     // ------------------------------------------------------------------
-    $sentCount = 0;
-    $failedIds = [];
+    $subscriptionsMap = [];
 
     while ($row = $result->fetch_assoc()) {
         $subscription = Subscription::create([
@@ -153,19 +174,32 @@ try {
             'authToken' => $row['auth'],
         ]);
 
-        $report = $webPush->sendOneNotification($subscription, $payload);
+        // จัดเข้าคิว
+        $webPush->queueNotification($subscription, $payload);
+        $subscriptionsMap[$row['endpoint']] = $row['id'];
+    }
 
+    // ------------------------------------------------------------------
+    // 10. ประมวลผลยิงข้อมูลออกพร้อมกันแบบ Asynchronous
+    // ------------------------------------------------------------------
+    $sentCount = 0;
+    $failedIds = [];
+
+    foreach ($webPush->flush() as $report) {
+        $endpoint = $report->getRequest()->getUri()->__toString();
+        
         if ($report->isSuccess()) {
             $sentCount++;
         } else {
-            if ($report->isSubscriptionExpired()) {
-                $failedIds[] = $row['id'];
+            // เช็คเฉพาะกรณี Token หมดอายุหรือถูกลบออกจากบราวเซอร์
+            if ($report->isSubscriptionExpired() && isset($subscriptionsMap[$endpoint])) {
+                $failedIds[] = $subscriptionsMap[$endpoint];
             }
         }
     }
 
     // ------------------------------------------------------------------
-    // 9. เคลียร์ข้อมูล Token ที่หมดอายุออกจาก DB
+    // 11. เคลียร์ข้อมูล Token ที่หมดอายุออกจาก DB
     // ------------------------------------------------------------------
     if (!empty($failedIds)) {
         $idsList = implode(',', array_map('intval', $failedIds));
