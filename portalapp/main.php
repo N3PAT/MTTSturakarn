@@ -1125,7 +1125,7 @@ try {
     </a>
   </div>
 
-  <script>
+ <script>
     // 1. ซ่อน Page Loader เมื่อโหลดหน้าเว็บเสร็จสมบูรณ์
     window.addEventListener('load', () => {
       const loader = document.getElementById('page-loader');
@@ -1177,7 +1177,7 @@ try {
       }
     }
 
-    // 4. สคริปต์บันทึก Push Notification อัตโนมัติเมื่อเข้าหน้า main.php
+    // 4. สคริปต์บันทึก Push Notification อัตโนมัติเมื่อเข้าหน้า main.php (แก้ไขใหม่)
     const applicationServerPublicKey = 'BDcVYH88lfTwHxM-yyzWmQzIc6_orJpWxXr156VsSppe-srH4z1gYGz0W6z9I67JHkBkcnnbrwqoLuBZLAzC7HA';
 
     function urlB64ToUint8Array(base64String) {
@@ -1214,28 +1214,38 @@ try {
     }
 
     if ('serviceWorker' in navigator && 'PushManager' in window) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js')
-          .then(swReg => {
-            console.log('ลงทะเบียน ServiceWorker สำเร็จ');
-            
-            return swReg.pushManager.getSubscription().then(function(subscription) {
-              if (subscription === null) {
-                return swReg.pushManager.subscribe({
-                  userVisibleOnly: true,
-                  applicationServerKey: urlB64ToUint8Array(applicationServerPublicKey)
-                })
-                .then(function(newSubscription) {
-                  console.log('ลงทะเบียนผู้รับข่าวสารใหม่สำเร็จ');
-                  sendSubscriptionToServer(newSubscription);
-                });
-              } else {
-                console.log('ผู้ใช้นี้เคยลงทะเบียนรับการแจ้งเตือนไว้แล้ว อัปเดตข้อมูลไปยังเซิร์ฟเวอร์');
-                sendSubscriptionToServer(subscription);
-              }
+      window.addEventListener('load', async () => {
+        try {
+          // 4.1 ขออนุญาตการแจ้งเตือนจากผู้ใช้ก่อน
+          const permission = await Notification.requestPermission();
+          if (permission !== 'granted') {
+            console.warn('ผู้ใช้ไม่อนุญาตการแจ้งเตือน (Permission denied)');
+            return; // หยุดทำงานถ้าผู้ใช้ไม่อนุญาต
+          }
+
+          // 4.2 ลงทะเบียน Service Worker
+          const swReg = await navigator.serviceWorker.register('sw.js');
+          console.log('ลงทะเบียน ServiceWorker สำเร็จ');
+          
+          // 4.3 ตรวจสอบและสร้าง Subscription
+          let subscription = await swReg.pushManager.getSubscription();
+          
+          if (!subscription) {
+            subscription = await swReg.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: urlB64ToUint8Array(applicationServerPublicKey)
             });
-          })
-          .catch(error => console.error('ServiceWorker Error: ', error));
+            console.log('ลงทะเบียนผู้รับข่าวสารใหม่สำเร็จ');
+          } else {
+            console.log('ผู้ใช้นี้เคยลงทะเบียนรับการแจ้งเตือนไว้แล้ว อัปเดตข้อมูลไปยังเซิร์ฟเวอร์');
+          }
+
+          // 4.4 ส่งข้อมูล Subscription ไปยังฐานข้อมูล
+          sendSubscriptionToServer(subscription);
+          
+        } catch (error) {
+          console.error('Push Registration Error:', error);
+        }
       });
     }
   </script>
