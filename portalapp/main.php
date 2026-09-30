@@ -1,8 +1,9 @@
 <?php
 session_start();
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
+ini_set('display_errors', 0);
+ini_set('display_startup_errors', 0);
 error_reporting(E_ALL);
+
 // -------------------------------------------------------------
 // ปิดการเซฟ Cache บังคับให้เบราว์เซอร์โหลดข้อมูลใหม่ล่าสุดเสมอ
 // -------------------------------------------------------------
@@ -96,97 +97,93 @@ try {
         }
         $stmt_vote->close();
     }
-  
-   // ดึงวันที่ปัจจุบันของไทย
-$today_date = date('Y-m-d');
-$studentCode = trim($_SESSION['student_code']);
+   
+    // ดึงวันที่ปัจจุบันของไทย
+    $today_date = date('Y-m-d');
+    $studentCode = trim($_SESSION['student_code']);
 
-// 4. ตรวจสอบข้อมูลบัตรวินัยประจำวันนี้
-$today_discipline = null;
-$today_disc_count = 0;
+    // 4. ตรวจสอบข้อมูลบัตรวินัยประจำวันนี้
+    $today_discipline = null;
+    $today_disc_count = 0;
 
-$stmt_disc = $conn->prepare("
-    SELECT card_bed, card_shoe, card_cabinet, total_cards, status_color 
-    FROM discipline_cards 
-    WHERE TRIM(student_code) = TRIM(?) AND DATE(check_date) = ? 
-    ORDER BY id DESC LIMIT 1
-");
-if ($stmt_disc) {
-    $stmt_disc->bind_param("ss", $studentCode, $today_date);
-    $stmt_disc->execute();
-    $res_disc = $stmt_disc->get_result();
-    if ($row_disc = $res_disc->fetch_assoc()) {
-        $today_discipline = $row_disc;
-        
-        $bed  = (int)($today_discipline['card_bed'] ?? 0);
-        $shoe = (int)($today_discipline['card_shoe'] ?? 0);
-        $cab  = (int)($today_discipline['card_cabinet'] ?? 0);
-        $db_tot = (int)($today_discipline['total_cards'] ?? 0);
-        
-        $today_disc_count = max($db_tot, ($bed + $shoe + $cab));
+    $stmt_disc = $conn->prepare("
+        SELECT card_bed, card_shoe, card_cabinet, total_cards, status_color 
+        FROM discipline_cards 
+        WHERE TRIM(student_code) = TRIM(?) AND DATE(check_date) = ? 
+        ORDER BY id DESC LIMIT 1
+    ");
+    if ($stmt_disc) {
+        $stmt_disc->bind_param("ss", $studentCode, $today_date);
+        $stmt_disc->execute();
+        $res_disc = $stmt_disc->get_result();
+        if ($row_disc = $res_disc->fetch_assoc()) {
+            $today_discipline = $row_disc;
+            
+            $bed  = (int)($today_discipline['card_bed'] ?? 0);
+            $shoe = (int)($today_discipline['card_shoe'] ?? 0);
+            $cab  = (int)($today_discipline['card_cabinet'] ?? 0);
+            $db_tot = (int)($today_discipline['total_cards'] ?? 0);
+            
+            $today_disc_count = max($db_tot, ($bed + $shoe + $cab));
+        }
+        $stmt_disc->close();
     }
-    $stmt_disc->close();
-}
 
-// 4.1 ดึงข้อมูลยอดรวมบัตรวินัยสะสมทั้งหมด
-$total_cards_history = 0;
-$stmt_total_disc = $conn->prepare("
-    SELECT COALESCE(SUM(total_cards), 0) as all_cards 
-    FROM discipline_cards 
-    WHERE TRIM(student_code) = TRIM(?)
-");
-if ($stmt_total_disc) {
-    $stmt_total_disc->bind_param("s", $studentCode);
-    $stmt_total_disc->execute();
-    $res_total = $stmt_total_disc->get_result();
-    if ($row_total = $res_total->fetch_assoc()) {
-        $total_cards_history = (int)$row_total['all_cards'];
+    // 4.1 ดึงข้อมูลยอดรวมบัตรวินัยสะสมทั้งหมด
+    $total_cards_history = 0;
+    $stmt_total_disc = $conn->prepare("
+        SELECT COALESCE(SUM(total_cards), 0) as all_cards 
+        FROM discipline_cards 
+        WHERE TRIM(student_code) = TRIM(?)
+    ");
+    if ($stmt_total_disc) {
+        $stmt_total_disc->bind_param("s", $studentCode);
+        $stmt_total_disc->execute();
+        $res_total = $stmt_total_disc->get_result();
+        if ($row_total = $res_total->fetch_assoc()) {
+            $total_cards_history = (int)$row_total['all_cards'];
+        }
+        $stmt_total_disc->close();
     }
-    $stmt_total_disc->close();
-}
 
-    // 5. ดึงข้อมูลข่าวสารประกาศ (ลองปลดเงื่อนไข status ออกชั่วคราว)
-$announcements = [];
-$sql = "SELECT id, title, content, attachment, created_at 
-        FROM announcements 
-        ORDER BY created_at DESC, id DESC 
-        LIMIT 10";
+    // 5. ดึงข้อมูลข่าวสารประกาศ
+    $announcements = [];
+    $sql = "SELECT id, title, content, attachment, created_at 
+            FROM announcements 
+            ORDER BY created_at DESC, id DESC 
+            LIMIT 10";
 
-$stmt = $conn->prepare($sql);
-if ($stmt) {
-    $stmt->execute();
-    $result = $stmt->get_result();
-    while ($row = $result->fetch_assoc()) {
-        $announcements[] = $row;
+    $stmt = $conn->prepare($sql);
+    if ($stmt) {
+        $stmt->execute();
+        $result = $stmt->get_result();
+        while ($row = $result->fetch_assoc()) {
+            $announcements[] = $row;
+        }
+        $stmt->close();
     }
-    $stmt->close();
-}
 
-// จัดเตรียมตัวแปรสำหรับการแสดงผล
-$name = trim(($student['prefix'] ?? '') . ($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''));
-$student_code_display = "รหัสนักเรียน " . ($student['student_code'] ?? '');
-$profile_image = $student['image'] ?? '';
+    // จัดเตรียมตัวแปรสำหรับการแสดงผล
+    $name = trim(($student['prefix'] ?? '') . ($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''));
+    $student_code_display = "รหัสนักเรียน " . ($student['student_code'] ?? '');
+    $profile_image = $student['image'] ?? '';
 
-$unit_parts = [];
-if (!empty($student['battalion'])) $unit_parts[] = "พัน." . $student['battalion'];
-if (!empty($student['company']))   $unit_parts[] = "ร้อย." . $student['company'];
-if (!empty($student['platoon']))   $unit_parts[] = "หมวด " . $student['platoon'];
-if (!empty($student['section']))   $unit_parts[] = "ตอนเรียนที่ " . $student['section'];
-$student_unit = !empty($unit_parts) ? implode(" ", $unit_parts) : "นักเรียนทหาร";
+    $unit_parts = [];
+    if (!empty($student['battalion'])) $unit_parts[] = "พัน." . $student['battalion'];
+    if (!empty($student['company']))   $unit_parts[] = "ร้อย." . $student['company'];
+    if (!empty($student['platoon']))   $unit_parts[] = "หมวด " . $student['platoon'];
+    if (!empty($student['section']))   $unit_parts[] = "ตอนเรียนที่ " . $student['section'];
+    $student_unit = !empty($unit_parts) ? implode(" ", $unit_parts) : "นักเรียนทหาร";
 
-if (empty($profile_image) || $profile_image === "default_student.png" || $profile_image === "0") {
-    $profile_image = "https://ui-avatars.com/api/?name=" . urlencode($name) . "&background=5a42a0&color=fff&size=128";
-}
+    if (empty($profile_image) || $profile_image === "default_student.png" || $profile_image === "0") {
+        $profile_image = "https://ui-avatars.com/api/?name=" . urlencode($name) . "&background=5a42a0&color=fff&size=128";
+    }
 
-// คำนวณนับการแจ้งเตือน
-$has_discipline_alert = ($today_disc_count > 0);
-$noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipline_alert ? 1 : 0);
-
-    // ทดสอบด่วน (หากข้อมูลมาครบแล้ว ให้ใส่ // คอมเมนต์บรรทัด var_dump ไว้เพื่อดูหน้าเว็บ)
-     //var_dump($studentCode, $today_date, $today_discipline, $announcements); die();
+    // คำนวณนับการแจ้งเตือน
+    $has_discipline_alert = ($today_disc_count > 0);
+    $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipline_alert ? 1 : 0);
 
 } catch (Exception $e) {
-    // ปิดปีกกาของ try จากบรรทัด 38 และดักจับ Error
     die("เกิดข้อผิดพลาดของระบบ: " . $e->getMessage());
 }
 ?>
@@ -196,7 +193,6 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <!-- กำหนด Meta Tag ไม่ให้เบราว์เซอร์และ PWA เก็บ Cache หน้าเว็บ -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
@@ -208,8 +204,9 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
   <style>
     :root {
       --primary: #5a42a0;
+      --primary-light: #7c5dfa;
       --bg-color: #f6f8fc;
-      --text-dark: #1e293b;
+      --text-dark: #0f172a;
       --text-gray: #64748b;
     }
 
@@ -381,31 +378,6 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
       backdrop-filter: blur(4px);
     }
 
-    .news-carousel {
-      display: flex;
-      overflow-x: auto;
-      gap: 15px;
-      padding: 0 20px 15px 20px;
-      scroll-snap-type: x mandatory;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
-      -ms-overflow-style: none;
-    }
-
-    .news-carousel::-webkit-scrollbar {
-      display: none;
-    }
-
-    .news-carousel .announcement-card {
-      min-width: 85%; 
-      margin: 0; 
-      scroll-snap-align: center; 
-      flex-shrink: 0;
-      display: flex;
-      gap: 15px;
-      align-items: flex-start;
-    }
-
     .badge-danger {
       background: rgba(220, 38, 38, 0.8) !important;
       border-color: #f87171 !important;
@@ -430,43 +402,6 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
       margin: 0 20px 15px;
     }
 
-    .announcement-card {
-      background: #ffffff;
-      border-left: 4px solid #3b82f6;
-      border-radius: 12px;
-      padding: 15px;
-      margin: 0 20px 15px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-      display: flex;
-      gap: 15px;
-      align-items: flex-start;
-    }
-    
-    .announcement-icon {
-      color: #3b82f6;
-      font-size: 1.5rem;
-      margin-top: 2px;
-    }
-    
-    .announcement-content {
-      flex: 1;
-    }
-
-    .announcement-content h4 {
-      margin: 0 0 5px 0;
-      font-size: 0.95rem;
-      font-weight: 600;
-      color: var(--text-dark);
-    }
-    
-    .announcement-content p {
-      margin: 0;
-      font-size: 0.8rem;
-      color: var(--text-gray);
-      line-height: 1.4;
-      word-break: break-word;
-    }
-
     .section-pill {
       width: 5px;
       height: 24px;
@@ -481,6 +416,193 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
       margin: 0;
     }
 
+    /* =========================================================
+       ✨ STYLE สำหรับ NEWS WIDGET (เรียบหรูสไตล์ MODERN)
+       ========================================================= */
+    .news-carousel {
+      display: flex;
+      overflow-x: auto;
+      gap: 16px;
+      padding: 4px 20px 20px 20px;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+
+    .news-carousel::-webkit-scrollbar {
+      display: none;
+    }
+
+    .news-card {
+      min-width: 86%;
+      max-width: 86%;
+      background: #ffffff;
+      border-radius: 20px;
+      overflow: hidden;
+      scroll-snap-align: center;
+      flex-shrink: 0;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+      border: 1px solid rgba(226, 232, 240, 0.8);
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .news-card:active {
+      transform: scale(0.98);
+    }
+
+    .news-media {
+      position: relative;
+      width: 100%;
+      height: 155px;
+      overflow: hidden;
+      background-color: #f1f5f9;
+    }
+
+    .news-media img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.4s ease;
+    }
+
+    .news-tag {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: #ffffff;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .news-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 18px 0 18px;
+    }
+
+    .news-tag-inline {
+      background: rgba(90, 66, 160, 0.08);
+      color: var(--primary);
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 20px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .news-body {
+      padding: 16px 18px 18px;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+    }
+
+    .news-meta {
+      margin-bottom: 6px;
+    }
+
+    .news-date {
+      font-size: 0.72rem;
+      color: #94a3b8;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .news-title {
+      font-size: 0.98rem;
+      font-weight: 700;
+      color: #0f172a;
+      margin: 0 0 6px 0;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .news-desc {
+      font-size: 0.82rem;
+      color: #475569;
+      line-height: 1.5;
+      margin: 0;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      white-space: pre-line;
+    }
+
+    .news-file-btn {
+      margin-top: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      color: var(--primary);
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background 0.2s, border-color 0.2s;
+    }
+
+    .news-file-btn:active {
+      background: #f1f5f9;
+    }
+
+    .news-file-btn .arrow-icon {
+      font-size: 0.7rem;
+      opacity: 0.6;
+    }
+
+    .empty-news-card {
+      width: 100%;
+      background: #ffffff;
+      border-radius: 20px;
+      padding: 30px 20px;
+      text-align: center;
+      border: 1px dashed #cbd5e1;
+      color: #94a3b8;
+    }
+
+    .empty-news-icon {
+      width: 50px;
+      height: 50px;
+      background: #f1f5f9;
+      color: #94a3b8;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+      margin: 0 auto 10px;
+    }
+
+    .empty-news-card p {
+      margin: 0;
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    /* Duty Alert Cards */
     .duty-alert-container {
       margin: 0 20px 20px;
       display: flex;
@@ -795,55 +917,68 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
       </a>
     </div>
 
+    <!-- =========================================================
+       ✨ ส่วนแสดงข่าวสาร / ประกาศ (NEWS WIDGET NEW DESIGN)
+       ========================================================= -->
+    <div class="section-title fade-in-up delay-4">
+      <div class="section-pill"></div>
+      <h3>ข่าวประชาสัมพันธ์</h3>
+    </div>
+
     <div class="fade-in-up delay-4">
       <div class="news-carousel">
         <?php if (!empty($announcements)): ?>
           <?php foreach ($announcements as $news): ?>
             <?php 
               $attachment_path = $news['attachment'] ?? '';
-              // แก้บัคคำสั่ง str_starts_with สำหรับให้รองรับ PHP ทุกเวอร์ชัน
               if (!empty($attachment_path) && !preg_match('/^https?:\/\//i', $attachment_path) && strpos($attachment_path, 'uploads/') !== 0) {
                   $attachment_path = 'uploads/news/' . $attachment_path;
               }
               
               $ext = strtolower(pathinfo($attachment_path, PATHINFO_EXTENSION));
               $is_image = in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp']);
+              $cache_buster = "?v=" . time();
             ?>
 
-            <div class="announcement-card">
-              <div class="announcement-icon">
-                <i class="fas fa-bullhorn"></i>
-              </div>
-              <div class="announcement-content">
-                <h4><?= htmlspecialchars($news['title']) ?></h4>
-                <p><?= nl2br(htmlspecialchars($news['content'])) ?></p>
-                
-                <?php if (!empty($news['attachment'])): ?>
-                  <div class="announcement-attachment" style="margin-top: 10px;">
-                    <?php $cache_buster = "?v=" . time(); ?>
-                    <?php if ($is_image): ?>
-                      <a href="<?= htmlspecialchars($attachment_path) . $cache_buster ?>" target="_blank">
-                        <img src="<?= htmlspecialchars($attachment_path) . $cache_buster ?>" alt="ภาพแนบประกาศ" style="max-width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px; margin-top: 5px; border: 1px solid #e2e8f0; display: block;">
-                      </a>
-                    <?php else: ?>
-                      <a href="<?= htmlspecialchars($attachment_path) . $cache_buster ?>" target="_blank" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #f1f5f9; color: #2563eb; border-radius: 6px; font-size: 0.8rem; text-decoration: none; font-weight: 500;">
-                        <i class="fas fa-paperclip"></i> ดูไฟล์แนบ
-                      </a>
-                    <?php endif; ?>
+            <div class="news-card">
+              <?php if (!empty($news['attachment']) && $is_image): ?>
+                <div class="news-media">
+                  <a href="<?= htmlspecialchars($attachment_path) . $cache_buster ?>" target="_blank">
+                    <img src="<?= htmlspecialchars($attachment_path) . $cache_buster ?>" alt="ข่าวสาร" loading="lazy">
+                  </a>
+                  <div class="news-tag"><i class="fas fa-bullhorn"></i> ประกาศ</div>
+                </div>
+              <?php else: ?>
+                <div class="news-card-header">
+                  <span class="news-tag-inline"><i class="fas fa-bullhorn"></i> ประกาศข่าว</span>
+                  <span class="news-date"><i class="far fa-clock"></i> <?= date('d/m/Y', strtotime($news['created_at'])) ?></span>
+                </div>
+              <?php endif; ?>
+
+              <div class="news-body">
+                <?php if (!empty($news['attachment']) && $is_image): ?>
+                  <div class="news-meta">
+                    <span class="news-date"><i class="far fa-clock"></i> <?= date('d/m/Y H:i', strtotime($news['created_at'])) ?> น.</span>
                   </div>
                 <?php endif; ?>
                 
-                <span class="announcement-date" style="display: block; margin-top: 10px; color: #94a3b8; font-size: 0.75rem;">
-                  <i class="far fa-clock"></i> <?= date('d/m/Y H:i', strtotime($news['created_at'])) ?>
-                </span>
+                <h4 class="news-title"><?= htmlspecialchars($news['title']) ?></h4>
+                <p class="news-desc"><?= htmlspecialchars($news['content']) ?></p>
+
+                <?php if (!empty($news['attachment']) && !$is_image): ?>
+                  <a href="<?= htmlspecialchars($attachment_path) . $cache_buster ?>" target="_blank" class="news-file-btn">
+                    <span><i class="fas fa-paperclip"></i> ดาวน์โหลดไฟล์แนบ</span>
+                    <i class="fas fa-chevron-right arrow-icon"></i>
+                  </a>
+                <?php endif; ?>
               </div>
             </div>
           <?php endforeach; ?>
 
         <?php else: ?>
-          <div class="empty-news" style="width: 100%; text-align: center; padding: 25px 15px; background: #ffffff; border-radius: 12px; color: #94a3b8; box-shadow: 0 2px 8px rgba(0,0,0,0.03);">
-            <i class="far fa-newspaper" style="font-size: 2rem; margin-bottom: 8px; display: block; opacity: 0.6;"></i>
-            <span style="font-size: 0.85rem;">ไม่มีประกาศข่าวสารในขณะนี้</span>
+          <div class="empty-news-card">
+            <div class="empty-news-icon"><i class="far fa-newspaper"></i></div>
+            <p>ไม่มีประกาศข่าวสารในขณะนี้</p>
           </div>
         <?php endif; ?>
       </div>
