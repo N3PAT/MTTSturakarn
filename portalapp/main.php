@@ -991,7 +991,7 @@ try {
         <div class="duty-alert-card urgent">
           <div class="alert-icon"><i class="fas fa-exclamation-triangle"></i></div>
           <div class="alert-info">
-            <h4>ยังไม่ได้โหวตประสงค์กลับบ้าน</h4>
+            <h4>ท่านยังไม่ได้โหวตประสงค์กลับบ้าน</h4>
             <p>กรุณาทำรายการโหวตสำหรับสัปดาห์นี้</p>
           </div>
           <a href="fill.php" class="btn-action-alert">โหวตเลย</a>
