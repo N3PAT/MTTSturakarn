@@ -181,7 +181,14 @@ if (empty($profile_image) || $profile_image === "default_student.png" || $profil
 // คำนวณนับการแจ้งเตือน
 $has_discipline_alert = ($today_disc_count > 0);
 $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipline_alert ? 1 : 0);
-    var_dump($studentCode, $today_date, $today_discipline, $announcements); die();
+
+    // ทดสอบด่วน (หากข้อมูลมาครบแล้ว ให้ใส่ // คอมเมนต์บรรทัด var_dump ไว้เพื่อดูหน้าเว็บ)
+     var_dump($studentCode, $today_date, $today_discipline, $announcements); die();
+
+} catch (Exception $e) {
+    // ปิดปีกกาของ try จากบรรทัด 38 และดักจับ Error
+    die("เกิดข้อผิดพลาดของระบบ: " . $e->getMessage());
+}
 ?>
     
 <!DOCTYPE html>
