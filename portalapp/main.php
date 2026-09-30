@@ -4,22 +4,17 @@ ini_set('display_errors', 0);
 ini_set('display_startup_errors', 0);
 error_reporting(E_ALL);
 
-// -------------------------------------------------------------
-// ปิดการเซฟ Cache บังคับให้เบราว์เซอร์โหลดข้อมูลใหม่ล่าสุดเสมอ
-// -------------------------------------------------------------
 header("Cache-Control: no-cache, no-store, must-revalidate");
 header("Pragma: no-cache");
 header("Expires: 0");
 
 require_once 'db.php';
 
-// ตรวจสอบการล็อกอิน
 if (empty($_SESSION['student_code'])) {
     header("Location: login.php");
     exit();
 }
 
-// เช็คว่าเคยแสดงหน้า Loading ไปหรือยังใน Session นี้
 $show_loading = false;
 if (!isset($_SESSION['has_seen_loading'])) {
     $show_loading = true;
