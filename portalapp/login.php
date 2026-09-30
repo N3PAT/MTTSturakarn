@@ -218,44 +218,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 
     
-    <script>
-    // สคริปต์ฟังก์ชันแสดง/ซ่อนรหัสผ่าน
+ <script>
+    // 1. สคริปต์ฟังก์ชันแสดง/ซ่อนรหัสผ่าน
     const togglePasswordBtn = document.getElementById('togglePasswordBtn');
     const passwordInput = document.getElementById('password');
     const toggleIcon = document.getElementById('toggleIcon');
 
-    togglePasswordBtn.addEventListener('click', function () {
-      const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-      passwordInput.setAttribute('type', type);
-      
-      if (type === 'text') {
-        toggleIcon.classList.remove('fa-eye');
-        toggleIcon.classList.add('fa-eye-slash');
-      } else {
-        toggleIcon.classList.remove('fa-eye-slash');
-        toggleIcon.classList.add('fa-eye');
-      }
-    });
+    // ตรวจสอบว่ามี Element อยู่จริงก่อนใส่ Event Listener เพื่อป้องกัน Error
+    if (togglePasswordBtn && passwordInput && toggleIcon) {
+      togglePasswordBtn.addEventListener('click', function () {
+        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+        passwordInput.setAttribute('type', type);
+        
+        if (type === 'text') {
+          toggleIcon.classList.replace('fa-eye', 'fa-eye-slash');
+        } else {
+          toggleIcon.classList.replace('fa-eye-slash', 'fa-eye');
+        }
+      });
+    }
 
+    // 2. สคริปต์ตรวจสอบการกรอกข้อมูล
     const studentCodeInput = document.getElementById('student_code');
     const submitBtn = document.getElementById('submitBtn');
 
     function checkInputs() {
+      if (!studentCodeInput || !passwordInput || !submitBtn) return;
+
       if (studentCodeInput.value.trim() !== '' && passwordInput.value.trim() !== '') {
         submitBtn.classList.add('active');
+        submitBtn.disabled = false; // เพิ่มการปลดล็อกปุ่มจริงๆ นอกเหนือจากการเปลี่ยนแค่คลาสสี
       } else {
         submitBtn.classList.remove('active');
+        submitBtn.disabled = true;  // ล็อกปุ่มหากข้อมูลไม่ครบ
       }
     }
 
-    studentCodeInput.addEventListener('input', checkInputs);
-    passwordInput.addEventListener('input', checkInputs);
-    window.addEventListener('DOMContentLoaded', checkInputs);
+    if (studentCodeInput && passwordInput) {
+      studentCodeInput.addEventListener('input', checkInputs);
+      passwordInput.addEventListener('input', checkInputs);
+      window.addEventListener('DOMContentLoaded', checkInputs);
+    }
 
-    // VAPID Public Key (นำมาจากฝั่ง Server ของคุณที่ใช้สร้าง Web Push)
+    // 3. VAPID Public Key และ Push Notification
     const applicationServerPublicKey = 'BDcVYH88lfTwHxM-yyzWmQzIc6_orJpWxXr156VsSppe-srH4z1gYGz0W6z9I67JHkBkcnnbrwqoLuBZLAzC7HA';
 
-    // ฟังก์ชันแปลง VAPID Key เป็น Uint8Array
     function urlB64ToUint8Array(base64String) {
       const padding = '='.repeat((4 - base64String.length % 4) % 4);
       const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
@@ -267,7 +274,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       return outputArray;
     }
 
-    // ฟังก์ชันสำหรับส่งข้อมูล Subscription ไปยัง save_subscription.php
     function sendSubscriptionToServer(subscription) {
       fetch('save_subscription.php', {
         method: 'POST',
@@ -280,7 +286,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!response.ok) {
           throw new Error('Network response was not ok');
         }
-        return response.text(); // หรือ response.json() หาก API ส่งกลับมาเป็น JSON
+        return response.text(); 
       })
       .then(data => {
         console.log('Subscription saved on server successfully:', data);
@@ -290,41 +296,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       });
     }
 
-    // ลงทะเบียน Service Worker และขอสิทธิ์ Push Notification
     if ('serviceWorker' in navigator && 'PushManager' in window) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('sw.js')
           .then(swReg => {
             console.log('ServiceWorker registration successful');
             
-            // ขอสิทธิ์และ Subscribe Push Notification
-            swReg.pushManager.getSubscription()
-              .then(function(subscription) {
-                if (subscription === null) {
-                  // ยังไม่ได้ Subscribe, ทำการ Subscribe ใหม่
-                  swReg.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey: urlB64ToUint8Array(applicationServerPublicKey)
-                  })
-                  .then(function(newSubscription) {
-                    console.log('User is subscribed.');
-                    sendSubscriptionToServer(newSubscription);
-                  })
-                  .catch(function(err) {
-                    console.log('Failed to subscribe the user: ', err);
-                  });
-                } else {
-                  // เคย Subscribe ไว้แล้ว ส่งข้อมูลอัปเดตไปที่ Server ได้เลย
-                  console.log('User is already subscribed.');
-                  sendSubscriptionToServer(subscription);
-                }
-              });
+            return swReg.pushManager.getSubscription().then(function(subscription) {
+              if (subscription === null) {
+                return swReg.pushManager.subscribe({
+                  userVisibleOnly: true,
+                  applicationServerKey: urlB64ToUint8Array(applicationServerPublicKey)
+                })
+                .then(function(newSubscription) {
+                  console.log('User is subscribed.');
+                  sendSubscriptionToServer(newSubscription);
+                });
+              } else {
+                console.log('User is already subscribed.');
+                sendSubscriptionToServer(subscription);
+              }
+            });
           })
-          .catch(error => console.log('ServiceWorker registration failed: ', error));
+          .catch(error => console.log('ServiceWorker error: ', error));
       });
     }
 
-    // ส่วนของการจัดการ PWA Banner
+    // 4. ส่วนของการจัดการ PWA Banner
     let deferredPrompt;
     const pwaBanner = document.getElementById('pwaBanner');
     const btnInstallPwa = document.getElementById('btnInstallPwa');
@@ -337,31 +335,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       e.preventDefault();
       deferredPrompt = e;
       
-      if (!isStandalone && !hasInstalledBefore && !sessionStorage.getItem('pwaBannerDismissed')) {
+      if (pwaBanner && !isStandalone && !hasInstalledBefore && !sessionStorage.getItem('pwaBannerDismissed')) {
         setTimeout(() => pwaBanner.classList.add('show'), 1500); 
       }
     });
 
-    btnInstallPwa.addEventListener('click', async () => {
-      if (deferredPrompt) {
-        pwaBanner.classList.remove('show');
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        if (outcome === 'accepted') {
-          localStorage.setItem('pwaInstalled', 'true');
+    if (btnInstallPwa) {
+      btnInstallPwa.addEventListener('click', async () => {
+        if (deferredPrompt) {
+          pwaBanner.classList.remove('show');
+          deferredPrompt.prompt();
+          const { outcome } = await deferredPrompt.userChoice;
+          if (outcome === 'accepted') {
+            localStorage.setItem('pwaInstalled', 'true');
+          }
+          deferredPrompt = null;
         }
-        deferredPrompt = null;
-      }
-    });
+      });
+    }
 
-    btnClosePwa.addEventListener('click', () => {
-      pwaBanner.classList.remove('show');
-      sessionStorage.setItem('pwaBannerDismissed', 'true');
-    });
+    if (btnClosePwa) {
+      btnClosePwa.addEventListener('click', () => {
+        pwaBanner.classList.remove('show');
+        sessionStorage.setItem('pwaBannerDismissed', 'true');
+      });
+    }
     
     window.addEventListener('appinstalled', () => {
       console.log('PWA was installed successfully');
-      pwaBanner.classList.remove('show');
+      if (pwaBanner) pwaBanner.classList.remove('show');
       localStorage.setItem('pwaInstalled', 'true');
     });
   </script>
