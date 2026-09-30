@@ -1,5 +1,13 @@
 <?php
 session_start();
+
+// -------------------------------------------------------------
+// ปิดการเซฟ Cache บังคับให้เบราว์เซอร์โหลดข้อมูลใหม่ล่าสุดเสมอ
+// -------------------------------------------------------------
+header("Cache-Control: no-cache, no-store, must-revalidate");
+header("Pragma: no-cache");
+header("Expires: 0");
+
 require_once 'db.php';
 
 // ตรวจสอบการล็อกอิน
@@ -8,9 +16,7 @@ if (empty($_SESSION['student_code'])) {
     exit();
 }
 
-// -------------------------------------------------------------
 // เช็คว่าเคยแสดงหน้า Loading ไปหรือยังใน Session นี้
-// -------------------------------------------------------------
 $show_loading = false;
 if (!isset($_SESSION['has_seen_loading'])) {
     $show_loading = true;
@@ -23,6 +29,7 @@ $announcements = [];
 $has_voted = true; 
 $news_error = ""; 
 $today_discipline = null; 
+$today_disc_count = 0;
 $total_cards_history = 0; 
 $student = [];
 
@@ -43,7 +50,6 @@ try {
         $stmt->close();
     }
 
-    // หากไม่พบข้อมูลนักเรียน ให้บังคับล็อกอินใหม่
     if (!$student) {
         session_destroy();
         header("Location: login.php");
@@ -87,12 +93,12 @@ try {
         $stmt_vote->close();
     }
 
-    // 4. ตรวจสอบข้อมูลบัตรวินัยประจำวันนี้
+    // 4. ตรวจสอบข้อมูลบัตรวินัยประจำวันนี้ (ปรับใช้ DATE() เพื่อรองรับทั้ง Date และ Datetime)
     $stmt_disc = $conn->prepare("
         SELECT card_bed, card_shoe, card_cabinet, total_cards, status_color 
         FROM discipline_cards 
-        WHERE student_code = ? AND check_date = CURDATE() 
-        LIMIT 1
+        WHERE student_code = ? AND DATE(check_date) = CURDATE() 
+        ORDER BY id DESC LIMIT 1
     ");
     if ($stmt_disc) {
         $stmt_disc->bind_param("s", $studentCode);
@@ -100,11 +106,19 @@ try {
         $res_disc = $stmt_disc->get_result();
         if ($row_disc = $res_disc->fetch_assoc()) {
             $today_discipline = $row_disc;
+            
+            // คำนวณจำนวนบัตรวินัยวันนี้แบบรัดกุม (รวมค่าแยกและ total_cards)
+            $bed = (int)($today_discipline['card_bed'] ?? 0);
+            $shoe = (int)($today_discipline['card_shoe'] ?? 0);
+            $cab = (int)($today_discipline['card_cabinet'] ?? 0);
+            $db_tot = (int)($today_discipline['total_cards'] ?? 0);
+            
+            $today_disc_count = max($db_tot, ($bed + $shoe + $cab));
         }
         $stmt_disc->close();
     }
 
-    // 4.1 ดึงข้อมูลยอดรวมบัตรวินัยสะสมทั้งหมดของนักเรียนคนนี้
+    // 4.1 ดึงข้อมูลยอดรวมบัตรวินัยสะสมทั้งหมด
     $stmt_total_disc = $conn->prepare("
         SELECT SUM(total_cards) as all_cards 
         FROM discipline_cards 
@@ -133,13 +147,9 @@ try {
         $result = $stmt->get_result();
         $announcements = $result->fetch_all(MYSQLI_ASSOC);
         $stmt->close();
-    } else {
-        $announcements = [];
-        error_log("MySQLi Prepare Error: " . $conn->error);
     }
 
 } catch (Exception $e) {
-    // จัดการกรณีเกิดข้อผิดพลาดจากระบบ/ฐานข้อมูล
     error_log("Database/System Error in main.php: " . $e->getMessage());
     $news_error = $e->getMessage();
 }
@@ -156,13 +166,12 @@ if (!empty($student['platoon']))   $unit_parts[] = "หมวด " . $student['p
 if (!empty($student['section']))   $unit_parts[] = "ตอนเรียนที่ " . $student['section'];
 $student_unit = !empty($unit_parts) ? implode(" ", $unit_parts) : "นักเรียนทหาร";
 
-// หากไม่มีรูปโปรไฟล์ ให้ใช้ Default Avatar สุ่มตามชื่อ
 if (empty($profile_image) || $profile_image === "default_student.png" || $profile_image === "0") {
     $profile_image = "https://ui-avatars.com/api/?name=" . urlencode($name) . "&background=5a42a0&color=fff&size=128";
 }
 
-// นับการแจ้งเตือน
-$has_discipline_alert = ($today_discipline && $today_discipline['total_cards'] > 0);
+// คำนวณนับการแจ้งเตือน
+$has_discipline_alert = ($today_disc_count > 0);
 $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipline_alert ? 1 : 0);
 ?>
 <!DOCTYPE html>
@@ -170,6 +179,11 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <!-- กำหนด Meta Tag ไม่ให้เบราว์เซอร์และ PWA เก็บ Cache หน้าเว็บ -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  
   <title>หน้าหลัก - MTTS</title>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
@@ -435,13 +449,6 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
       line-height: 1.4;
       word-break: break-word;
     }
-    
-    .announcement-date {
-      display: block;
-      font-size: 0.7rem;
-      color: #94a3b8;
-      margin-top: 8px;
-    }
 
     .section-pill {
       width: 5px;
@@ -631,7 +638,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
         </div>
       </div>
 
- <a href="nofitication.php" class="noti-btn" id="notiBellBtn" title="ดูการแจ้งเตือน">
+      <a href="nofitication.php" class="noti-btn" id="notiBellBtn" title="ดูการแจ้งเตือน">
         <i class="far fa-bell"></i>
         <?php if ($noti_count > 0): ?>
           <span class="noti-badge"><?= $noti_count ?></span>
@@ -660,16 +667,16 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
     <div class="duty-alert-container fade-in-up delay-3">
 
       <!-- 1. การ์ดแสดงสถานะบัตรวินัยประจำวันนี้ -->
-      <?php if (!empty($today_discipline) && $today_discipline['total_cards'] > 0): ?>
+      <?php if ($today_disc_count > 0): ?>
         <?php 
-          $tot = (int)$today_discipline['total_cards'];
+          $tot = $today_disc_count;
           $color = isset($today_discipline['status_color']) ? $today_discipline['status_color'] : '';
           
           $items = [];
-          if (!empty($today_discipline['card_bed'])) $items[] = "เตียง";
-          if (!empty($today_discipline['card_cabinet'])) $items[] = "ตู้";
-          if (!empty($today_discipline['card_shoe'])) $items[] = "รองเท้า";
-          $items_str = !empty($items) ? implode(", ", $items) : "ไม่มีรายการ";
+          if (!empty($today_discipline['card_bed'])) $items[] = "เตียง (" . (int)$today_discipline['card_bed'] . ")";
+          if (!empty($today_discipline['card_cabinet'])) $items[] = "ตู้ (" . (int)$today_discipline['card_cabinet'] . ")";
+          if (!empty($today_discipline['card_shoe'])) $items[] = "รองเท้า (" . (int)$today_discipline['card_shoe'] . ")";
+          $items_str = !empty($items) ? implode(", ", $items) : "โดนตัดบัตรวินัยประจำวันนี้";
         ?>
 
         <?php if ($tot >= 3 || $color == 'red'): ?>
@@ -800,15 +807,19 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
                 
                 <?php if (!empty($news['attachment'])): ?>
                   <div class="announcement-attachment" style="margin-top: 10px;">
-                    <?php if ($is_image): ?>
-                      <a href="<?= htmlspecialchars($attachment_path) ?>" target="_blank">
-                        <img src="<?= htmlspecialchars($attachment_path) ?>" alt="ภาพแนบประกาศ" style="max-width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px; margin-top: 5px; border: 1px solid #e2e8f0; display: block;">
-                      </a>
-                    <?php else: ?>
-                      <a href="<?= htmlspecialchars($attachment_path) ?>" target="_blank" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #f1f5f9; color: #2563eb; border-radius: 6px; font-size: 0.8rem; text-decoration: none; font-weight: 500;">
-                        <i class="fas fa-paperclip"></i> ดูไฟล์แนบ
-                      </a>
-                    <?php endif; ?>
+                    <?php 
+  // สร้างตัวแปร version เพื่อไม่ให้ cache รูปภาพ/ไฟล์
+  $cache_buster = "?v=" . time(); 
+?>
+<?php if ($is_image): ?>
+  <a href="<?= htmlspecialchars($attachment_path) . $cache_buster ?>" target="_blank">
+    <img src="<?= htmlspecialchars($attachment_path) . $cache_buster ?>" alt="ภาพแนบประกาศ" style="max-width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px; margin-top: 5px; border: 1px solid #e2e8f0; display: block;">
+  </a>
+<?php else: ?>
+  <a href="<?= htmlspecialchars($attachment_path) . $cache_buster ?>" target="_blank" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #f1f5f9; color: #2563eb; border-radius: 6px; font-size: 0.8rem; text-decoration: none; font-weight: 500;">
+    <i class="fas fa-paperclip"></i> ดูไฟล์แนบ
+  </a>
+<?php endif; ?>
                   </div>
                 <?php endif; ?>
                 
@@ -866,14 +877,12 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
   }
 
   document.getElementById('notiBellBtn').addEventListener('click', async function(e) {
-    // 1. ถ้าเบราว์เซอร์ไม่รองรับ ให้ข้ามไป ปล่อยให้ลิงก์ <a> ทำงานเปลี่ยนหน้าตามปกติ
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
       return; 
     }
 
-    // 2. ถ้าสถานะเป็น default (ยังไม่เคยถามสิทธิ์) ให้ดักการเปลี่ยนหน้าเว็บไว้ก่อน
     if (Notification.permission === 'default') {
-      e.preventDefault(); // ระงับการเปลี่ยนหน้าของแท็ก <a> ไว้ชั่วคราว
+      e.preventDefault();
       
       try {
         const permission = await Notification.requestPermission();
@@ -892,7 +901,6 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
           formData.append('p256dh', subData.keys.p256dh);
           formData.append('auth', subData.keys.auth);
 
-          // 3. ส่งข้อมูลไปบันทึก (เปลี่ยนเป้าหมายเป็น notification.php ตามที่มีการรวมไฟล์ไว้)
           const res = await fetch('nofitication.php', {
             method: 'POST',
             body: formData,
@@ -904,7 +912,6 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
           try {
               const data = JSON.parse(text);
               if (data.success) {
-                // บันทึกสำเร็จ พาผู้ใช้ไปที่หน้าแจ้งเตือน
                 window.location.href = this.href;
               } else {
                 alert('เซิร์ฟเวอร์แจ้งข้อผิดพลาด: ' + (data.error || 'ไม่ทราบสาเหตุ'));
@@ -921,11 +928,8 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
         alert('เกิดข้อผิดพลาดของระบบ: ' + err.message);
       }
     }
-    // 3. ถ้าสถานะเป็น granted (อนุญาตแล้ว) หรือ denied (ปฏิเสธไปแล้ว) 
-    // โปรแกรมจะไม่เข้า if ด้านบน และจะปล่อยให้แท็ก <a> พาเปลี่ยนหน้าไปตามปกติ
   });
 
-  // ส่วนของ Loader
   document.addEventListener("DOMContentLoaded", function() {
     const loader = document.getElementById('page-loader');
     if (loader) {
@@ -937,8 +941,6 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
       }, 1200);
     }
   });
-
-  
 </script>
    
 </body>
