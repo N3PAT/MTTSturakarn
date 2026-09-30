@@ -1115,13 +1115,9 @@ try {
       <i class="fas fa-home"></i>
       <span>หน้าหลัก</span>
     </a>
-    <a href="duty.php" class="nav-link">
-      <i class="fas fa-calendar-alt"></i>
-      <span>ตารางเวร</span>
-    </a>
-    <a href="profile.php" class="nav-link">
-      <i class="fas fa-user"></i>
-      <span>โปรไฟล์</span>
+    <a href="logout.php" class="nav-link">
+      <i class="fa fa-sign-out"></i>
+      <span>ออกจากระบบ</span>
     </a>
   </div>
 
