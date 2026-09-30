@@ -417,16 +417,17 @@ try {
     }
 
     /* =========================================================
-       ✨ STYLE สำหรับ NEWS WIDGET (เรียบหรูสไตล์ MODERN)
+       ✨ STYLE สำหรับ NEWS CAROUSEL WIDGET & DOTS
        ========================================================= */
     .news-carousel {
       display: flex;
       overflow-x: auto;
       gap: 16px;
-      padding: 4px 20px 20px 20px;
+      padding: 4px 20px 15px 20px;
       scroll-snap-type: x mandatory;
       -webkit-overflow-scrolling: touch;
       scrollbar-width: none;
+      scroll-behavior: smooth;
     }
 
     .news-carousel::-webkit-scrollbar {
@@ -455,9 +456,10 @@ try {
     .news-media {
       position: relative;
       width: 100%;
-      height: 155px;
+      height: 165px;
       overflow: hidden;
       background-color: #f1f5f9;
+      cursor: pointer;
     }
 
     .news-media img {
@@ -465,6 +467,41 @@ try {
       height: 100%;
       object-fit: cover;
       transition: transform 0.4s ease;
+    }
+
+    .news-media:hover img {
+      transform: scale(1.03);
+    }
+
+    .news-media-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+    }
+
+    .news-media:hover .news-media-overlay {
+      opacity: 1;
+    }
+
+    .zoom-icon {
+      color: white;
+      font-size: 1.5rem;
+      background: rgba(0,0,0,0.5);
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
     }
 
     .news-tag {
@@ -573,6 +610,29 @@ try {
       opacity: 0.6;
     }
 
+    /* จุดบอกตำแหน่งสไลด์ (Carousel Dots) */
+    .carousel-dots {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 6px;
+      margin: 0 0 20px 0;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background-color: #cbd5e1;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .dot.active {
+      width: 22px;
+      border-radius: 10px;
+      background-color: var(--primary);
+    }
+
     .empty-news-card {
       width: 100%;
       background: #ffffff;
@@ -600,6 +660,74 @@ try {
       margin: 0;
       font-size: 0.85rem;
       font-weight: 500;
+    }
+
+    /* =========================================================
+       ✨ STYLE สำหรับ IMAGE POPUP / MODAL
+       ========================================================= */
+    .image-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 99999;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+      box-sizing: border-box;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .image-modal.show {
+      display: flex;
+      opacity: 1;
+    }
+
+    .modal-body-container {
+      position: relative;
+      max-width: 100%;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transform: scale(0.9);
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .image-modal.show .modal-body-container {
+      transform: scale(1);
+    }
+
+    .modal-content-img {
+      max-width: 100%;
+      max-height: 80vh;
+      border-radius: 16px;
+      object-fit: contain;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+    }
+
+    .modal-close-btn {
+      position: absolute;
+      top: -45px;
+      right: 0;
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: white;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      cursor: pointer;
+      backdrop-filter: blur(4px);
     }
 
     /* Duty Alert Cards */
@@ -918,7 +1046,7 @@ try {
     </div>
 
     <!-- =========================================================
-       ✨ ส่วนแสดงข่าวสาร / ประกาศ (NEWS WIDGET NEW DESIGN)
+       ✨ ส่วนแสดงข่าวสาร / ประกาศ (CAROUSEL WIDGET WITH POPUP)
        ========================================================= -->
     <div class="section-title fade-in-up delay-4">
       <div class="section-pill"></div>
@@ -926,9 +1054,9 @@ try {
     </div>
 
     <div class="fade-in-up delay-4">
-      <div class="news-carousel">
+      <div class="news-carousel" id="newsCarousel">
         <?php if (!empty($announcements)): ?>
-          <?php foreach ($announcements as $news): ?>
+          <?php foreach ($announcements as $index => $news): ?>
             <?php 
               $attachment_path = $news['attachment'] ?? '';
               if (!empty($attachment_path) && !preg_match('/^https?:\/\//i', $attachment_path) && strpos($attachment_path, 'uploads/') !== 0) {
@@ -938,14 +1066,17 @@ try {
               $ext = strtolower(pathinfo($attachment_path, PATHINFO_EXTENSION));
               $is_image = in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp']);
               $cache_buster = "?v=" . time();
+              $full_img_url = htmlspecialchars($attachment_path) . $cache_buster;
             ?>
 
             <div class="news-card">
               <?php if (!empty($news['attachment']) && $is_image): ?>
-                <div class="news-media">
-                  <a href="<?= htmlspecialchars($attachment_path) . $cache_buster ?>" target="_blank">
-                    <img src="<?= htmlspecialchars($attachment_path) . $cache_buster ?>" alt="ข่าวสาร" loading="lazy">
-                  </a>
+                <!-- เมื่อคลิกจะเรียก openImageModal เพื่อเปิด Popup -->
+                <div class="news-media" onclick="openImageModal('<?= $full_img_url ?>')">
+                  <img src="<?= $full_img_url ?>" alt="ข่าวสาร" loading="lazy">
+                  <div class="news-media-overlay">
+                    <div class="zoom-icon"><i class="fas fa-search-plus"></i></div>
+                  </div>
                   <div class="news-tag"><i class="fas fa-bullhorn"></i> ประกาศ</div>
                 </div>
               <?php else: ?>
@@ -966,8 +1097,8 @@ try {
                 <p class="news-desc"><?= htmlspecialchars($news['content']) ?></p>
 
                 <?php if (!empty($news['attachment']) && !$is_image): ?>
-                  <a href="<?= htmlspecialchars($attachment_path) . $cache_buster ?>" target="_blank" class="news-file-btn">
-                    <span><i class="fas fa-paperclip"></i> ดาวน์โหลดไฟล์แนบ</span>
+                  <a href="<?= $full_img_url ?>" target="_blank" class="news-file-btn">
+                    <span><i class="fas fa-paperclip"></i> เปิดลิงก์ / ดาวน์โหลดไฟล์</span>
                     <i class="fas fa-chevron-right arrow-icon"></i>
                   </a>
                 <?php endif; ?>
@@ -982,6 +1113,15 @@ try {
           </div>
         <?php endif; ?>
       </div>
+
+      <!-- จุดบอกตำแหน่งสไลด์ Carousel -->
+      <?php if (!empty($announcements) && count($announcements) > 1): ?>
+        <div class="carousel-dots" id="carouselDots">
+          <?php foreach ($announcements as $i => $news): ?>
+            <span class="dot <?= $i === 0 ? 'active' : '' ?>"></span>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
     </div>
       
     <div class="bottom-nav">
@@ -1001,7 +1141,68 @@ try {
 
   </div>
 
+  <!-- =========================================================
+     ✨ IMAGE MODAL POPUP
+     ========================================================= -->
+  <div id="imageModal" class="image-modal" onclick="closeImageModal()">
+    <div class="modal-body-container" onclick="event.stopPropagation()">
+      <div class="modal-close-btn" onclick="closeImageModal()"><i class="fas fa-times"></i></div>
+      <img id="modalImg" class="modal-content-img" src="" alt="รูปภาพขยายใหญ่">
+    </div>
+  </div>
+
 <script>
+  // -------------------------------------------------------------
+  // ระบบเปิด/ปิด Image Popup (Modal)
+  // -------------------------------------------------------------
+  function openImageModal(imgSrc) {
+    const modal = document.getElementById('imageModal');
+    const modalImg = document.getElementById('modalImg');
+    modalImg.src = imgSrc;
+    modal.classList.add('show');
+    document.body.style.overflow = 'hidden'; // ป้องกันการสกรูลพื้นหลัง
+  }
+
+  function closeImageModal() {
+    const modal = document.getElementById('imageModal');
+    modal.classList.remove('show');
+    document.body.style.overflow = 'auto';
+  }
+
+  // ปิด Modal เมื่อกดปุ่ม ESC
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeImageModal();
+  });
+
+  // -------------------------------------------------------------
+  // ระบบ Carousel Dots Indicator
+  // -------------------------------------------------------------
+  const carousel = document.getElementById('newsCarousel');
+  const dotsContainer = document.getElementById('carouselDots');
+
+  if (carousel && dotsContainer) {
+    const dots = dotsContainer.querySelectorAll('.dot');
+    
+    carousel.addEventListener('scroll', () => {
+      const card = carousel.querySelector('.news-card');
+      if (!card) return;
+      
+      const cardWidth = card.offsetWidth + 16; // ความกว้างการ์ด + gap
+      const scrollIndex = Math.round(carousel.scrollLeft / cardWidth);
+
+      dots.forEach((dot, idx) => {
+        if (idx === scrollIndex) {
+          dot.classList.add('active');
+        } else {
+          dot.classList.remove('active');
+        }
+      });
+    });
+  }
+
+  // -------------------------------------------------------------
+  // ระบบ Web Push & Loader
+  // -------------------------------------------------------------
   function urlBase64ToUint8Array(base64String) {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
     const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
