@@ -79,22 +79,23 @@ try {
     // 3. ตรวจสอบว่า "โหวตประสงค์กลับบ้าน" หรือยังในสัปดาห์นี้
     $stmt_vote = $conn->prepare("
         SELECT COUNT(*) as vote_count 
-        FROM votes 
-        WHERE student_code = ? 
-          AND YEARWEEK(vote_date, 1) = YEARWEEK(CURDATE(), 1)
+        FROM weekly_votes 
+        WHERE TRIM(student_code) = TRIM(?) 
+          AND YEARWEEK(COALESCE(vote_date, DATE(created_at)), 1) = YEARWEEK(CURDATE(), 1)
     ");
     if ($stmt_vote) {
         $stmt_vote->bind_param("s", $studentCode);
         $stmt_vote->execute();
         $res_vote = $stmt_vote->get_result();
         if ($row_vote = $res_vote->fetch_assoc()) {
-            if ($row_vote['vote_count'] == 0) {
+            if ((int)$row_vote['vote_count'] === 0) {
                 $has_voted = false;
+            } else {
+                $has_voted = true;
             }
         }
         $stmt_vote->close();
     }
-
   
    // ดึงวันที่ปัจจุบันของไทย
 $today_date = date('Y-m-d');
