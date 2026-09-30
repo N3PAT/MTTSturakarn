@@ -93,51 +93,48 @@ try {
         $stmt_vote->close();
     }
 
-   // 4. ตรวจสอบข้อมูลบัตรวินัยประจำวันนี้
-$today_discipline = null;
-$today_disc_count = 0;
-
-$stmt_disc = $conn->prepare("
-    SELECT card_bed, card_shoe, card_cabinet, total_cards, status_color 
-    FROM discipline_cards 
-    WHERE student_code = ? AND check_date = CURDATE() 
-    ORDER BY id DESC LIMIT 1
-");
-if ($stmt_disc) {
-    $stmt_disc->bind_param("s", $studentCode);
-    $stmt_disc->execute();
-    $res_disc = $stmt_disc->get_result();
-    if ($row_disc = $res_disc->fetch_assoc()) {
-        $today_discipline = $row_disc;
-        
-        // คำนวณจำนวนบัตรวินัยวันนี้
-        $bed  = (int)($today_discipline['card_bed'] ?? 0);
-        $shoe = (int)($today_discipline['card_shoe'] ?? 0);
-        $cab  = (int)($today_discipline['card_cabinet'] ?? 0);
-        $db_tot = (int)($today_discipline['total_cards'] ?? 0);
-        
-        $today_disc_count = max($db_tot, ($bed + $shoe + $cab));
+    // 4. ตรวจสอบข้อมูลบัตรวินัยประจำวันนี้
+    $stmt_disc = $conn->prepare("
+        SELECT card_bed, card_shoe, card_cabinet, total_cards, status_color 
+        FROM discipline_cards 
+        WHERE student_code = ? AND DATE(check_date) = CURDATE() 
+        ORDER BY id DESC LIMIT 1
+    ");
+    if ($stmt_disc) {
+        $stmt_disc->bind_param("s", $studentCode);
+        $stmt_disc->execute();
+        $res_disc = $stmt_disc->get_result();
+        if ($row_disc = $res_disc->fetch_assoc()) {
+            $today_discipline = $row_disc;
+            
+            // คำนวณจำนวนบัตรวินัยวันนี้
+            $bed  = (int)($today_discipline['card_bed'] ?? 0);
+            $shoe = (int)($today_discipline['card_shoe'] ?? 0);
+            $cab  = (int)($today_discipline['card_cabinet'] ?? 0);
+            $db_tot = (int)($today_discipline['total_cards'] ?? 0);
+            
+            $today_disc_count = max($db_tot, ($bed + $shoe + $cab));
+        }
+        $stmt_disc->close();
     }
-    $stmt_disc->close();
-}
 
-// 4.1 ดึงข้อมูลยอดรวมบัตรวินัยสะสมทั้งหมด
-$total_cards_history = 0;
-$stmt_total_disc = $conn->prepare("
-    SELECT COALESCE(SUM(total_cards), 0) as all_cards 
-    FROM discipline_cards 
-    WHERE student_code = ?
-");
-if ($stmt_total_disc) {
-    $stmt_total_disc->bind_param("s", $studentCode);
-    $stmt_total_disc->execute();
-    $res_total = $stmt_total_disc->get_result();
-    if ($row_total = $res_total->fetch_assoc()) {
-        $total_cards_history = (int)$row_total['all_cards'];
+    // 4.1 ดึงข้อมูลยอดรวมบัตรวินัยสะสมทั้งหมด
+    $stmt_total_disc = $conn->prepare("
+        SELECT COALESCE(SUM(total_cards), 0) as all_cards 
+        FROM discipline_cards 
+        WHERE student_code = ?
+    ");
+    if ($stmt_total_disc) {
+        $stmt_total_disc->bind_param("s", $studentCode);
+        $stmt_total_disc->execute();
+        $res_total = $stmt_total_disc->get_result();
+        if ($row_total = $res_total->fetch_assoc()) {
+            $total_cards_history = (int)$row_total['all_cards'];
+        }
+        $stmt_total_disc->close();
     }
-    $stmt_total_disc->close();
-}
-    // 5. ดึงข้อมูลข่าวสารประกาศ
+
+    // 5. ดึงข้อมูลข่าวสารประกาศ (เปลี่ยนจาก fetch_all เป็น while loop เพื่อป้องกัน Error)
     $sql = "SELECT id, title, content, attachment, created_at 
             FROM announcements 
             WHERE status = 'active' 
@@ -148,7 +145,9 @@ if ($stmt_total_disc) {
     if ($stmt) {
         $stmt->execute();
         $result = $stmt->get_result();
-        $announcements = $result->fetch_all(MYSQLI_ASSOC);
+        while ($row = $result->fetch_assoc()) {
+            $announcements[] = $row;
+        }
         $stmt->close();
     }
 
@@ -624,7 +623,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
 
   <?php if ($show_loading): ?>
   <div id="page-loader">
-    <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg?utm_source=th.wikipedia.org&utm_campaign=index&utm_content=thumbnail_unscaled" alt="Loading Logo" class="loader-logo">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg" alt="Loading Logo" class="loader-logo">
     <div class="loader-spinner"></div>
     <div class="loader-text">กำลังโหลดข้อมูล...</div>
   </div>
@@ -634,7 +633,7 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
     
     <div class="top-header fade-in-up delay-1">
       <div class="header-left">
-        <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg?utm_source=th.wikipedia.org&utm_campaign=index&utm_content=thumbnail_unscaled" alt="Logo" class="school-logo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg" alt="Logo" class="school-logo">
         <div class="school-name">
           <h1>ระบบบริการสารสนเทศ กองพันนักเรียนที่ 1</h1>
           <p>โรงเรียนช่างฝีมือทหาร</p>
@@ -661,68 +660,66 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
       <p><?= htmlspecialchars($student_code_display) ?></p>
     </div>
 
-    <!-- ส่วนแสดงการแจ้งเตือน (บัตรวินัย + เวร + สถานะการโหวต) -->
     <div class="section-title fade-in-up delay-3">
       <div class="section-pill"></div>
       <h3>บัตรวินัย</h3>
     </div>
 
     <div class="duty-alert-container fade-in-up delay-3">
-
       <!-- 1. การ์ดแสดงสถานะบัตรวินัยประจำวันนี้ -->
-<?php if ($today_disc_count > 0): ?>
-  <?php 
-    $tot = $today_disc_count;
-    $color = strtolower(trim($today_discipline['status_color'] ?? ''));
+      <?php if ($today_disc_count > 0): ?>
+        <?php 
+          $tot = $today_disc_count;
+          $color = strtolower(trim($today_discipline['status_color'] ?? ''));
 
-    $items = [];
-    if (!empty($today_discipline['card_bed']))     $items[] = "เตียง (" . (int)$today_discipline['card_bed'] . ")";
-    if (!empty($today_discipline['card_cabinet'])) $items[] = "ตู้ (" . (int)$today_discipline['card_cabinet'] . ")";
-    if (!empty($today_discipline['card_shoe']))    $items[] = "รองเท้า (" . (int)$today_discipline['card_shoe'] . ")";
-    
-    $items_str = !empty($items) ? implode(", ", $items) : "โดนตัดบัตรวินัยประจำวันนี้";
-  ?>
+          $items = [];
+          if (!empty($today_discipline['card_bed']))     $items[] = "เตียง (" . (int)$today_discipline['card_bed'] . ")";
+          if (!empty($today_discipline['card_cabinet'])) $items[] = "ตู้ (" . (int)$today_discipline['card_cabinet'] . ")";
+          if (!empty($today_discipline['card_shoe']))    $items[] = "รองเท้า (" . (int)$today_discipline['card_shoe'] . ")";
+          
+          $items_str = !empty($items) ? implode(", ", $items) : "โดนตัดบัตรวินัยประจำวันนี้";
+        ?>
 
-  <?php if ($tot >= 3 || $color === 'red'): ?>
-    <div class="duty-alert-card urgent">
-      <div class="alert-icon"><i class="fas fa-id-card-alt"></i></div>
-      <div class="alert-info">
-        <h4>วันนี้สถานะบัตร: แดง (โดน <?= $tot ?> ใบ)</h4>
-        <p>รายการ: <?= htmlspecialchars($items_str) ?></p>
-      </div>
-      <a href="discipline_history.php" class="btn-action-alert">ดูรายละเอียด</a>
-    </div>
+        <?php if ($tot >= 3 || $color === 'red'): ?>
+          <div class="duty-alert-card urgent">
+            <div class="alert-icon"><i class="fas fa-id-card-alt"></i></div>
+            <div class="alert-info">
+              <h4>วันนี้สถานะบัตร: แดง (โดน <?= $tot ?> ใบ)</h4>
+              <p>รายการ: <?= htmlspecialchars($items_str) ?></p>
+            </div>
+            <a href="discipline_history.php" class="btn-action-alert">ดูรายละเอียด</a>
+          </div>
 
-  <?php elseif ($tot == 2 || $color === 'yellow'): ?>
-    <div class="duty-alert-card warning">
-      <div class="alert-icon"><i class="fas fa-id-card-alt"></i></div>
-      <div class="alert-info">
-        <h4>วันนี้สถานะบัตร: เหลือง (โดน <?= $tot ?> ใบ)</h4>
-        <p>รายการ: <?= htmlspecialchars($items_str) ?></p>
-      </div>
-      <a href="discipline_history.php" class="btn-action-warning">ดูรายละเอียด</a>
-    </div>
+        <?php elseif ($tot == 2 || $color === 'yellow'): ?>
+          <div class="duty-alert-card warning">
+            <div class="alert-icon"><i class="fas fa-id-card-alt"></i></div>
+            <div class="alert-info">
+              <h4>วันนี้สถานะบัตร: เหลือง (โดน <?= $tot ?> ใบ)</h4>
+              <p>รายการ: <?= htmlspecialchars($items_str) ?></p>
+            </div>
+            <a href="discipline_history.php" class="btn-action-warning">ดูรายละเอียด</a>
+          </div>
 
-  <?php else: ?>
-    <div class="duty-alert-card warning" style="background-color: #fff3cd; color: #856404; border-color: #ffeeba;">
-      <div class="alert-icon"><i class="fas fa-exclamation-triangle"></i></div>
-      <div class="alert-info">
-        <h4>วันนี้สถานะบัตร: เตือน (โดน <?= $tot ?> ใบ)</h4>
-        <p>รายการ: <?= htmlspecialchars($items_str) ?></p>
-      </div>
-      <a href="discipline_history.php" class="btn-action-warning">ดูรายละเอียด</a>
-    </div>
-  <?php endif; ?>
+        <?php else: ?>
+          <div class="duty-alert-card warning" style="background-color: #fff3cd; color: #856404; border-color: #ffeeba;">
+            <div class="alert-icon"><i class="fas fa-exclamation-triangle"></i></div>
+            <div class="alert-info">
+              <h4>วันนี้สถานะบัตร: เตือน (โดน <?= $tot ?> ใบ)</h4>
+              <p>รายการ: <?= htmlspecialchars($items_str) ?></p>
+            </div>
+            <a href="discipline_history.php" class="btn-action-warning">ดูรายละเอียด</a>
+          </div>
+        <?php endif; ?>
 
-<?php else: ?>
-  <div class="duty-alert-card success">
-    <div class="alert-icon"><i class="fas fa-shield-alt"></i></div>
-    <div class="alert-info">
-      <h4>สถานะบัตรวินัยวันนี้: ปกติ</h4>
-      <p>ยังไม่มีรายการโดนตัดบัตรวินัยประจำวันนี้</p>
-    </div>
-  </div>
-<?php endif; ?>
+      <?php else: ?>
+        <div class="duty-alert-card success">
+          <div class="alert-icon"><i class="fas fa-shield-alt"></i></div>
+          <div class="alert-info">
+            <h4>สถานะบัตรวินัยวันนี้: ปกติ</h4>
+            <p>ยังไม่มีรายการโดนตัดบัตรวินัยประจำวันนี้</p>
+          </div>
+        </div>
+      <?php endif; ?>
 
       <!-- 2. แจ้งเตือนโหวต -->
       <?php if (!$has_voted): ?>
@@ -765,22 +762,18 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
         <div class="icon-box bg-purple"><i class="fas fa-user-clock"></i></div>
         <span class="menu-text">เวรของฉัน</span>
       </a>
-
       <a href="fill.php" class="menu-item">
         <div class="icon-box bg-orange"><i class="fas fa-vote-yea"></i></div>
         <span class="menu-text">โหวตกลับบ้าน</span>
       </a>
-
       <a href="reqdoc.php" class="menu-item">
         <div class="icon-box bg-blue"><i class="fas fa-file-alt"></i></div>
         <span class="menu-text">คำร้องขอเอกสาร</span>
       </a>
-      
       <a href="duty_substitutions.php" class="menu-item">
         <div class="icon-box bg-blue"><i class="fas fa-address-book"></i></div>
         <span class="menu-text">เปลี่ยนเวร</span>
       </a>
-
       <a href="discipline_history.php" class="menu-item">
         <div class="icon-box bg-red"><i class="fas fa-id-card"></i></div>
         <span class="menu-text">ประวัติบัตรวินัย</span>
@@ -793,7 +786,8 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
           <?php foreach ($announcements as $news): ?>
             <?php 
               $attachment_path = $news['attachment'] ?? '';
-              if (!empty($attachment_path) && !preg_match('/^https?:\/\//i', $attachment_path) && !str_starts_with($attachment_path, 'uploads/')) {
+              // แก้บัคคำสั่ง str_starts_with สำหรับให้รองรับ PHP ทุกเวอร์ชัน
+              if (!empty($attachment_path) && !preg_match('/^https?:\/\//i', $attachment_path) && strpos($attachment_path, 'uploads/') !== 0) {
                   $attachment_path = 'uploads/news/' . $attachment_path;
               }
               
@@ -811,19 +805,16 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
                 
                 <?php if (!empty($news['attachment'])): ?>
                   <div class="announcement-attachment" style="margin-top: 10px;">
-                    <?php 
-  // สร้างตัวแปร version เพื่อไม่ให้ cache รูปภาพ/ไฟล์
-  $cache_buster = "?v=" . time(); 
-?>
-<?php if ($is_image): ?>
-  <a href="<?= htmlspecialchars($attachment_path) . $cache_buster ?>" target="_blank">
-    <img src="<?= htmlspecialchars($attachment_path) . $cache_buster ?>" alt="ภาพแนบประกาศ" style="max-width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px; margin-top: 5px; border: 1px solid #e2e8f0; display: block;">
-  </a>
-<?php else: ?>
-  <a href="<?= htmlspecialchars($attachment_path) . $cache_buster ?>" target="_blank" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #f1f5f9; color: #2563eb; border-radius: 6px; font-size: 0.8rem; text-decoration: none; font-weight: 500;">
-    <i class="fas fa-paperclip"></i> ดูไฟล์แนบ
-  </a>
-<?php endif; ?>
+                    <?php $cache_buster = "?v=" . time(); ?>
+                    <?php if ($is_image): ?>
+                      <a href="<?= htmlspecialchars($attachment_path) . $cache_buster ?>" target="_blank">
+                        <img src="<?= htmlspecialchars($attachment_path) . $cache_buster ?>" alt="ภาพแนบประกาศ" style="max-width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px; margin-top: 5px; border: 1px solid #e2e8f0; display: block;">
+                      </a>
+                    <?php else: ?>
+                      <a href="<?= htmlspecialchars($attachment_path) . $cache_buster ?>" target="_blank" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #f1f5f9; color: #2563eb; border-radius: 6px; font-size: 0.8rem; text-decoration: none; font-weight: 500;">
+                        <i class="fas fa-paperclip"></i> ดูไฟล์แนบ
+                      </a>
+                    <?php endif; ?>
                   </div>
                 <?php endif; ?>
                 
@@ -848,12 +839,10 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
         <i class="fas fa-home"></i>
         <span>หน้าหลัก</span>
       </a>
-      
       <a href="duty.php" class="nav-link">
         <i class="fas fa-calendar-alt"></i>
         <span>เวรของฉัน</span>
       </a>
-
       <a href="logout.php" class="nav-link">
         <i class="far fa-user"></i>
         <span>ออกจากระบบ</span>
@@ -924,7 +913,6 @@ $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipl
               console.error('PHP ตอบกลับมาผิดปกติ:', text);
               alert('บันทึกไม่สำเร็จ: PHP มี Error (ดูรายละเอียดใน Console)');
           }
-
         } else if (permission === 'denied') {
           alert('คุณได้ปฏิเสธการแจ้งเตือน หากต้องการใช้งานโปรดเปิดสิทธิ์ในการตั้งค่าของเบราว์เซอร์');
         }
