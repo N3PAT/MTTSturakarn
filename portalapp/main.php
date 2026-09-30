@@ -411,9 +411,6 @@ try {
       margin: 0;
     }
 
-    /* =========================================================
-       ✨ STYLE สำหรับ NEWS CAROUSEL WIDGET & DOTS
-       ========================================================= */
     .news-carousel {
       display: flex;
       overflow-x: auto;
@@ -605,7 +602,6 @@ try {
       opacity: 0.6;
     }
 
-    /* จุดบอกตำแหน่งสไลด์ (Carousel Dots) */
     .carousel-dots {
       display: flex;
       justify-content: center;
@@ -657,9 +653,6 @@ try {
       font-weight: 500;
     }
 
-    /* =========================================================
-       ✨ STYLE สำหรับ IMAGE POPUP / MODAL
-       ========================================================= */
     .image-modal {
       display: none;
       position: fixed;
@@ -725,7 +718,6 @@ try {
       backdrop-filter: blur(4px);
     }
 
-    /* Duty Alert Cards */
     .duty-alert-container {
       margin: 0 20px 20px;
       display: flex;
@@ -1040,9 +1032,7 @@ try {
       </a>
     </div>
 
-    <!-- =========================================================
-       ✨ ส่วนแสดงข่าวสาร / ประกาศ (CAROUSEL WIDGET WITH POPUP)
-       ========================================================= -->
+    <!-- ส่วนแสดงข่าวสาร / ประกาศ (CAROUSEL WIDGET WITH POPUP) -->
     <div class="section-title fade-in-up delay-4">
       <div class="section-pill"></div>
       <h3>ข่าวประชาสัมพันธ์</h3>
@@ -1066,7 +1056,6 @@ try {
 
             <div class="news-card">
               <?php if (!empty($news['attachment']) && $is_image): ?>
-                <!-- เมื่อคลิกจะเรียก openImageModal เพื่อเปิด Popup -->
                 <div class="news-media" onclick="openImageModal('<?= $full_img_url ?>')">
                   <img src="<?= $full_img_url ?>" alt="ข่าวสาร" loading="lazy">
                   <div class="news-media-overlay">
@@ -1100,186 +1089,155 @@ try {
               </div>
             </div>
           <?php endforeach; ?>
-
         <?php else: ?>
           <div class="empty-news-card">
-            <div class="empty-news-icon"><i class="far fa-newspaper"></i></div>
-            <p>ไม่มีประกาศข่าวสารในขณะนี้</p>
+            <div class="empty-news-icon"><i class="fas fa-newspaper"></i></div>
+            <p>ยังไม่มีข่าวประชาสัมพันธ์ในขณะนี้</p>
           </div>
         <?php endif; ?>
       </div>
-
-      <!-- จุดบอกตำแหน่งสไลด์ Carousel -->
-      <?php if (!empty($announcements) && count($announcements) > 1): ?>
-        <div class="carousel-dots" id="carouselDots">
-          <?php foreach ($announcements as $i => $news): ?>
-            <span class="dot <?= $i === 0 ? 'active' : '' ?>"></span>
-          <?php endforeach; ?>
-        </div>
-      <?php endif; ?>
-    </div>
-      
-    <div class="bottom-nav">
-      <a href="main.php" class="nav-link active">
-        <i class="fas fa-home"></i>
-        <span>หน้าหลัก</span>
-      </a>
-      <a href="duty.php" class="nav-link">
-        <i class="fas fa-calendar-alt"></i>
-        <span>เวรของฉัน</span>
-      </a>
-      <a href="logout.php" class="nav-link">
-        <i class="far fa-user"></i>
-        <span>ออกจากระบบ</span>
-      </a>
+      <div class="carousel-dots" id="carouselDots"></div>
     </div>
 
   </div>
 
-  <!-- =========================================================
-     ✨ IMAGE MODAL POPUP
-     ========================================================= -->
+  <!-- Modal สำหรับขยายรูปภาพ -->
   <div id="imageModal" class="image-modal" onclick="closeImageModal()">
     <div class="modal-body-container" onclick="event.stopPropagation()">
-      <div class="modal-close-btn" onclick="closeImageModal()"><i class="fas fa-times"></i></div>
-      <img id="modalImg" class="modal-content-img" src="" alt="รูปภาพขยายใหญ่">
+      <button class="modal-close-btn" onclick="closeImageModal()">&times;</button>
+      <img id="modalImage" class="modal-content-img" src="" alt="ขยายรูปภาพ">
     </div>
   </div>
 
-<script>
-  // -------------------------------------------------------------
-  // ระบบเปิด/ปิด Image Popup (Modal)
-  // -------------------------------------------------------------
-  function openImageModal(imgSrc) {
-    const modal = document.getElementById('imageModal');
-    const modalImg = document.getElementById('modalImg');
-    modalImg.src = imgSrc;
-    modal.classList.add('show');
-    document.body.style.overflow = 'hidden'; // ป้องกันการสกรูลพื้นหลัง
-  }
+  <!-- เมนูด้านล่าง Bottom Navigation -->
+  <div class="bottom-nav">
+    <a href="main.php" class="nav-link active">
+      <i class="fas fa-home"></i>
+      <span>หน้าหลัก</span>
+    </a>
+    <a href="duty.php" class="nav-link">
+      <i class="fas fa-calendar-alt"></i>
+      <span>ตารางเวร</span>
+    </a>
+    <a href="profile.php" class="nav-link">
+      <i class="fas fa-user"></i>
+      <span>โปรไฟล์</span>
+    </a>
+  </div>
 
-  function closeImageModal() {
-    const modal = document.getElementById('imageModal');
-    modal.classList.remove('show');
-    document.body.style.overflow = 'auto';
-  }
-
-  // ปิด Modal เมื่อกดปุ่ม ESC
-  document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') closeImageModal();
-  });
-
-  // -------------------------------------------------------------
-  // ระบบ Carousel Dots Indicator
-  // -------------------------------------------------------------
-  const carousel = document.getElementById('newsCarousel');
-  const dotsContainer = document.getElementById('carouselDots');
-
-  if (carousel && dotsContainer) {
-    const dots = dotsContainer.querySelectorAll('.dot');
-    
-    carousel.addEventListener('scroll', () => {
-      const card = carousel.querySelector('.news-card');
-      if (!card) return;
-      
-      const cardWidth = card.offsetWidth + 16; // ความกว้างการ์ด + gap
-      const scrollIndex = Math.round(carousel.scrollLeft / cardWidth);
-
-      dots.forEach((dot, idx) => {
-        if (idx === scrollIndex) {
-          dot.classList.add('active');
-        } else {
-          dot.classList.remove('active');
-        }
-      });
+  <script>
+    // 1. ซ่อน Page Loader เมื่อโหลดหน้าเว็บเสร็จสมบูรณ์
+    window.addEventListener('load', () => {
+      const loader = document.getElementById('page-loader');
+      if (loader) {
+        setTimeout(() => {
+          loader.classList.add('hidden');
+        }, 300);
+      }
     });
-  }
 
-  // -------------------------------------------------------------
-  // ระบบ Web Push & Loader
-  // -------------------------------------------------------------
-  function urlBase64ToUint8Array(base64String) {
-    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
-    const rawData = window.atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
-    for (let i = 0; i < rawData.length; ++i) {
-      outputArray[i] = rawData.charCodeAt(i);
-    }
-    return outputArray;
-  }
-
-  if ('serviceWorker' in navigator && 'PushManager' in window) {
-    navigator.serviceWorker.register('sw.js')
-      .then(reg => console.log('SW Registered'))
-      .catch(err => console.error('SW Error:', err));
-  }
-
-  document.getElementById('notiBellBtn').addEventListener('click', async function(e) {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      return; 
-    }
-
-    if (Notification.permission === 'default') {
-      e.preventDefault();
-      
-      try {
-        const permission = await Notification.requestPermission();
-        if (permission === 'granted') {
-          const registration = await navigator.serviceWorker.ready;
-          const publicVapidKey = 'BDcVYH88lfTwHxM-yyzWmQzIc6_orJpWxXr156VsSppe-srH4z1gYGz0W6z9I67JHkBkcnnbrwqoLuBZLAzC7HA'; 
-          
-          const subscription = await registration.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
-          });
-
-          const subData = subscription.toJSON();
-          const formData = new FormData();
-          formData.append('endpoint', subData.endpoint);
-          formData.append('p256dh', subData.keys.p256dh);
-          formData.append('auth', subData.keys.auth);
-
-          const res = await fetch('nofitication.php', {
-            method: 'POST',
-            body: formData,
-            credentials: 'same-origin'
-          });
-
-          const text = await res.text();
-          
-          try {
-              const data = JSON.parse(text);
-              if (data.success) {
-                window.location.href = this.href;
-              } else {
-                alert('เซิร์ฟเวอร์แจ้งข้อผิดพลาด: ' + (data.error || 'ไม่ทราบสาเหตุ'));
-              }
-          } catch (parseError) {
-              console.error('PHP ตอบกลับมาผิดปกติ:', text);
-              alert('บันทึกไม่สำเร็จ: PHP มี Error (ดูรายละเอียดใน Console)');
-          }
-        } else if (permission === 'denied') {
-          alert('คุณได้ปฏิเสธการแจ้งเตือน หากต้องการใช้งานโปรดเปิดสิทธิ์ในการตั้งค่าของเบราว์เซอร์');
-        }
-      } catch (err) {
-        alert('เกิดข้อผิดพลาดของระบบ: ' + err.message);
+    // 2. ฟังก์ชัน Modal สำหรับดูรูปภาพข่าวแบบเต็มหน้าจอ
+    function openImageModal(src) {
+      const modal = document.getElementById('imageModal');
+      const modalImg = document.getElementById('modalImage');
+      if (modal && modalImg) {
+        modalImg.src = src;
+        modal.classList.add('show');
       }
     }
-  });
 
-  document.addEventListener("DOMContentLoaded", function() {
-    const loader = document.getElementById('page-loader');
-    if (loader) {
-      setTimeout(function() {
-        loader.classList.add('hidden');
-        setTimeout(function() {
-          loader.remove();
-        }, 500);
-      }, 1200);
+    function closeImageModal() {
+      const modal = document.getElementById('imageModal');
+      if (modal) {
+        modal.classList.remove('show');
+      }
     }
-  });
-</script>
-   
+
+    // 3. จัดการ Carousel Dots บอกตำแหน่งข่าว
+    const carousel = document.getElementById('newsCarousel');
+    const dotsContainer = document.getElementById('carouselDots');
+    if (carousel && dotsContainer) {
+      const cards = carousel.querySelectorAll('.news-card');
+      if (cards.length > 1) {
+        cards.forEach((_, idx) => {
+          const dot = document.createElement('div');
+          dot.classList.add('dot');
+          if (idx === 0) dot.classList.add('active');
+          dotsContainer.appendChild(dot);
+        });
+
+        carousel.addEventListener('scroll', () => {
+          const cardWidth = cards[0].offsetWidth + 16;
+          const activeIndex = Math.round(carousel.scrollLeft / cardWidth);
+          const dots = dotsContainer.querySelectorAll('.dot');
+          dots.forEach((dot, idx) => {
+            dot.classList.toggle('active', idx === activeIndex);
+          });
+        });
+      }
+    }
+
+    // 4. สคริปต์บันทึก Push Notification อัตโนมัติเมื่อเข้าหน้า main.php
+    const applicationServerPublicKey = 'BDcVYH88lfTwHxM-yyzWmQzIc6_orJpWxXr156VsSppe-srH4z1gYGz0W6z9I67JHkBkcnnbrwqoLuBZLAzC7HA';
+
+    function urlB64ToUint8Array(base64String) {
+      const padding = '='.repeat((4 - base64String.length % 4) % 4);
+      const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const rawData = window.atob(base64);
+      const outputArray = new Uint8Array(rawData.length);
+      for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+      }
+      return outputArray;
+    }
+
+    function sendSubscriptionToServer(subscription) {
+      fetch('save_subscription.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(subscription)
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+        return response.text();
+      })
+      .then(data => {
+        console.log('บันทึกการสมัครรับแจ้งเตือนไปยังเซิร์ฟเวอร์เรียบร้อย:', data);
+      })
+      .catch(error => {
+        console.error('เกิดข้อผิดพลาดในการส่งข้อมูลไปเซิร์ฟเวอร์:', error);
+      });
+    }
+
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js')
+          .then(swReg => {
+            console.log('ลงทะเบียน ServiceWorker สำเร็จ');
+            
+            return swReg.pushManager.getSubscription().then(function(subscription) {
+              if (subscription === null) {
+                return swReg.pushManager.subscribe({
+                  userVisibleOnly: true,
+                  applicationServerKey: urlB64ToUint8Array(applicationServerPublicKey)
+                })
+                .then(function(newSubscription) {
+                  console.log('ลงทะเบียนผู้รับข่าวสารใหม่สำเร็จ');
+                  sendSubscriptionToServer(newSubscription);
+                });
+              } else {
+                console.log('ผู้ใช้นี้เคยลงทะเบียนรับการแจ้งเตือนไว้แล้ว อัปเดตข้อมูลไปยังเซิร์ฟเวอร์');
+                sendSubscriptionToServer(subscription);
+              }
+            });
+          })
+          .catch(error => console.error('ServiceWorker Error: ', error));
+      });
+    }
+  </script>
 </body>
 </html>
