@@ -216,7 +216,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
   </div>
 
-  <script>
+
+    
+    <script>
     // สคริปต์ฟังก์ชันแสดง/ซ่อนรหัสผ่าน
     const togglePasswordBtn = document.getElementById('togglePasswordBtn');
     const passwordInput = document.getElementById('password');
@@ -250,19 +252,84 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     passwordInput.addEventListener('input', checkInputs);
     window.addEventListener('DOMContentLoaded', checkInputs);
 
-    if ('serviceWorker' in navigator) {
+    // VAPID Public Key (นำมาจากฝั่ง Server ของคุณที่ใช้สร้าง Web Push)
+    const applicationServerPublicKey = 'BDcVYH88lfTwHxM-yyzWmQzIc6_orJpWxXr156VsSppe-srH4z1gYGz0W6z9I67JHkBkcnnbrwqoLuBZLAzC7HA';
+
+    // ฟังก์ชันแปลง VAPID Key เป็น Uint8Array
+    function urlB64ToUint8Array(base64String) {
+      const padding = '='.repeat((4 - base64String.length % 4) % 4);
+      const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+      const rawData = window.atob(base64);
+      const outputArray = new Uint8Array(rawData.length);
+      for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+      }
+      return outputArray;
+    }
+
+    // ฟังก์ชันสำหรับส่งข้อมูล Subscription ไปยัง save_subscription.php
+    function sendSubscriptionToServer(subscription) {
+      fetch('save_subscription.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(subscription)
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+        return response.text(); // หรือ response.json() หาก API ส่งกลับมาเป็น JSON
+      })
+      .then(data => {
+        console.log('Subscription saved on server successfully:', data);
+      })
+      .catch(error => {
+        console.error('Error sending subscription to server:', error);
+      });
+    }
+
+    // ลงทะเบียน Service Worker และขอสิทธิ์ Push Notification
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('sw.js')
+          .then(swReg => {
+            console.log('ServiceWorker registration successful');
+            
+            // ขอสิทธิ์และ Subscribe Push Notification
+            swReg.pushManager.getSubscription()
+              .then(function(subscription) {
+                if (subscription === null) {
+                  // ยังไม่ได้ Subscribe, ทำการ Subscribe ใหม่
+                  swReg.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlB64ToUint8Array(applicationServerPublicKey)
+                  })
+                  .then(function(newSubscription) {
+                    console.log('User is subscribed.');
+                    sendSubscriptionToServer(newSubscription);
+                  })
+                  .catch(function(err) {
+                    console.log('Failed to subscribe the user: ', err);
+                  });
+                } else {
+                  // เคย Subscribe ไว้แล้ว ส่งข้อมูลอัปเดตไปที่ Server ได้เลย
+                  console.log('User is already subscribed.');
+                  sendSubscriptionToServer(subscription);
+                }
+              });
+          })
           .catch(error => console.log('ServiceWorker registration failed: ', error));
       });
     }
 
+    // ส่วนของการจัดการ PWA Banner
     let deferredPrompt;
     const pwaBanner = document.getElementById('pwaBanner');
     const btnInstallPwa = document.getElementById('btnInstallPwa');
     const btnClosePwa = document.getElementById('btnClosePwa');
 
-    // ตรวจสอบสถานะการเปิดแอป
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
     const hasInstalledBefore = localStorage.getItem('pwaInstalled') === 'true';
 
@@ -270,7 +337,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       e.preventDefault();
       deferredPrompt = e;
       
-      // ถ้าเปิดในเบราว์เซอร์ และยังไม่เคยติดตั้งแอป ให้แสดง Banner
       if (!isStandalone && !hasInstalledBefore && !sessionStorage.getItem('pwaBannerDismissed')) {
         setTimeout(() => pwaBanner.classList.add('show'), 1500); 
       }
@@ -282,7 +348,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         deferredPrompt.prompt();
         const { outcome } = await deferredPrompt.userChoice;
         if (outcome === 'accepted') {
-          // บันทึกสถานะว่าผู้ใช้อนุมัติติดตั้งแอปแล้ว
           localStorage.setItem('pwaInstalled', 'true');
         }
         deferredPrompt = null;
@@ -297,7 +362,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     window.addEventListener('appinstalled', () => {
       console.log('PWA was installed successfully');
       pwaBanner.classList.remove('show');
-      localStorage.setItem('pwaInstalled', 'true'); // บันทึกถาวรว่ามีแอปในเครื่องแล้ว
+      localStorage.setItem('pwaInstalled', 'true');
     });
   </script>
 </body>
