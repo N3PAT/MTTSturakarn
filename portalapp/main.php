@@ -95,67 +95,71 @@ try {
         $stmt_vote->close();
     }
 
-    // 4. ตรวจสอบข้อมูลบัตรวินัยประจำวันนี้
-    $stmt_disc = $conn->prepare("
-        SELECT card_bed, card_shoe, card_cabinet, total_cards, status_color 
-        FROM discipline_cards 
-        WHERE student_code = ? AND DATE(check_date) = CURDATE() 
-        ORDER BY id DESC LIMIT 1
-    ");
-    if ($stmt_disc) {
-        $stmt_disc->bind_param("s", $studentCode);
-        $stmt_disc->execute();
-        $res_disc = $stmt_disc->get_result();
-        if ($row_disc = $res_disc->fetch_assoc()) {
-            $today_discipline = $row_disc;
-            
-            // คำนวณจำนวนบัตรวินัยวันนี้
-            $bed  = (int)($today_discipline['card_bed'] ?? 0);
-            $shoe = (int)($today_discipline['card_shoe'] ?? 0);
-            $cab  = (int)($today_discipline['card_cabinet'] ?? 0);
-            $db_tot = (int)($today_discipline['total_cards'] ?? 0);
-            
-            $today_disc_count = max($db_tot, ($bed + $shoe + $cab));
-        }
-        $stmt_disc->close();
+  
+   // ดึงวันที่ปัจจุบันของไทย
+$today_date = date('Y-m-d');
+$studentCode = trim($_SESSION['student_code']);
+
+// 4. ตรวจสอบข้อมูลบัตรวินัยประจำวันนี้
+$today_discipline = null;
+$today_disc_count = 0;
+
+$stmt_disc = $conn->prepare("
+    SELECT card_bed, card_shoe, card_cabinet, total_cards, status_color 
+    FROM discipline_cards 
+    WHERE TRIM(student_code) = TRIM(?) AND DATE(check_date) = ? 
+    ORDER BY id DESC LIMIT 1
+");
+if ($stmt_disc) {
+    $stmt_disc->bind_param("ss", $studentCode, $today_date);
+    $stmt_disc->execute();
+    $res_disc = $stmt_disc->get_result();
+    if ($row_disc = $res_disc->fetch_assoc()) {
+        $today_discipline = $row_disc;
+        
+        $bed  = (int)($today_discipline['card_bed'] ?? 0);
+        $shoe = (int)($today_discipline['card_shoe'] ?? 0);
+        $cab  = (int)($today_discipline['card_cabinet'] ?? 0);
+        $db_tot = (int)($today_discipline['total_cards'] ?? 0);
+        
+        $today_disc_count = max($db_tot, ($bed + $shoe + $cab));
     }
+    $stmt_disc->close();
+}
 
-    // 4.1 ดึงข้อมูลยอดรวมบัตรวินัยสะสมทั้งหมด
-    $stmt_total_disc = $conn->prepare("
-        SELECT COALESCE(SUM(total_cards), 0) as all_cards 
-        FROM discipline_cards 
-        WHERE student_code = ?
-    ");
-    if ($stmt_total_disc) {
-        $stmt_total_disc->bind_param("s", $studentCode);
-        $stmt_total_disc->execute();
-        $res_total = $stmt_total_disc->get_result();
-        if ($row_total = $res_total->fetch_assoc()) {
-            $total_cards_history = (int)$row_total['all_cards'];
-        }
-        $stmt_total_disc->close();
+// 4.1 ดึงข้อมูลยอดรวมบัตรวินัยสะสมทั้งหมด
+$total_cards_history = 0;
+$stmt_total_disc = $conn->prepare("
+    SELECT COALESCE(SUM(total_cards), 0) as all_cards 
+    FROM discipline_cards 
+    WHERE TRIM(student_code) = TRIM(?)
+");
+if ($stmt_total_disc) {
+    $stmt_total_disc->bind_param("s", $studentCode);
+    $stmt_total_disc->execute();
+    $res_total = $stmt_total_disc->get_result();
+    if ($row_total = $res_total->fetch_assoc()) {
+        $total_cards_history = (int)$row_total['all_cards'];
     }
+    $stmt_total_disc->close();
+}
 
-    // 5. ดึงข้อมูลข่าวสารประกาศ (เปลี่ยนจาก fetch_all เป็น while loop เพื่อป้องกัน Error)
-    $sql = "SELECT id, title, content, attachment, created_at 
-            FROM announcements 
-            WHERE status = 'active' 
-            ORDER BY created_at DESC, id DESC 
-            LIMIT 10";
+    // 5. ดึงข้อมูลข่าวสารประกาศ
+$announcements = [];
+$sql = "SELECT id, title, content, attachment, created_at 
+        FROM announcements 
+        WHERE status = 'active' OR status IS NULL OR status = ''
+        ORDER BY created_at DESC, id DESC 
+        LIMIT 10";
 
-    $stmt = $conn->prepare($sql);
-    if ($stmt) {
-        $stmt->execute();
-        $result = $stmt->get_result();
-        while ($row = $result->fetch_assoc()) {
-            $announcements[] = $row;
-        }
-        $stmt->close();
+$stmt = $conn->prepare($sql);
+if ($stmt) {
+    $stmt->execute();
+    $result = $stmt->get_result();
+    while ($row = $result->fetch_assoc()) {
+        $announcements[] = $row;
     }
-
-} catch (Exception $e) {
-    error_log("Database/System Error in main.php: " . $e->getMessage());
-    $news_error = $e->getMessage();
+    $stmt->close();
 }
 
 // จัดเตรียมตัวแปรสำหรับการแสดงผล
@@ -177,7 +181,9 @@ if (empty($profile_image) || $profile_image === "default_student.png" || $profil
 // คำนวณนับการแจ้งเตือน
 $has_discipline_alert = ($today_disc_count > 0);
 $noti_count = count($duty_notifications) + (!$has_voted ? 1 : 0) + ($has_discipline_alert ? 1 : 0);
+    var_dump($studentCode, $today_date, $today_discipline, $announcements); die();
 ?>
+    
 <!DOCTYPE html>
 <html lang="th">
 <head>
