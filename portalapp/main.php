@@ -145,11 +145,10 @@ if ($stmt_total_disc) {
     $stmt_total_disc->close();
 }
 
-    // 5. ดึงข้อมูลข่าวสารประกาศ
+    // 5. ดึงข้อมูลข่าวสารประกาศ (ลองปลดเงื่อนไข status ออกชั่วคราว)
 $announcements = [];
 $sql = "SELECT id, title, content, attachment, created_at 
         FROM announcements 
-        WHERE status = 'active' OR status IS NULL OR status = ''
         ORDER BY created_at DESC, id DESC 
         LIMIT 10";
 
