@@ -4,14 +4,8 @@ require_once 'db.php';
 
 // สมมติว่ามีระบบเช็คสิทธิ์ Admin
 if (empty($_SESSION['admin_id'])) {
-      header("Location: admin_login.php");
-      exit();
- }
-
-// สร้างโฟลเดอร์สำหรับเก็บไฟล์อัปโหลดถ้ายังไม่มี
-$upload_dir = 'uploads/announcements/';
-if (!is_dir($upload_dir)) {
-    mkdir($upload_dir, 0777, true);
+    header("Location: admin_login.php");
+    exit();
 }
 
 // -------------------------------------------------------------
@@ -21,34 +15,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $title = trim($_POST['title'] ?? '');
     $content = trim($_POST['content'] ?? '');
     $status = $_POST['status'] ?? 'active';
-    $attachment_path = null;
+    $attachment_link = trim($_POST['attachment_link'] ?? '');
+    $attachment_path = !empty($attachment_link) ? $attachment_link : null;
 
     if (!empty($title) && !empty($content)) {
         try {
-            // --- จัดการอัปโหลดไฟล์ ---
-            if (isset($_FILES['attachment']) && $_FILES['attachment']['error'] === UPLOAD_ERR_OK) {
-                $file_tmp = $_FILES['attachment']['tmp_name'];
-                $file_name = $_FILES['attachment']['name'];
-                $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
-                
-                // นามสกุลไฟล์ที่อนุญาต
-                $allowed_exts = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx'];
-                
-                if (in_array($file_ext, $allowed_exts)) {
-                    $new_filename = uniqid('news_') . '.' . $file_ext;
-                    $dest_path = $upload_dir . $new_filename;
-                    
-                    if (move_uploaded_file($file_tmp, $dest_path)) {
-                        $attachment_path = $dest_path;
-                    } else {
-                        throw new Exception("ไม่สามารถบันทึกไฟล์แนบได้");
-                    }
-                } else {
-                    throw new Exception("รองรับเฉพาะไฟล์รูปภาพ, PDF, Word และ Excel เท่านั้น");
-                }
-            }
-
-            // 1.1 บันทึกลงตาราง announcements (เพิ่ม $attachment_path)
+            // 1.1 บันทึกลงตาราง announcements (ใช้ลิงก์บันทึกลงคอลัมน์ attachment)
             $stmt = $conn->prepare("INSERT INTO announcements (title, content, status, attachment) VALUES (?, ?, ?, ?)");
             $stmt->bind_param("ssss", $title, $content, $status, $attachment_path);
             $stmt->execute();
@@ -129,18 +101,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 if (isset($_GET['delete_id'])) {
     $del_id = intval($_GET['delete_id']);
     try {
-        // ค้นหาไฟล์แนบเพื่อลบออกจากเซิร์ฟเวอร์
-        $stmt_file = $conn->prepare("SELECT attachment FROM announcements WHERE id = ?");
-        $stmt_file->bind_param("i", $del_id);
-        $stmt_file->execute();
-        $res_file = $stmt_file->get_result();
-        if ($row_file = $res_file->fetch_assoc()) {
-            if (!empty($row_file['attachment']) && file_exists($row_file['attachment'])) {
-                unlink($row_file['attachment']); // ลบไฟล์
-            }
-        }
-        $stmt_file->close();
-
         // ลบข้อมูลจาก Database
         $stmt = $conn->prepare("DELETE FROM announcements WHERE id = ?");
         $stmt->bind_param("i", $del_id);
@@ -155,7 +115,7 @@ if (isset($_GET['delete_id'])) {
 }
 
 // -------------------------------------------------------------
-// 3. ดึงข้อมูลประกาศทั้งหมดมาแสดง (เพิ่มคอลัมน์ attachment)
+// 3. ดึงข้อมูลประกาศทั้งหมดมาแสดง
 // -------------------------------------------------------------
 $announcements = [];
 try {
@@ -275,10 +235,6 @@ try {
       border-color: var(--primary);
       box-shadow: 0 0 0 3px rgba(90, 66, 160, 0.1);
     }
-    .form-control-file {
-      padding: 8px 10px;
-      background: #f8fafc;
-    }
     textarea.form-control {
       resize: vertical;
       min-height: 80px;
@@ -342,13 +298,16 @@ try {
     }
     .attachment-img {
       max-width: 100%;
+      max-height: 200px;
+      object-fit: cover;
       border-radius: 8px;
       border: 1px solid #e2e8f0;
+      display: block;
     }
     .attachment-link {
       display: inline-flex;
       align-items: center;
-      gap: 5px;
+      gap: 6px;
       padding: 8px 12px;
       background: #f8fafc;
       border: 1px solid #e2e8f0;
@@ -357,6 +316,7 @@ try {
       font-size: 0.8rem;
       font-weight: 600;
       text-decoration: none;
+      word-break: break-all;
     }
     
     .admin-news-footer {
@@ -461,14 +421,14 @@ try {
       <div class="alert alert-danger fade-in-up"><i class="fas fa-exclamation-triangle"></i> <?= htmlspecialchars($error_msg) ?></div>
     <?php endif; ?>
 
-    <!-- ฟอร์มเพิ่มประกาศใหม่ (เพิ่ม enctype="multipart/form-data") -->
+    <!-- ฟอร์มเพิ่มประกาศใหม่ -->
     <div class="section-title fade-in-up">
       <div class="section-pill"></div>
       <h3>สร้างประกาศใหม่</h3>
     </div>
 
     <div class="form-card fade-in-up">
-      <form method="POST" action="admin_announcements.php" enctype="multipart/form-data">
+      <form method="POST" action="admin_announcements.php">
         <input type="hidden" name="action" value="add">
         
         <div class="form-group">
@@ -481,10 +441,10 @@ try {
           <textarea name="content" class="form-control" placeholder="พิมพ์รายละเอียดข่าวสารที่นี่..." required></textarea>
         </div>
 
-        <!-- ช่องอัปโหลดไฟล์แนบ -->
+        <!-- ช่องวางลิงก์แนบแทนการอัปโหลดไฟล์ -->
         <div class="form-group">
-          <label class="form-label">ไฟล์แนบ / รูปภาพประกอบ (ไม่บังคับ)</label>
-          <input type="file" name="attachment" class="form-control form-control-file" accept=".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx,.xls,.xlsx">
+          <label class="form-label">ลิงก์แนบ / เอกสารประกอบ (URL) (ไม่บังคับ)</label>
+          <input type="url" name="attachment_link" class="form-control" placeholder="https://example.com/document.pdf หรือลิงก์รูปภาพ">
         </div>
 
         <div class="form-group">
@@ -524,17 +484,22 @@ try {
             <?= nl2br(htmlspecialchars($news['content'])) ?>
           </div>
 
-          <!-- แสดงผลไฟล์แนบ ถ้ามี -->
-          <?php if (!empty($news['attachment']) && file_exists($news['attachment'])): ?>
+          <!-- แสดงผลลิงก์แนบ ถ้ามี -->
+          <?php if (!empty($news['attachment'])): ?>
             <div class="attachment-preview">
               <?php 
-                $ext = strtolower(pathinfo($news['attachment'], PATHINFO_EXTENSION));
-                if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif'])): 
+                $url = $news['attachment'];
+                $path = parse_url($url, PHP_URL_PATH);
+                $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+                $is_image = in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp']);
               ?>
-                <img src="<?= $news['attachment'] ?>" class="attachment-img" alt="รูปภาพประกอบ">
+              <?php if ($is_image): ?>
+                <a href="<?= htmlspecialchars($url) ?>" target="_blank">
+                  <img src="<?= htmlspecialchars($url) ?>" class="attachment-img" alt="รูปภาพประกอบ">
+                </a>
               <?php else: ?>
-                <a href="<?= $news['attachment'] ?>" target="_blank" class="attachment-link">
-                  <i class="fas fa-paperclip"></i> ดาวน์โหลดไฟล์แนบ
+                <a href="<?= htmlspecialchars($url) ?>" target="_blank" class="attachment-link">
+                  <i class="fas fa-external-link-alt"></i> เปิดลิงก์แนบ / เอกสาร
                 </a>
               <?php endif; ?>
             </div>
@@ -570,10 +535,7 @@ try {
         <span>ประกาศ</span>
       </a>
 
-      <a href="admin_logout.php" class="nav-link">
-        <i class="fas fa-sign-out-alt"></i>
-        <span>ออก</span>
-      </a>
+      
     </div>
 
   </div>
