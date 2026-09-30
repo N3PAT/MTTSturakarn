@@ -4,11 +4,8 @@ session_start();
 
 header('Content-Type: application/json; charset=utf-8');
 
-// ปิดการแสดงผล Error ออกหน้าเว็บ แต่ยังให้ PHP แจ้ง Error ใน Log ของ Server
 error_reporting(E_ALL);
 ini_set('display_errors', 0); 
-
-// บังคับให้ MySQLi โยน Exception เมื่อคำสั่ง SQL มีปัญหา
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
 try {
@@ -23,35 +20,39 @@ try {
 
     $studentCode = $_SESSION['student_code'];
 
-    // 2. ตรวจสอบว่ามีข้อมูลส่งมาจาก POST
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['endpoint'])) {
-        
-        $endpoint = $_POST['endpoint'];
-        // Web Push ปกติต้องใช้ p256dh และ auth แต่ใส่ fallback ไว้เผื่อกรณีอื่น
-        $p256dh = $_POST['p256dh'] ?? '';
-        $auth   = $_POST['auth'] ?? '';
+    // 2. รับข้อมูล JSON ที่ส่งมาจาก Fetch API
+    $json = file_get_contents('php://input');
+    $data = json_decode($json, true);
 
-        // 3. เช็คว่ามี student_id นี้ในตารางแล้วหรือไม่
+    // 3. ตรวจสอบว่ามีข้อมูล endpoint ถูกส่งมาหรือไม่
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($data['endpoint'])) {
+        
+        $endpoint = $data['endpoint'];
+        // Object ของ Push Subscription ค่า p256dh และ auth จะซ้อนอยู่ใน 'keys'
+        $p256dh = $data['keys']['p256dh'] ?? '';
+        $auth   = $data['keys']['auth'] ?? '';
+
+        // 4. เช็คว่ามี student_id นี้ในตารางแล้วหรือไม่
         $checkStmt = $conn->prepare("SELECT id FROM push_subscriptions WHERE student_id = ? LIMIT 1");
         $checkStmt->bind_param("s", $studentCode);
         $checkStmt->execute();
         $res = $checkStmt->get_result();
 
         if ($res->num_rows > 0) {
-            // [แก้ไข] อัปเดตข้อมูล Subscription ใหม่ แทนที่จะข้ามการบันทึก
+            // อัปเดตข้อมูล Subscription เดิมให้เป็น Token ล่าสุด
             $updateStmt = $conn->prepare("UPDATE push_subscriptions SET endpoint = ?, p256dh = ?, auth = ? WHERE student_id = ?");
             $updateStmt->bind_param("ssss", $endpoint, $p256dh, $auth, $studentCode);
             $updateStmt->execute();
             $updateStmt->close();
-
+            
             $message = 'อัปเดตข้อมูลการแจ้งเตือนสำเร็จ';
         } else {
-            // 4. เพิ่มข้อมูลใหม่ลงในฐานข้อมูล
+            // เพิ่มข้อมูลใหม่ลงในฐานข้อมูล
             $insertStmt = $conn->prepare("INSERT INTO push_subscriptions (student_id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?)");
             $insertStmt->bind_param("ssss", $studentCode, $endpoint, $p256dh, $auth);
             $insertStmt->execute();
             $insertStmt->close();
-
+            
             $message = 'บันทึกการแจ้งเตือนสำเร็จ';
         }
         $checkStmt->close();
@@ -61,21 +62,15 @@ try {
 
     } else {
         if (ob_get_length()) ob_clean();
-        http_response_code(400); // Bad Request
-        echo json_encode(['success' => false, 'error' => 'ข้อมูลไม่ครบถ้วน (Missing endpoint)']);
+        http_response_code(400); // ตั้งสเตตัสเป็น 400 จะได้เห็นชัดๆ ใน Network Log
+        echo json_encode(['success' => false, 'error' => 'ข้อมูลไม่ครบถ้วน (ไม่พบ endpoint)']);
     }
 
 } catch (Throwable $e) {
-    // [แก้ไข] บันทึก Error ลง Server Log แทนการส่งให้ Client
-    error_log("Push Subscription Error: " . $e->getMessage() . " in " . $e->getFile() . " on line " . $e->getLine());
-    
+    error_log("Push Subscription Error: " . $e->getMessage());
     if (ob_get_length()) ob_clean();
-    http_response_code(500); // Internal Server Error
-    echo json_encode([
-        'success' => false,
-        'error' => 'เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล โปรดลองใหม่อีกครั้ง'
-        // ลบ getFile() และ getLine() ออกเพื่อความปลอดภัย
-    ]);
+    http_response_code(500);
+    echo json_encode(['success' => false, 'error' => 'เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล']);
 }
 
 exit();
