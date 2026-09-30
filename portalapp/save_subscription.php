@@ -7,7 +7,7 @@ session_start();
 header('Content-Type: application/json; charset=utf-8');
 
 // ปิดการแสดง Error บนหน้าเว็บ ป้องกันไม่ให้มี HTML หลุดไปปนกับ JSON
-ini_set('display_errors', 0);
+ini_set('display_errors', 1);
 error_reporting(0);
 
 // เรียกใช้การเชื่อมต่อฐานข้อมูลตัวเดียวกับระบบหลักของคุณ
