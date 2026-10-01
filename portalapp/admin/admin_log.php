@@ -11,19 +11,33 @@ if (empty($_SESSION['admin_id'])) {
 $studentCode =$_SESSION['admin_id'];
 
 // ------------------------------------------------------------------
-// ระบบควบคุมสถานะ (Toggle Settings)
+// ระบบควบคุมสถานะ (Toggle Settings) แบบปลอดภัย
 // ------------------------------------------------------------------
 if (isset($_GET['action']) &&$_GET['action'] == 'toggle' && isset($_GET['setting']) && isset($_GET['value'])) {
-    $setting_key =$_GET['setting'];
-    $new_value = intval($_GET['value']);
-    try {
-        // อัปเดตสถานะในฐานข้อมูล (ต้องมีตาราง system_settings)
-         $stmt =$conn->prepare("UPDATE system_settings SET setting_value = ? WHERE setting_key = ?");
-         $stmt->bind_param("is", $new_value,$setting_key);
-         $stmt->execute();$stmt->close();
-        header("Location: admin_log.php?msg=toggled");
-        exit();
-    } catch (Exception $e) { }
+    $setting_name =$_GET['setting'];
+    // แปลงเป็น string เพื่อรองรับ varchar
+    $new_value = (string)intval($_GET['value']); 
+
+    // ✅ Whitelist: อนุญาตให้อัปเดตเฉพาะค่าเหล่านี้เท่านั้น ป้องกันการไปแก้ setting ของระบบหลัก
+    $allowed_settings = ['vote_system', 'req_system', 'maintenance_mode'];
+    
+    if (in_array($setting_name,$allowed_settings)) {
+        try {
+            $stmt =$conn->prepare("UPDATE system_settings SET setting_value = ? WHERE setting_name = ?");
+            $stmt->bind_param("ss", $new_value,$setting_name);
+            $stmt->execute();$stmt->close();
+            
+            // กรณียังไม่มีแถวข้อมูลนี้ในตาราง ให้ Insert ใหม่
+            if ($conn->affected_rows === 0) {
+                $stmt_insert =$conn->prepare("INSERT IGNORE INTO system_settings (setting_name, setting_value) VALUES (?, ?)");
+                $stmt_insert->bind_param("ss", $setting_name,$new_value);
+                $stmt_insert->execute();$stmt_insert->close();
+            }
+
+            header("Location: admin_log.php?msg=toggled");
+            exit();
+        } catch (Exception $e) { }
+    }
 }
 
 // ------------------------------------------------------------------
@@ -140,6 +154,20 @@ try {
     }
     $stmt->close();
 } catch (Exception $e) {$logs = []; }
+
+// ------------------------------------------------------------------
+// ดึงค่าสถานะสวิตช์ปัจจุบัน
+// ------------------------------------------------------------------
+$sys_states = [
+    'vote_system' => '1',
+    'req_system' => '1',
+    'maintenance_mode' => '0'
+];
+try {
+    $stmt =$conn->query("SELECT setting_name, setting_value FROM system_settings WHERE setting_name IN ('vote_system', 'req_system', 'maintenance_mode')");
+    while ($row = $stmt->fetch_assoc()) {$sys_states[$row['setting_name']] =$row['setting_value'];
+    }
+} catch (Exception $e) { }
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -281,21 +309,22 @@ try {
       <div class="toggle-row">
         <span class="toggle-label"><i class="fas fa-vote-yea" style="color:var(--primary);"></i> ระบบโหวต (Vote)</span>
         <label class="switch">
-          <input type="checkbox" checked onchange="toggleSetting('vote_system', this.checked)">
+          <!-- ตรวจสอบค่าจาก Database ถ้าเป็น 1 ให้แสดงผลว่าเปิดสวิตช์อยู่ -->
+          <input type="checkbox" <?= $sys_states['vote_system'] == '1' ? 'checked' : '' ?> onchange="toggleSetting('vote_system', this.checked)">
           <span class="slider"></span>
         </label>
       </div>
       <div class="toggle-row">
         <span class="toggle-label"><i class="fas fa-file-alt" style="color:#f59e0b;"></i> ระบบคำร้อง (Reqdoc)</span>
         <label class="switch">
-          <input type="checkbox" checked onchange="toggleSetting('req_system', this.checked)">
+          <input type="checkbox" <?= $sys_states['req_system'] == '1' ? 'checked' : '' ?> onchange="toggleSetting('req_system', this.checked)">
           <span class="slider"></span>
         </label>
       </div>
       <div class="toggle-row">
         <span class="toggle-label"><i class="fas fa-tools" style="color:#ef4444;"></i> โหมดปรับปรุง (Maintenance)</span>
         <label class="switch">
-          <input type="checkbox" onchange="toggleSetting('maintenance_mode', this.checked)">
+          <input type="checkbox" <?= $sys_states['maintenance_mode'] == '1' ? 'checked' : '' ?> onchange="toggleSetting('maintenance_mode', this.checked)">
           <span class="slider"></span>
         </label>
       </div>
