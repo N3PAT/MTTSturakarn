@@ -18,10 +18,10 @@ if (isset($_GET['action']) &&$_GET['action'] == 'toggle' && isset($_GET['setting
     $new_value = intval($_GET['value']);
     try {
         // อัปเดตสถานะในฐานข้อมูล (ต้องมีตาราง system_settings)
-        // $stmt =$conn->prepare("UPDATE system_settings SET setting_value = ? WHERE setting_key = ?");
-        // $stmt->bind_param("is", $new_value,$setting_key);
-        // $stmt->execute();$stmt->close();
-        header("Location: admin_panel.php?msg=toggled");
+         $stmt =$conn->prepare("UPDATE system_settings SET setting_value = ? WHERE setting_key = ?");
+         $stmt->bind_param("is", $new_value,$setting_key);
+         $stmt->execute();$stmt->close();
+        header("Location: admin_log.php?msg=toggled");
         exit();
     } catch (Exception $e) { }
 }
@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) &&$_POST['ac
         $stmt =$conn->prepare("INSERT INTO notifications (title, message, type) VALUES (?, ?, ?)");
         $stmt->bind_param("sss", $title, $message,$type);
         $stmt->execute();$stmt->close();
-        header("Location: admin_panel.php?msg=added");
+        header("Location: admin_log.php?msg=added");
         exit();
     } catch (Exception $e) { }
 }
@@ -52,7 +52,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'delete' && isset($_GET['id']))
         $stmt =$conn->prepare("DELETE FROM notifications WHERE id = ?");
         $stmt->bind_param("i", $delete_id);
         $stmt->execute();$stmt->close();
-        header("Location: admin_panel.php?msg=deleted");
+        header("Location: admin_log.php?msg=deleted");
         exit();
     } catch (Exception $e) { }
 }
@@ -70,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) &&$_POST['ac
         $stmt =$conn->prepare("UPDATE notifications SET title = ?, message = ?, type = ? WHERE id = ?");
         $stmt->bind_param("sssi", $new_title,$new_message, $new_type,$edit_id);
         $stmt->execute();$stmt->close();
-        header("Location: admin_panel.php?msg=updated");
+        header("Location: admin_log.php?msg=updated");
         exit();
     } catch (Exception $e) { }
 }
@@ -349,7 +349,7 @@ try {
       <a href="main.php" class="nav-link">
         <i class="fas fa-home"></i><span>หน้าหลัก</span>
       </a>
-      <a href="admin_panel.php" class="nav-link active">
+      <a href="admin_log.php" class="nav-link active">
         <i class="fas fa-sliders-h"></i><span>จัดการระบบ</span>
       </a>
       <a href="reqdoc.php" class="nav-link">
