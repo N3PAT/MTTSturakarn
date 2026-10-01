@@ -13,86 +13,106 @@ $studentCode =$_SESSION['admin_id'];
 // ------------------------------------------------------------------
 // ระบบควบคุมสถานะ (Toggle Settings) แบบปลอดภัย
 // ------------------------------------------------------------------
-if (isset($_GET['action']) &&$_GET['action'] == 'toggle' && isset($_GET['setting']) && isset($_GET['value'])) {
-    $setting_name =$_GET['setting'];
-    // แปลงเป็น string เพื่อรองรับ varchar
+if (isset($_GET['action']) &&$_GET['action'] === 'toggle' && isset($_GET['setting']) && isset($_GET['value'])) {
+    $setting_name = trim($_GET['setting']);
     $new_value = (string)intval($_GET['value']); 
 
-    // ✅ Whitelist: อนุญาตให้อัปเดตเฉพาะค่าเหล่านี้เท่านั้น ป้องกันการไปแก้ setting ของระบบหลัก
-    $allowed_settings = ['vote_system', 'req_system', 'maintenance_mode'];
+    // Whitelist รองรับชื่อการตั้งค่าทั้งหมดในระบบ
+    $allowed_settings = [
+        'vote_system', 'req_system', 'maintenance_mode',
+        'vote_system_status', 'reqdoc_system_status', 'duty_system_status'
+    ];
     
-    if (in_array($setting_name,$allowed_settings)) {
+    if (in_array($setting_name,$allowed_settings, true)) {
         try {
-            $stmt =$conn->prepare("UPDATE system_settings SET setting_value = ? WHERE setting_name = ?");
-            $stmt->bind_param("ss", $new_value,$setting_name);
-            $stmt->execute();$stmt->close();
-            
-            // กรณียังไม่มีแถวข้อมูลนี้ในตาราง ให้ Insert ใหม่
-            if ($conn->affected_rows === 0) {
-                $stmt_insert =$conn->prepare("INSERT IGNORE INTO system_settings (setting_name, setting_value) VALUES (?, ?)");
-                $stmt_insert->bind_param("ss", $setting_name,$new_value);
-                $stmt_insert->execute();$stmt_insert->close();
+            // ใช้ ON DUPLICATE KEY UPDATE เพื่อรองรับทั้งกรณีเพิ่มใหม่และอัปเดตแถวเดิมได้อย่างสมบูรณ์
+            $stmt =$conn->prepare("
+                INSERT INTO system_settings (setting_name, setting_value) 
+                VALUES (?, ?) 
+                ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)
+            ");
+            if ($stmt) {$stmt->bind_param("ss", $setting_name,$new_value);
+                $stmt->execute();$stmt->close();
             }
 
             header("Location: admin_log.php?msg=toggled");
             exit();
-        } catch (Exception $e) { }
+        } catch (Throwable $e) {
+            error_log('Toggle Setting Error: ' . $e->getMessage());
+        }
     }
 }
 
 // ------------------------------------------------------------------
 // ระบบจัดการข้อมูล (เพิ่ม)
 // ------------------------------------------------------------------
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) &&$_POST['action'] == 'add') {
-    $title =$_POST['title'];
-    $message =$_POST['message'];
-    $type =$_POST['type'];
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) &&$_POST['action'] === 'add') {
+    $title = trim($_POST['title'] ?? '');
+    $message = trim($_POST['message'] ?? '');
+    $type = trim($_POST['type'] ?? 'system');
     
-    try {
-        $stmt =$conn->prepare("INSERT INTO notifications (title, message, type) VALUES (?, ?, ?)");
-        $stmt->bind_param("sss", $title, $message,$type);
-        $stmt->execute();$stmt->close();
-        header("Location: admin_log.php?msg=added");
-        exit();
-    } catch (Exception $e) { }
+    if (!empty($title) && !empty($message)) {
+        try {
+            $stmt =$conn->prepare("INSERT INTO notifications (title, message, type) VALUES (?, ?, ?)");
+            if ($stmt) {
+                $stmt->bind_param("sss", $title, $message,$type);
+                $stmt->execute();$stmt->close();
+            }
+            header("Location: admin_log.php?msg=added");
+            exit();
+        } catch (Throwable $e) {
+            error_log('Add Notification Error: ' . $e->getMessage());
+        }
+    }
 }
 
 // ------------------------------------------------------------------
 // ระบบจัดการข้อมูล (ลบ)
 // ------------------------------------------------------------------
-if (isset($_GET['action']) && $_GET['action'] == 'delete' && isset($_GET['id'])) {
+if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['id'])) {
     $delete_id = intval($_GET['id']);
-    try {
-        $stmt =$conn->prepare("DELETE FROM notifications WHERE id = ?");
-        $stmt->bind_param("i", $delete_id);
-        $stmt->execute();$stmt->close();
-        header("Location: admin_log.php?msg=deleted");
-        exit();
-    } catch (Exception $e) { }
+    if ($delete_id > 0) {
+        try {
+            $stmt =$conn->prepare("DELETE FROM notifications WHERE id = ?");
+            if ($stmt) {
+                $stmt->bind_param("i", $delete_id);
+                $stmt->execute();$stmt->close();
+            }
+            header("Location: admin_log.php?msg=deleted");
+            exit();
+        } catch (Throwable $e) {
+            error_log('Delete Notification Error: ' . $e->getMessage());
+        }
+    }
 }
 
 // ------------------------------------------------------------------
 // ระบบจัดการข้อมูล (แก้ไข)
 // ------------------------------------------------------------------
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) &&$_POST['action'] == 'edit') {
-    $edit_id = intval($_POST['edit_id']);
-    $new_title =$_POST['title'];
-    $new_message =$_POST['message'];
-    $new_type =$_POST['type'];
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) &&$_POST['action'] === 'edit') {
+    $edit_id = intval($_POST['edit_id'] ?? 0);
+    $new_title = trim($_POST['title'] ?? '');
+    $new_message = trim($_POST['message'] ?? '');
+    $new_type = trim($_POST['type'] ?? 'system');
     
-    try {
-        $stmt =$conn->prepare("UPDATE notifications SET title = ?, message = ?, type = ? WHERE id = ?");
-        $stmt->bind_param("sssi", $new_title,$new_message, $new_type,$edit_id);
-        $stmt->execute();$stmt->close();
-        header("Location: admin_log.php?msg=updated");
-        exit();
-    } catch (Exception $e) { }
+    if ($edit_id > 0 && !empty($new_title) && !empty($new_message)) {
+        try {
+            $stmt =$conn->prepare("UPDATE notifications SET title = ?, message = ?, type = ? WHERE id = ?");
+            if ($stmt) {$stmt->bind_param("sssi", $new_title,$new_message, $new_type,$edit_id);
+                $stmt->execute();$stmt->close();
+            }
+            header("Location: admin_log.php?msg=updated");
+            exit();
+        } catch (Throwable $e) {
+            error_log('Edit Notification Error: ' . $e->getMessage());
+        }
+    }
 }
 
 // ------------------------------------------------------------------
 // ระบบ Export Database (ดาวน์โหลดไฟล์ .sql)
 // ------------------------------------------------------------------
-if (isset($_GET['export']) &&$_GET['export'] == 'sql') {
+if (isset($_GET['export']) &&$_GET['export'] === 'sql') {
     error_reporting(0);
     $filename = "mtts_backup_" . date("Y-m-d_H-i-s") . ".sql";
     header("Content-Type: application/sql; charset=utf-8");
@@ -107,17 +127,25 @@ if (isset($_GET['export']) &&$_GET['export'] == 'sql') {
 
     $tables = [];
     $result =$conn->query("SHOW TABLES");
-    while ($row =$result->fetch_row()) {
-        $tables[] =$row[0];
+    if ($result) {
+        while ($row =$result->fetch_row()) {
+            $tables[] =$row[0];
+        }
     }
 
-    foreach ($tables as $table) {$result = $conn->query("SELECT * FROM $table");
+    foreach ($tables as$table) {
+        $result =$conn->query("SELECT * FROM `$table`");
+        if (!$result) continue;
+        
         $num_fields =$result->field_count;
+        $row2_res =$conn->query("SHOW CREATE TABLE `$table`");
+        $row2 = $row2_res ? $row2_res->fetch_row() : null;
 
-        $row2 =$conn->query("SHOW CREATE TABLE $table")->fetch_row();
         echo "\n\n-- Structure for table `$table`\n";
         echo "DROP TABLE IF EXISTS `$table`;\n";
-        echo $row2[1] . ";\n\n";
+        if ($row2) {
+            echo $row2[1] . ";\n\n";
+        }
 
         if ($result->num_rows > 0) {
             echo "-- Data for table `$table`\n";
@@ -147,13 +175,15 @@ if (isset($_GET['export']) &&$_GET['export'] == 'sql') {
 $logs = [];
 try {
     $stmt =$conn->prepare("SELECT * FROM notifications ORDER BY created_at DESC LIMIT 50");
-    $stmt->execute();
-    $result =$stmt->get_result();
-    while ($row =$result->fetch_assoc()) {
-        $logs[] =$row;
+    if ($stmt) {$stmt->execute();
+        $result =$stmt->get_result();
+        while ($row =$result->fetch_assoc()) {
+            $logs[] =$row;
+        }
+        $stmt->close();
     }
-    $stmt->close();
-} catch (Exception $e) {$logs = []; }
+} catch (Throwable $e) {$logs = [];
+}
 
 // ------------------------------------------------------------------
 // ดึงค่าสถานะสวิตช์ปัจจุบัน
@@ -164,10 +194,12 @@ $sys_states = [
     'maintenance_mode' => '0'
 ];
 try {
-    $stmt =$conn->query("SELECT setting_name, setting_value FROM system_settings WHERE setting_name IN ('vote_system', 'req_system', 'maintenance_mode')");
-    while ($row = $stmt->fetch_assoc()) {$sys_states[$row['setting_name']] =$row['setting_value'];
+    $res =$conn->query("SELECT setting_name, setting_value FROM system_settings WHERE setting_name IN ('vote_system', 'req_system', 'maintenance_mode')");
+    if ($res) {
+        while ($row = $res->fetch_assoc()) {$sys_states[$row['setting_name']] =$row['setting_value'];
+        }
     }
-} catch (Exception $e) { }
+} catch (Throwable $e) { }
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -309,22 +341,21 @@ try {
       <div class="toggle-row">
         <span class="toggle-label"><i class="fas fa-vote-yea" style="color:var(--primary);"></i> ระบบโหวต (Vote)</span>
         <label class="switch">
-          <!-- ตรวจสอบค่าจาก Database ถ้าเป็น 1 ให้แสดงผลว่าเปิดสวิตช์อยู่ -->
-          <input type="checkbox" <?= $sys_states['vote_system'] == '1' ? 'checked' : '' ?> onchange="toggleSetting('vote_system', this.checked)">
+          <input type="checkbox" <?= (string)$sys_states['vote_system'] === '1' ? 'checked' : '' ?> onchange="toggleSetting('vote_system', this.checked)">
           <span class="slider"></span>
         </label>
       </div>
       <div class="toggle-row">
         <span class="toggle-label"><i class="fas fa-file-alt" style="color:#f59e0b;"></i> ระบบคำร้อง (Reqdoc)</span>
         <label class="switch">
-          <input type="checkbox" <?= $sys_states['req_system'] == '1' ? 'checked' : '' ?> onchange="toggleSetting('req_system', this.checked)">
+          <input type="checkbox" <?= (string)$sys_states['req_system'] === '1' ? 'checked' : '' ?> onchange="toggleSetting('req_system', this.checked)">
           <span class="slider"></span>
         </label>
       </div>
       <div class="toggle-row">
         <span class="toggle-label"><i class="fas fa-tools" style="color:#ef4444;"></i> โหมดปรับปรุง (Maintenance)</span>
         <label class="switch">
-          <input type="checkbox" <?= $sys_states['maintenance_mode'] == '1' ? 'checked' : '' ?> onchange="toggleSetting('maintenance_mode', this.checked)">
+          <input type="checkbox" <?= (string)$sys_states['maintenance_mode'] === '1' ? 'checked' : '' ?> onchange="toggleSetting('maintenance_mode', this.checked)">
           <span class="slider"></span>
         </label>
       </div>
@@ -361,7 +392,11 @@ try {
             </div>
             <div class="log-actions">
               <button type="button" class="btn-action btn-edit" 
-                      onclick="openEditModal(<?= $log['id'] ?>, '<?= htmlspecialchars(addslashes($log['title'])) ?>', '<?= htmlspecialchars(addslashes($log['message'])) ?>', '<?=$log['type'] ?>')">
+                      data-id="<?= $log['id'] ?>"
+                      data-title="<?= htmlspecialchars($log['title'], ENT_QUOTES) ?>"
+                      data-message="<?= htmlspecialchars($log['message'], ENT_QUOTES) ?>"
+                      data-type="<?= htmlspecialchars($log['type'], ENT_QUOTES) ?>"
+                      onclick="openEditModalFromBtn(this)">
                 <i class="fas fa-edit"></i> แก้ไข
               </button>
               <a href="?action=delete&id=<?= $log['id'] ?>" class="btn-action btn-delete" onclick="return confirm('ยืนยันการลบข้อมูลนี้หรือไม่?');">
@@ -425,7 +460,6 @@ try {
 
   <script>
     function toggleSetting(settingName, isChecked) {
-      // ส่งค่าการเปิดปิดสวิตช์ไปยัง Backend
       const value = isChecked ? 1 : 0;
       window.location.href = `?action=toggle&setting=${settingName}&value=${value}`;
     }
@@ -442,7 +476,12 @@ try {
       showModal();
     }
 
-    function openEditModal(id, title, message, type) {
+    function openEditModalFromBtn(btn) {
+      const id = btn.getAttribute('data-id');
+      const title = btn.getAttribute('data-title');
+      const message = btn.getAttribute('data-message');
+      const type = btn.getAttribute('data-type');
+
       document.getElementById('modalTitle').innerText = 'แก้ไขข้อมูล';
       document.getElementById('formAction').value = 'edit';
       document.getElementById('edit_id').value = id;
