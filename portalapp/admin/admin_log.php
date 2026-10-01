@@ -11,21 +11,20 @@ if (empty($_SESSION['admin_id'])) {
 $studentCode =$_SESSION['admin_id'];
 
 // ------------------------------------------------------------------
-// ระบบควบคุมสถานะ (Toggle Settings) แบบปลอดภัย
+// ระบบควบคุมสถานะ (Toggle Settings) - ใช้ 'open' / 'close' สำหรับทุก Key
 // ------------------------------------------------------------------
 if (isset($_GET['action']) &&$_GET['action'] === 'toggle' && isset($_GET['setting']) && isset($_GET['value'])) {
     $setting_name = trim($_GET['setting']);
-    $new_value = (string)intval($_GET['value']); 
+    $raw_value = trim($_GET['value']); 
 
-    // Whitelist รองรับชื่อการตั้งค่าทั้งหมดในระบบ
-    $allowed_settings = [
-        'vote_system', 'req_system', 'maintenance_mode',
-        'vote_system_status', 'reqdoc_system_status', 'duty_system_status'
-    ];
+    // Whitelist อ้างอิงตามชื่อคอลัมน์จริงในตาราง system_settings
+    $allowed_settings = ['vote_system_status', 'reqdoc_system_status', 'duty_system_status', 'maintenance_mode'];
     
     if (in_array($setting_name,$allowed_settings, true)) {
+        // บังคับเปลี่ยนค่าให้เป็นเพียง 'open' หรือ 'close' เท่านั้น
+        $new_value = (strtolower($raw_value) === 'open') ? 'open' : 'close';
+
         try {
-            // ใช้ ON DUPLICATE KEY UPDATE เพื่อรองรับทั้งกรณีเพิ่มใหม่และอัปเดตแถวเดิมได้อย่างสมบูรณ์
             $stmt =$conn->prepare("
                 INSERT INTO system_settings (setting_name, setting_value) 
                 VALUES (?, ?) 
@@ -186,20 +185,26 @@ try {
 }
 
 // ------------------------------------------------------------------
-// ดึงค่าสถานะสวิตช์ปัจจุบัน
+// ดึงค่าสถานะสวิตช์ปัจจุบันจาก DB
 // ------------------------------------------------------------------
 $sys_states = [
-    'vote_system' => '1',
-    'req_system' => '1',
-    'maintenance_mode' => '0'
+    'duty_system_status'   => 'close',
+    'vote_system_status'   => 'close',
+    'reqdoc_system_status' => 'close',
+    'maintenance_mode'     => 'close'
 ];
 try {
-    $res =$conn->query("SELECT setting_name, setting_value FROM system_settings WHERE setting_name IN ('vote_system', 'req_system', 'maintenance_mode')");
+    $res =$conn->query("SELECT setting_name, setting_value FROM system_settings WHERE setting_name IN ('duty_system_status', 'vote_system_status', 'reqdoc_system_status', 'maintenance_mode')");
     if ($res) {
         while ($row = $res->fetch_assoc()) {$sys_states[$row['setting_name']] =$row['setting_value'];
         }
     }
 } catch (Throwable $e) { }
+
+// Helper Function ตรวจสอบว่าเปิดใช้งาน ('open') อยู่หรือไม่
+function isSettingActive($val) {
+    return strtolower((string)$val) === 'open';
+}
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -339,23 +344,30 @@ try {
     </div>
     <div class="control-card fade-in-up delay-1">
       <div class="toggle-row">
+        <span class="toggle-label"><i class="fas fa-calendar-check" style="color:#10b981;"></i> ระบบเข้าเวร (Duty)</span>
+        <label class="switch">
+          <input type="checkbox" <?= isSettingActive($sys_states['duty_system_status']) ? 'checked' : '' ?> onchange="toggleSetting('duty_system_status', this.checked)">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
         <span class="toggle-label"><i class="fas fa-vote-yea" style="color:var(--primary);"></i> ระบบโหวต (Vote)</span>
         <label class="switch">
-          <input type="checkbox" <?= (string)$sys_states['vote_system'] === '1' ? 'checked' : '' ?> onchange="toggleSetting('vote_system', this.checked)">
+          <input type="checkbox" <?= isSettingActive($sys_states['vote_system_status']) ? 'checked' : '' ?> onchange="toggleSetting('vote_system_status', this.checked)">
           <span class="slider"></span>
         </label>
       </div>
       <div class="toggle-row">
         <span class="toggle-label"><i class="fas fa-file-alt" style="color:#f59e0b;"></i> ระบบคำร้อง (Reqdoc)</span>
         <label class="switch">
-          <input type="checkbox" <?= (string)$sys_states['req_system'] === '1' ? 'checked' : '' ?> onchange="toggleSetting('req_system', this.checked)">
+          <input type="checkbox" <?= isSettingActive($sys_states['reqdoc_system_status']) ? 'checked' : '' ?> onchange="toggleSetting('reqdoc_system_status', this.checked)">
           <span class="slider"></span>
         </label>
       </div>
       <div class="toggle-row">
         <span class="toggle-label"><i class="fas fa-tools" style="color:#ef4444;"></i> โหมดปรับปรุง (Maintenance)</span>
         <label class="switch">
-          <input type="checkbox" <?= (string)$sys_states['maintenance_mode'] === '1' ? 'checked' : '' ?> onchange="toggleSetting('maintenance_mode', this.checked)">
+          <input type="checkbox" <?= isSettingActive($sys_states['maintenance_mode']) ? 'checked' : '' ?> onchange="toggleSetting('maintenance_mode', this.checked)">
           <span class="slider"></span>
         </label>
       </div>
@@ -460,7 +472,7 @@ try {
 
   <script>
     function toggleSetting(settingName, isChecked) {
-      const value = isChecked ? 1 : 0;
+      const value = isChecked ? 'open' : 'close';
       window.location.href = `?action=toggle&setting=${settingName}&value=${value}`;
     }
 
@@ -501,10 +513,11 @@ try {
     }
 
     function closeModal() {
-      const modal = document.getElementById('formModal');
+      const modal.style.display = 'none';
+      const modalObj = document.getElementById('formModal');
       const content = document.getElementById('modalContent');
       content.classList.remove('show');
-      setTimeout(() => { modal.style.display = 'none'; }, 300);
+      setTimeout(() => { modalObj.style.display = 'none'; }, 300);
     }
   </script>
 </body>
