@@ -10,15 +10,23 @@ header("Expires: 0");
 
 require_once 'db.php';
 
+// 1. ตรวจสอบการ Login
 if (empty($_SESSION['student_code'])) {
     header("Location: login.php");
     exit();
 }
 
+// 2. ดึงข้อมูลนักเรียน (รองรับทั้งแบบส่ง ?id= ผ่าน URL หรือดึงจาก student_code ใน Session โดยตรง)
+if (isset($_GET['id']) && is_numeric($_GET['id'])) {
+    $student_id = (int)$_GET['id'];
+    $stmt = $pdo->prepare("SELECT * FROM students WHERE id = :id LIMIT 1");
+    $stmt->bindParam(':id', $student_id, PDO::PARAM_INT);
+} else {
+    $student_code_session = $_SESSION['student_code'];
+    $stmt = $pdo->prepare("SELECT * FROM students WHERE student_code = :student_code LIMIT 1");
+    $stmt->bindParam(':student_code', $student_code_session, PDO::PARAM_STR);
+}
 
-// 3. ดึงข้อมูลจากตาราง students
-$stmt = $pdo->prepare("SELECT * FROM students WHERE id = :id LIMIT 1");
-$stmt->bindParam(':id', $student_id, PDO::PARAM_INT);
 $stmt->execute();
 $student = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -26,7 +34,7 @@ if (!$student) {
     die("<div style='text-align:center; margin-top:50px; font-family:sans-serif;'>ไม่พบข้อมูลนักเรียน</div>");
 }
 
-// 4. เตรียมข้อมูลรูปภาพและชื่อ
+// 3. เตรียมข้อมูลรูปภาพและชื่อ
 $image_path = !empty($student['image']) ? $student['image'] : 'default_student.png';
 $full_name = htmlspecialchars(($student['prefix'] ?? '') . ($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''));
 $student_code = htmlspecialchars($student['student_code'] ?? '-');
