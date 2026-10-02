@@ -322,9 +322,7 @@ try {
     <div class="profile-main-card fade-in-up delay-1">
         <div class="profile-img-container">
             <img src="<?php echo htmlspecialchars($image_path); ?>" alt="Profile Image" class="profile-img">
-            <a href="edit_image.php?id=<?php echo (int)($student['id'] ?? 0); ?>" class="edit-img-btn">
-                <i class="fas fa-camera"></i>
-            </a>
+          
         </div>
         <h2><?php echo $full_name; ?></h2>
         <p><i class="fa-solid fa-id-badge"></i> รหัสประจำตัว: <?php echo $student_code; ?></p>
