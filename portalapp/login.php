@@ -36,10 +36,10 @@ require_once 'db.php';
 // 3. ดึงค่าการตั้งค่าจากฐานข้อมูล
 // ==========================================
 $settings = [
-    'maintenance_mode'     => 'off',
-    'duty_system_status'   => 'open',
-    'vote_system_status'   => 'open',
-    'reqdoc_system_status' => 'open'
+    'maintenance_mode'     => '',
+    'duty_system_status'   => '',
+    'vote_system_status'   => '',
+    'reqdoc_system_status' => ''
 ];
 
 try {
