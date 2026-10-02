@@ -8,36 +8,50 @@ header("Cache-Control: no-cache, no-store, must-revalidate");
 header("Pragma: no-cache");
 header("Expires: 0");
 
+// 1. เรียกใช้ไฟล์เชื่อมต่อฐานข้อมูล
 require_once 'db.php';
 
-// 1. ตรวจสอบการ Login
+// 2. ตรวจสอบการ Login
 if (empty($_SESSION['student_code'])) {
     header("Location: login.php");
     exit();
 }
 
-// 2. ดึงข้อมูลนักเรียน (รองรับทั้งแบบส่ง ?id= ผ่าน URL หรือดึงจาก student_code ใน Session โดยตรง)
-if (isset($_GET['id']) && is_numeric($_GET['id'])) {
-    $student_id = (int)$_GET['id'];
-    $stmt = $pdo->prepare("SELECT * FROM students WHERE id = :id LIMIT 1");
-    $stmt->bindParam(':id', $student_id, PDO::PARAM_INT);
-} else {
-    $student_code_session = $_SESSION['student_code'];
-    $stmt = $pdo->prepare("SELECT * FROM students WHERE student_code = :student_code LIMIT 1");
-    $stmt->bindParam(':student_code', $student_code_session, PDO::PARAM_STR);
+// 3. ดึงข้อมูลนักเรียนพร้อมระบบดักจับ Error
+try {
+    if (isset($_GET['id']) && is_numeric($_GET['id'])) {
+        $student_id = (int)$_GET['id'];
+        $stmt = $pdo->prepare("SELECT * FROM students WHERE id = :id LIMIT 1");
+        $stmt->bindParam(':id', $student_id, PDO::PARAM_INT);
+    } else {
+        $student_code_session = $_SESSION['student_code'];
+        $stmt = $pdo->prepare("SELECT * FROM students WHERE student_code = :student_code LIMIT 1");
+        $stmt->bindParam(':student_code', $student_code_session, PDO::PARAM_STR);
+    }
+
+    $stmt->execute();
+    $student = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$student) {
+        die("<div style='text-align:center; margin-top:50px; font-family:sans-serif;'>ไม่พบข้อมูลนักเรียน</div>");
+    }
+
+    // เตรียมข้อมูลรูปภาพและชื่อ
+    $image_path = !empty($student['image']) ? $student['image'] : 'default_student.png';
+    $full_name = htmlspecialchars(($student['prefix'] ?? '') . ($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''));
+    $student_code = htmlspecialchars($student['student_code'] ?? '-');
+
+} catch (PDOException $e) {
+    die("<div style='text-align:center; margin-top:50px; font-family:sans-serif; color:red;'>
+        <h3>เกิดข้อผิดพลาดจากฐานข้อมูล</h3>
+        <p>" . htmlspecialchars($e->getMessage()) . "</p>
+    </div>");
+} catch (Exception $e) {
+    die("<div style='text-align:center; margin-top:50px; font-family:sans-serif; color:red;'>
+        <h3>เกิดข้อผิดพลาดของระบบ</h3>
+        <p>" . htmlspecialchars($e->getMessage()) . "</p>
+    </div>");
 }
-
-$stmt->execute();
-$student = $stmt->fetch(PDO::FETCH_ASSOC);
-
-if (!$student) {
-    die("<div style='text-align:center; margin-top:50px; font-family:sans-serif;'>ไม่พบข้อมูลนักเรียน</div>");
-}
-
-// 3. เตรียมข้อมูลรูปภาพและชื่อ
-$image_path = !empty($student['image']) ? $student['image'] : 'default_student.png';
-$full_name = htmlspecialchars(($student['prefix'] ?? '') . ($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''));
-$student_code = htmlspecialchars($student['student_code'] ?? '-');
 ?>
 
 <!DOCTYPE html>
@@ -247,33 +261,6 @@ $student_code = htmlspecialchars($student['student_code'] ?? '-');
             color: var(--primary);
         }
 
-        /* Action Button */
-        .action-container {
-            padding: 0 20px 20px;
-        }
-
-        .btn-edit {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            width: 100%;
-            background: white;
-            color: var(--primary);
-            border: 1px solid var(--primary);
-            padding: 14px;
-            border-radius: 12px;
-            font-size: 0.9rem;
-            font-weight: 600;
-            text-decoration: none;
-            transition: all 0.2s;
-        }
-
-        .btn-edit:active {
-            background: var(--primary);
-            color: white;
-        }
-
         /* Bottom Nav */
         .bottom-nav {
             position: fixed; 
@@ -329,14 +316,14 @@ $student_code = htmlspecialchars($student['student_code'] ?? '-');
     <div class="top-header fade-in-up">
         <a href="javascript:history.back()" class="back-btn"><i class="fas fa-chevron-left"></i></a>
         <h1 class="header-title">ข้อมูลส่วนตัว</h1>
-        <div style="width: 20px;"></div> <!-- Spacer -->
+        <div style="width: 20px;"></div>
     </div>
 
     <!-- Profile Header Card -->
     <div class="profile-main-card fade-in-up delay-1">
         <div class="profile-img-container">
             <img src="<?php echo htmlspecialchars($image_path); ?>" alt="Profile Image" class="profile-img">
-            <a href="edit_image.php?id=<?php echo $student['id']; ?>" class="edit-img-btn">
+            <a href="edit_image.php?id=<?php echo (int)($student['id'] ?? 0); ?>" class="edit-img-btn">
                 <i class="fas fa-camera"></i>
             </a>
         </div>
@@ -411,8 +398,6 @@ $student_code = htmlspecialchars($student['student_code'] ?? '-');
             <span class="info-value text-highlight"><?php echo htmlspecialchars($student['bmi_category'] ?? '-'); ?></span>
         </div>
     </div>
-
-   
 
     <!-- Bottom Navigation -->
     <div class="bottom-nav">
