@@ -11,13 +11,13 @@ if (empty($_SESSION['admin_id'])) {
 $studentCode =$_SESSION['admin_id'];
 
 // ------------------------------------------------------------------
-// ระบบควบคุมสถานะ (Toggle Settings) - ใช้ 'open' / 'close' สำหรับทุก Key
+// ระบบควบคุมสถานะ (Toggle Settings) - ใช้ 'open' / 'close'
 // ------------------------------------------------------------------
 if (isset($_GET['action']) &&$_GET['action'] === 'toggle' && isset($_GET['setting']) && isset($_GET['value'])) {
     $setting_name = trim($_GET['setting']);
     $raw_value = trim($_GET['value']); 
 
-    // Whitelist อ้างอิงตามชื่อคอลัมน์จริงในตาราง system_settings
+    // Whitelist อ้างอิงตามชื่อคอลัมน์จริงในตาราง
     $allowed_settings = ['vote_system_status', 'reqdoc_system_status', 'duty_system_status', 'maintenance_mode'];
     
     if (in_array($setting_name,$allowed_settings, true)) {
@@ -25,11 +25,13 @@ if (isset($_GET['action']) &&$_GET['action'] === 'toggle' && isset($_GET['settin
         $new_value = (strtolower($raw_value) === 'open') ? 'open' : 'close';
 
         try {
+            // โค้ดนี้ต้องการให้ setting_name เป็น Primary Key หรือ Unique
             $stmt =$conn->prepare("
                 INSERT INTO system_settings (setting_name, setting_value) 
                 VALUES (?, ?) 
                 ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)
             ");
+            
             if ($stmt) {$stmt->bind_param("ss", $setting_name,$new_value);
                 $stmt->execute();$stmt->close();
             }
@@ -473,6 +475,7 @@ function isSettingActive($val) {
   <script>
     function toggleSetting(settingName, isChecked) {
       const value = isChecked ? 'open' : 'close';
+      // วิ่งไปที่ PHP เพื่อทำการอัปเดต DB
       window.location.href = `?action=toggle&setting=${settingName}&value=${value}`;
     }
 
@@ -512,8 +515,8 @@ function isSettingActive($val) {
       setTimeout(() => { content.classList.add('show'); }, 10);
     }
 
+    // แก้ไขจุดที่เป็นบัคใน Javascript ให้แล้ว
     function closeModal() {
-      const modal.style.display = 'none';
       const modalObj = document.getElementById('formModal');
       const content = document.getElementById('modalContent');
       content.classList.remove('show');
