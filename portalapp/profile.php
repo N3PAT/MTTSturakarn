@@ -1,7 +1,7 @@
 <?php
 session_start();
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
+ini_set('display_errors', 0);
+ini_set('display_startup_errors', 0);
 error_reporting(E_ALL);
 
 header("Cache-Control: no-cache, no-store, must-revalidate");
@@ -353,7 +353,7 @@ try {
         </div>
         <div class="info-row">
             <span class="info-label">เพศ</span>
-            <span class="info-value"><?php echo htmlspecialchars($student['gender'] ?? '-'); ?></span>
+            <span class="info-value">ชาย></span>
         </div>
         <div class="info-row">
             <span class="info-label">อายุ</span>
