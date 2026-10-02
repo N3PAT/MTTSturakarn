@@ -1,19 +1,20 @@
 <?php
-// 1. ตั้งค่าการเชื่อมต่อฐานข้อมูล (Database Configuration)
-$host = 'localhost';
-$dbname = 'your_database_name'; 
-$username = 'root';             
-$password = '';                 
+session_start();
+ini_set('display_errors', 0);
+ini_set('display_startup_errors', 0);
+error_reporting(E_ALL);
 
-try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8", $username, $password);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch (PDOException $e) {
-    die("ไม่สามารถเชื่อมต่อฐานข้อมูลได้: " . $e->getMessage());
+header("Cache-Control: no-cache, no-store, must-revalidate");
+header("Pragma: no-cache");
+header("Expires: 0");
+
+require_once 'db.php';
+
+if (empty($_SESSION['student_code'])) {
+    header("Location: login.php");
+    exit();
 }
 
-// 2. รับค่า ID (ในการใช้งานจริงควรใช้ $_SESSION['student_id'] ตามโครงสร้างระบบ)
-$student_id = isset($_GET['id']) ? (int)$_GET['id'] : 1; 
 
 // 3. ดึงข้อมูลจากตาราง students
 $stmt = $pdo->prepare("SELECT * FROM students WHERE id = :id LIMIT 1");
