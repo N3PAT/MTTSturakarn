@@ -353,7 +353,7 @@ try {
         </div>
         <div class="info-row">
             <span class="info-label">เพศ</span>
-            <span class="info-value">ชาย></span>
+            <span class="info-value">ชาย</span>
         </div>
         <div class="info-row">
             <span class="info-label">อายุ</span>
