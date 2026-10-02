@@ -8,7 +8,7 @@ header("Cache-Control: no-cache, no-store, must-revalidate");
 header("Pragma: no-cache");
 header("Expires: 0");
 
-// 1. เรียกใช้ไฟล์เชื่อมต่อฐานข้อมูล (db.php ตัวเดิมของคุณที่เป็น MySQLi)
+// 1. เรียกใช้ไฟล์เชื่อมต่อฐานข้อมูล
 require_once 'db.php';
 
 // 2. ตรวจสอบการ Login
@@ -17,33 +17,47 @@ if (empty($_SESSION['student_code'])) {
     exit();
 }
 
-// 3. ดึงข้อมูลนักเรียนด้วย MySQLi พร้อมระบบดักจับ Error
 try {
+    // 3. ดึงข้อมูลพื้นฐานจากตาราง students
     if (isset($_GET['id']) && is_numeric($_GET['id'])) {
         $student_id = (int)$_GET['id'];
         $stmt = $conn->prepare("SELECT * FROM students WHERE id = ? LIMIT 1");
-        $stmt->bind_param("i", $student_id); // "i" = integer
+        $stmt->bind_param("i", $student_id);
     } else {
         $student_code_session = $_SESSION['student_code'];
         $stmt = $conn->prepare("SELECT * FROM students WHERE student_code = ? LIMIT 1");
-        $stmt->bind_param("s", $student_code_session); // "s" = string
+        $stmt->bind_param("s", $student_code_session);
     }
 
     $stmt->execute();
     $result = $stmt->get_result();
     $student = $result->fetch_assoc();
-    
-    // ปิด Statement คืนหน่วยความจำ
     $stmt->close();
 
     if (!$student) {
         die("<div style='text-align:center; margin-top:50px; font-family:sans-serif;'>ไม่พบข้อมูลนักเรียน</div>");
     }
 
-    // เตรียมข้อมูลรูปภาพและชื่อ
-    $image_path = !empty($student['image']) ? $student['image'] : 'default_student.png';
-    $full_name = htmlspecialchars(($student['prefix'] ?? '') . ($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''));
+    // 4. ดึงข้อมูลทางกายภาพล่าสุดจากตาราง student_bmi_records
+    $current_student_code = $student['student_code'];
+    $stmt_bmi = $conn->prepare("SELECT * FROM student_bmi_records WHERE student_code = ? ORDER BY created_at DESC LIMIT 1");
+    $stmt_bmi->bind_param("s", $current_student_code);
+    $stmt_bmi->execute();
+    $result_bmi = $stmt_bmi->get_result();
+    $bmi_record = $result_bmi->fetch_assoc();
+    $stmt_bmi->close();
+
+    // 5. เตรียมข้อมูลตัวแปรสำหรับแสดงผล
+    $image_path   = !empty($student['image']) ? $student['image'] : 'default_student.png';
+    $full_name    = htmlspecialchars(($student['prefix'] ?? '') . ($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''));
     $student_code = htmlspecialchars($student['student_code'] ?? '-');
+    
+    // ดึงข้อมูลกายภาพ (ถ้าไม่มีใน bmi_records ให้ดึงจาก students แทน หรือใส่ค่าว่าง)
+    $display_age      = htmlspecialchars($bmi_record['age'] ?? $student['age'] ?? '-');
+    $display_weight   = htmlspecialchars($bmi_record['weight'] ?? '-');
+    $display_height   = htmlspecialchars($bmi_record['height'] ?? '-');
+    $display_bmi      = htmlspecialchars($bmi_record['bmi'] ?? '-');
+    $display_bmi_cat  = htmlspecialchars($bmi_record['bmi_category'] ?? '-');
 
 } catch (Exception $e) {
     die("<div style='text-align:center; margin-top:50px; font-family:sans-serif; color:red;'>
@@ -321,8 +335,7 @@ try {
     <!-- Profile Header Card -->
     <div class="profile-main-card fade-in-up delay-1">
         <div class="profile-img-container">
-            <img src="<?php echo htmlspecialchars($image_path); ?>" alt="Profile Image" class="profile-img">
-          
+            <img src="<?php echo $image_path; ?>" alt="Profile Image" class="profile-img">
         </div>
         <h2><?php echo $full_name; ?></h2>
         <p><i class="fa-solid fa-id-badge"></i> รหัสประจำตัว: <?php echo $student_code; ?></p>
@@ -344,7 +357,7 @@ try {
         </div>
         <div class="info-row">
             <span class="info-label">อายุ</span>
-            <span class="info-value"><?php echo htmlspecialchars($student['age'] ?? '-'); ?> ปี</span>
+            <span class="info-value"><?php echo $display_age; ?> ปี</span>
         </div>
     </div>
 
@@ -380,19 +393,19 @@ try {
         </div>
         <div class="info-row">
             <span class="info-label">น้ำหนัก</span>
-            <span class="info-value"><?php echo htmlspecialchars($student['weight'] ?? '-'); ?> กก.</span>
+            <span class="info-value"><?php echo $display_weight; ?> กก.</span>
         </div>
         <div class="info-row">
             <span class="info-label">ส่วนสูง</span>
-            <span class="info-value"><?php echo htmlspecialchars($student['height'] ?? '-'); ?> ซม.</span>
+            <span class="info-value"><?php echo $display_height; ?> ซม.</span>
         </div>
         <div class="info-row">
             <span class="info-label">ค่า BMI</span>
-            <span class="info-value"><?php echo htmlspecialchars($student['bmi'] ?? '-'); ?></span>
+            <span class="info-value"><?php echo $display_bmi; ?></span>
         </div>
         <div class="info-row">
             <span class="info-label">เกณฑ์ BMI</span>
-            <span class="info-value text-highlight"><?php echo htmlspecialchars($student['bmi_category'] ?? '-'); ?></span>
+            <span class="info-value text-highlight"><?php echo $display_bmi_cat; ?></span>
         </div>
     </div>
 
