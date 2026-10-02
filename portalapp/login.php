@@ -62,13 +62,22 @@ $m_mode   = strtolower(trim($settings['maintenance_mode'] ?? 'off'));
 $d_status = strtolower(trim($settings['duty_system_status'] ?? 'open'));
 
 // เช็กสถานะการเปิด/ปิดปรับปรุงระบบ (ใช้ค่า Manual หรือ Database)
-// ระบบจะถือว่า "ปิดปรับปรุง" เมื่อ:
-// 1. $force_maintenance เป็น true (สั่งปิดแบบ Manual ในโค้ด)
-// 2. $m_mode เป็น 'on', 'open', '1' หรือ 'true'
-// 3. $d_status เป็น 'close', 'closed', 'off' หรือ '0'
 $is_maintenance = $force_maintenance 
     || in_array($m_mode, ['on', 'open', '1', 'true']) 
     || in_array($d_status, ['close', 'closed', 'off', '0']);
+
+// ==========================================
+// 4. API สำหรับเช็กสถานะแบบ Real-time (AJAX)
+// ==========================================
+if (isset($_GET['check_status'])) {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-cache, must-revalidate');
+    echo json_encode([
+        'is_maintenance' => $is_maintenance
+    ]);
+    exit();
+}
+
 // เช็กว่าผู้ใช้เข้าสู่ระบบอยู่แล้วหรือไม่
 if (isset($_SESSION['student_code'])) {
     header("Location: main.php");
@@ -76,7 +85,7 @@ if (isset($_SESSION['student_code'])) {
 }
 
 // ==========================================
-// 4. ประมวลผลการ Login
+// 5. ประมวลผลการ Login
 // ==========================================
 $error = '';
 $student_code_input = '';
@@ -420,5 +429,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$is_maintenance) {
     <?php endif; ?>
 
   </div>
+
+  <!-- Script เช็กสถานะ Real-time วางไว้นอกเงื่อนไขเพื่อให้รันได้ทั้ง 2 หน้า -->
+  <script>
+    // สถานะปัจจุบันที่หน้าเว็บกำลังแสดงอยู่ (true = หน้าปิดปรับปรุง, false = หน้าปกติ)
+    const currentIsMaintenance = <?= $is_maintenance ? 'true' : 'false' ?>;
+
+    function checkSystemStatusRealtime() {
+      // เรียกเช็กสถานะที่ไฟล์เดิม (ส่ง check_status=1 เพื่อให้ PHP คืนค่าเป็น JSON กลับมา)
+      fetch('?check_status=1&_t=' + Date.now(), { cache: 'no-store' })
+        .then(response => response.json())
+        .then(data => {
+          // หากค่าการตั้งค่าใน Database ต่างกับหน้าที่แสดงผลอยู่ตอนนี้
+          if (data.is_maintenance !== currentIsMaintenance) {
+            window.location.reload(); // รีเฟรชหน้าเพื่อสลับโหมดทันที
+          }
+        })
+        .catch(err => console.error('Real-time check failed:', err));
+    }
+
+    // ทำงานทุกๆ 3 วินาที (สามารถปรับเลข 3000 ให้เร็วหรือช้าลงได้)
+    setInterval(checkSystemStatusRealtime, 3000);
+  </script>
 </body>
 </html>
