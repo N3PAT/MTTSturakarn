@@ -1,5 +1,14 @@
 <?php
-// 1. ตั้งค่าความปลอดภัยและอายุของ Session
+// ==========================================
+// 1. ตั้งค่าเปิด-ปิดระบบ (Maintenance Mode)
+// ==========================================
+// เปลี่ยนเป็น true หากต้องการบังคับปิดปรับปรุงระบบทันที (ไม่ต้องผ่าน Database)
+// เปลี่ยนเป็น false หากต้องการให้ระบบไปอ่านค่าจาก Database แทน
+$force_maintenance = false; 
+
+// ==========================================
+// 2. ตั้งค่าความปลอดภัยและอายุของ Session
+// ==========================================
 $session_lifetime = 2592000; // 30 วัน
 ini_set('session.gc_maxlifetime', $session_lifetime);
 ini_set('session.cookie_lifetime', $session_lifetime);
@@ -23,11 +32,13 @@ session_set_cookie_params([
 session_start();
 require_once 'db.php';
 
-// 2. ดึงค่าจากตาราง system_settings ทั้งหมดเก็บใส่ Array แบบ Dynamic
+// ==========================================
+// 3. ดึงค่าการตั้งค่าจากฐานข้อมูล
+// ==========================================
 $settings = [
-    'maintenance_mode'   => 'off',
-    'duty_system_status' => 'open',
-    'vote_system_status' => 'open',
+    'maintenance_mode'     => 'off',
+    'duty_system_status'   => 'open',
+    'vote_system_status'   => 'open',
     'reqdoc_system_status' => 'open'
 ];
 
@@ -45,8 +56,8 @@ try {
     error_log('Fetch Settings Error: ' . $e->getMessage());
 }
 
-// เช็กสถานะการเปิด/ปิดปรับปรุงระบบ
-$is_maintenance = ($settings['maintenance_mode'] === 'on' || $settings['duty_system_status'] === 'closed');
+// เช็กสถานะการเปิด/ปิดปรับปรุงระบบ (ใช้ค่า Manual หรือ Database)
+$is_maintenance = $force_maintenance || ($settings['maintenance_mode'] === 'on' || $settings['duty_system_status'] === 'closed');
 
 // เช็กว่าผู้ใช้เข้าสู่ระบบอยู่แล้วหรือไม่
 if (isset($_SESSION['student_code'])) {
@@ -54,7 +65,9 @@ if (isset($_SESSION['student_code'])) {
     exit();
 }
 
-// 3. ประมวลผลการ Login (ทำงานเมื่อระบบเปิดปกติเท่านั้น)
+// ==========================================
+// 4. ประมวลผลการ Login
+// ==========================================
 $error = '';
 $student_code_input = '';
 
@@ -187,7 +200,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$is_maintenance) {
     .top-background::after { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.4)); }
     .login-panel { flex-grow: 1; background-color: #ffffff; border-radius: 35px 35px 0 0; position: relative; z-index: 2; margin-top: -40px; padding: 30px 25px 20px; display: flex; flex-direction: column; align-items: center; animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
     @keyframes slideUp { 0% { transform: translateY(50px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
-    .school-logo { width: 100px; height: 100px; object-fit: contain; margin-bottom: 15px; background-image: url('https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg?utm_source=th.wikipedia.org&utm_campaign=index&utm_content=thumbnail_unscaled'); background-size: contain; background-position: center; background-repeat: no-repeat; }
+    .school-logo { width: 100px; height: 100px; object-fit: contain; margin-bottom: 15px; background-image: url('https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg'); background-size: contain; background-position: center; background-repeat: no-repeat; }
     .title { font-size: 1.5rem; font-weight: 700; color: var(--primary-color); margin: 0 0 5px 0; letter-spacing: -0.5px; }
     .subtitle { font-size: 0.95rem; color: var(--text-gray); margin: 0 0 35px 0; }
     .login-form { width: 100%; margin-bottom: auto; }
@@ -309,7 +322,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$is_maintenance) {
       <!-- PWA Install Banner -->
       <div class="pwa-banner" id="pwaBanner">
         <div class="pwa-content">
-          <img src="icon-192x192.png" alt="App Icon" class="pwa-icon" onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg?utm_source=th.wikipedia.org&utm_campaign=index&utm_content=thumbnail_unscaled'">
+          <img src="icon-192x192.png" alt="App Icon" class="pwa-icon" onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg'">
           <div class="pwa-text">
             <p class="pwa-title">ติดตั้ง MTTS App</p>
             <p class="pwa-subtitle">เพื่อการใช้งานที่รวดเร็วยิ่งขึ้น</p>
