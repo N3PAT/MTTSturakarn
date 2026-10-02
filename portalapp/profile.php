@@ -380,7 +380,7 @@ try {
             <span class="info-value"><?php echo htmlspecialchars($student['platoon'] ?? '-'); ?></span>
         </div>
         <div class="info-row">
-            <span class="info-label">ตอน/หมู่</span>
+            <span class="info-label">ตอน/วิชาชีพช่าง</span>
             <span class="info-value"><?php echo htmlspecialchars($student['section'] ?? '-'); ?></span>
         </div>
     </div>
