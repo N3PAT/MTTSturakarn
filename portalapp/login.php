@@ -48,7 +48,8 @@ try {
         $result = $conn->query("SELECT setting_name, setting_value FROM system_settings");
         if ($result) {
             while ($row = $result->fetch_assoc()) {
-                $settings[$row['setting_name']] = trim($row['setting_value']);
+                // ตัดช่องว่างและ แปลงเป็นตัวพิมพ์เล็กทั้งหมด
+                $settings[$row['setting_name']] = strtolower(trim($row['setting_value']));
             }
         }
     }
@@ -56,9 +57,18 @@ try {
     error_log('Fetch Settings Error: ' . $e->getMessage());
 }
 
-// เช็กสถานะการเปิด/ปิดปรับปรุงระบบ (ใช้ค่า Manual หรือ Database)
-$is_maintenance = $force_maintenance || ($settings['maintenance_mode'] === 'on' || $settings['duty_system_status'] === 'closed');
+// ดึงค่ามาแปลงเป็นตัวพิมพ์เล็กเพื่อนำมาเช็กเงื่อนไข
+$m_mode   = strtolower(trim($settings['maintenance_mode'] ?? 'off'));
+$d_status = strtolower(trim($settings['duty_system_status'] ?? 'open'));
 
+// เช็กสถานะการเปิด/ปิดปรับปรุงระบบ (ใช้ค่า Manual หรือ Database)
+// ระบบจะถือว่า "ปิดปรับปรุง" เมื่อ:
+// 1. $force_maintenance เป็น true (สั่งปิดแบบ Manual ในโค้ด)
+// 2. $m_mode เป็น 'on', 'open', '1' หรือ 'true'
+// 3. $d_status เป็น 'close', 'closed', 'off' หรือ '0'
+$is_maintenance = $force_maintenance 
+    || in_array($m_mode, ['on', 'open', '1', 'true']) 
+    || in_array($d_status, ['close', 'closed', 'off', '0']);
 // เช็กว่าผู้ใช้เข้าสู่ระบบอยู่แล้วหรือไม่
 if (isset($_SESSION['student_code'])) {
     header("Location: main.php");
