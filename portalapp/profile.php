@@ -8,7 +8,7 @@ header("Cache-Control: no-cache, no-store, must-revalidate");
 header("Pragma: no-cache");
 header("Expires: 0");
 
-// 1. เรียกใช้ไฟล์เชื่อมต่อฐานข้อมูล
+// 1. เรียกใช้ไฟล์เชื่อมต่อฐานข้อมูล (db.php ตัวเดิมของคุณที่เป็น MySQLi)
 require_once 'db.php';
 
 // 2. ตรวจสอบการ Login
@@ -17,20 +17,24 @@ if (empty($_SESSION['student_code'])) {
     exit();
 }
 
-// 3. ดึงข้อมูลนักเรียนพร้อมระบบดักจับ Error
+// 3. ดึงข้อมูลนักเรียนด้วย MySQLi พร้อมระบบดักจับ Error
 try {
     if (isset($_GET['id']) && is_numeric($_GET['id'])) {
         $student_id = (int)$_GET['id'];
-        $stmt = $pdo->prepare("SELECT * FROM students WHERE id = :id LIMIT 1");
-        $stmt->bindParam(':id', $student_id, PDO::PARAM_INT);
+        $stmt = $conn->prepare("SELECT * FROM students WHERE id = ? LIMIT 1");
+        $stmt->bind_param("i", $student_id); // "i" = integer
     } else {
         $student_code_session = $_SESSION['student_code'];
-        $stmt = $pdo->prepare("SELECT * FROM students WHERE student_code = :student_code LIMIT 1");
-        $stmt->bindParam(':student_code', $student_code_session, PDO::PARAM_STR);
+        $stmt = $conn->prepare("SELECT * FROM students WHERE student_code = ? LIMIT 1");
+        $stmt->bind_param("s", $student_code_session); // "s" = string
     }
 
     $stmt->execute();
-    $student = $stmt->fetch(PDO::FETCH_ASSOC);
+    $result = $stmt->get_result();
+    $student = $result->fetch_assoc();
+    
+    // ปิด Statement คืนหน่วยความจำ
+    $stmt->close();
 
     if (!$student) {
         die("<div style='text-align:center; margin-top:50px; font-family:sans-serif;'>ไม่พบข้อมูลนักเรียน</div>");
@@ -41,11 +45,6 @@ try {
     $full_name = htmlspecialchars(($student['prefix'] ?? '') . ($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''));
     $student_code = htmlspecialchars($student['student_code'] ?? '-');
 
-} catch (PDOException $e) {
-    die("<div style='text-align:center; margin-top:50px; font-family:sans-serif; color:red;'>
-        <h3>เกิดข้อผิดพลาดจากฐานข้อมูล</h3>
-        <p>" . htmlspecialchars($e->getMessage()) . "</p>
-    </div>");
 } catch (Exception $e) {
     die("<div style='text-align:center; margin-top:50px; font-family:sans-serif; color:red;'>
         <h3>เกิดข้อผิดพลาดของระบบ</h3>
