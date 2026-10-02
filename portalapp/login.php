@@ -36,10 +36,10 @@ require_once 'db.php';
 // 3. ดึงค่าการตั้งค่าจากฐานข้อมูล
 // ==========================================
 $settings = [
-    'maintenance_mode'     => '',
-    'duty_system_status'   => '',
-    'vote_system_status'   => '',
-    'reqdoc_system_status' => ''
+    'maintenance_mode'     => 'off',
+    'duty_system_status'   => 'open',
+    'vote_system_status'   => 'open',
+    'reqdoc_system_status' => 'open'
 ];
 
 try {
@@ -57,14 +57,14 @@ try {
     error_log('Fetch Settings Error: ' . $e->getMessage());
 }
 
-// ดึงค่ามาแปลงเป็นตัวพิมพ์เล็กเพื่อนำมาเช็กเงื่อนไข
-$m_mode   = strtolower(trim($settings['maintenance_mode'] ?? 'off'));
-$d_status = strtolower(trim($settings['duty_system_status'] ?? 'open'));
+// ดึงค่า maintenance_mode มาเช็ก
+$m_mode = $settings['maintenance_mode'];
 
 // เช็กสถานะการเปิด/ปิดปรับปรุงระบบ (ใช้ค่า Manual หรือ Database)
+// *แก้ไขใหม่*: ถ้าระบุว่า 'on', '1', 'true' (เปิดโหมดซ่อมบำรุง) หรือ 'close', 'closed' (ปิดระบบหลัก) ถึงจะเข้าโหมด Maintenance
 $is_maintenance = $force_maintenance 
-    || in_array($m_mode, ['on', 'open', '1', 'true']) 
-    || in_array($d_status, ['close', 'closed', 'off', '0']);
+    || in_array($m_mode, ['on', '1', 'true', 'close', 'closed']);
+// หมายเหตุ: ตัด $d_status (duty_system_status) ออกจากหน้า Login เพราะควรไปเช็กปิดเฉพาะในหน้าระบบเวรเท่านั้น
 
 // ==========================================
 // 4. API สำหรับเช็กสถานะแบบ Real-time (AJAX)
@@ -445,11 +445,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$is_maintenance) {
             window.location.reload(); // รีเฟรชหน้าเพื่อสลับโหมดทันที
           }
         })
-        .catch(err => console.error('Real-time check failed:', err));
+        .catch(error => console.error('Error checking system status:', error));
     }
-
-    // ทำงานทุกๆ 3 วินาที (สามารถปรับเลข 3000 ให้เร็วหรือช้าลงได้)
-    setInterval(checkSystemStatusRealtime, 3000);
+    
+    // เช็กสถานะทุกๆ 30 วินาที
+    setInterval(checkSystemStatusRealtime, 30000);
   </script>
 </body>
 </html>
