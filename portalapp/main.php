@@ -160,18 +160,21 @@ try {
 
     // จัดเตรียมตัวแปรสำหรับการแสดงผล
     $name = trim(($student['prefix'] ?? '') . ($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''));
-    $student_code_display = "รหัสนักเรียน " . ($student['student_code'] ?? '');
+    $student_code_display = "รหัส " . ($student['student_code'] ?? '');
     $profile_image = $student['image'] ?? '';
 
     $unit_parts = [];
     if (!empty($student['battalion'])) $unit_parts[] = "พัน." . $student['battalion'];
     if (!empty($student['company']))   $unit_parts[] = "ร้อย." . $student['company'];
     if (!empty($student['platoon']))   $unit_parts[] = "หมวด " . $student['platoon'];
-    if (!empty($student['section']))   $unit_parts[] = "ตอนเรียนที่ " . $student['section'];
+    if (!empty($student['section']))   $unit_parts[] = "ตอนเรียน " . $student['section'];
     $student_unit = !empty($unit_parts) ? implode(" ", $unit_parts) : "นักเรียนทหาร";
 
     if (empty($profile_image) || $profile_image === "default_student.png" || $profile_image === "0") {
-        $profile_image = "https://ui-avatars.com/api/?name=" . urlencode($name) . "&background=5a42a0&color=fff&size=128";
+        $profile_image = "https://ui-avatars.com/api/?name=" . urlencode($name) . "&background=4f46e5&color=fff&size=128";
+    } else {
+        // กรณีมีรูปในระบบ ปรับ Path ให้ตรงตามที่ใช้งานจริง
+        $profile_image = "uploads/profiles/" . $profile_image;
     }
 
     // คำนวณนับการแจ้งเตือน
@@ -198,11 +201,13 @@ try {
   
   <style>
     :root {
-      --primary: #5a42a0;
-      --primary-light: #7c5dfa;
-      --bg-color: #f6f8fc;
+      --primary: #4f46e5;      /* Modern Indigo */
+      --primary-light: #818cf8;
+      --bg-color: #f8fafc;     /* Light slate */
+      --card-bg: #ffffff;
       --text-dark: #0f172a;
       --text-gray: #64748b;
+      --radius: 20px;
     }
 
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -216,659 +221,213 @@ try {
       user-select: none;
     }
 
+    /* Loader */
     #page-loader {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background-color: #ffffff;
-      z-index: 9999;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background-color: #ffffff; z-index: 9999;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
       transition: opacity 0.5s ease, visibility 0.5s ease;
     }
-    #page-loader.hidden {
-      opacity: 0;
-      visibility: hidden;
-    }
-    .loader-logo {
-      width: 80px;
-      height: 80px;
-      border-radius: 15px;
-      animation: pulse 1.5s infinite ease-in-out;
-    }
+    #page-loader.hidden { opacity: 0; visibility: hidden; }
+    .loader-logo { width: 80px; height: 80px; border-radius: 15px; animation: pulse 1.5s infinite ease-in-out; }
     .loader-spinner {
-      margin-top: 20px;
-      width: 40px;
-      height: 40px;
-      border: 4px solid rgba(90, 66, 160, 0.2);
+      margin-top: 20px; width: 40px; height: 40px;
+      border: 4px solid rgba(79, 70, 229, 0.2);
       border-top: 4px solid var(--primary);
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-    .loader-text {
-      margin-top: 15px;
-      color: var(--primary);
-      font-weight: 600;
-      font-size: 0.9rem;
-      letter-spacing: 1px;
-      animation: flash 1.5s infinite;
+      border-radius: 50%; animation: spin 1s linear infinite;
     }
 
     @keyframes pulse {
-      0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(90, 66, 160, 0.4); }
-      50% { transform: scale(1.05); box-shadow: 0 0 20px 0 rgba(90, 66, 160, 0); }
-      100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(90, 66, 160, 0); }
+      0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.4); }
+      50% { transform: scale(1.05); box-shadow: 0 0 20px 0 rgba(79, 70, 229, 0); }
+      100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(79, 70, 229, 0); }
     }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    @keyframes flash {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
-
-    .fade-in-up {
-      opacity: 0;
-      transform: translateY(20px);
-      animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    }
-    @keyframes fadeInUp {
-      to { opacity: 1; transform: translateY(0); }
-    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     
-    .delay-1 { animation-delay: 0.1s; }
-    .delay-2 { animation-delay: 0.2s; }
-    .delay-3 { animation-delay: 0.3s; }
-    .delay-4 { animation-delay: 0.4s; }
+    .fade-in-up { opacity: 0; transform: translateY(20px); animation: fadeInUp 0.5s ease forwards; }
+    @keyframes fadeInUp { to { opacity: 1; transform: translateY(0); } }
+    .delay-1 { animation-delay: 0.1s; } .delay-2 { animation-delay: 0.2s; }
+    .delay-3 { animation-delay: 0.3s; } .delay-4 { animation-delay: 0.4s; }
 
+    /* App Layout */
+    .app-container {
+      width: 100%; max-width: 430px;
+      background-color: var(--bg-color);
+      min-height: 100vh; position: relative;
+      padding-bottom: 90px;
+      box-shadow: 0 0 30px rgba(0,0,0,0.1);
+    }
+
+    /* Header */
     .top-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 15px 20px;
-      background: var(--bg-color);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px; background: transparent;
     }
-
-    .header-left {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .school-logo {
-      width: 45px;
-      height: 45px;
-      object-fit: contain;
-      border-radius: 10px;
-    }
-
-    .school-name h1 {
-      font-size: 1rem;
-      font-weight: 700;
-      color: var(--text-dark);
-      margin: 0 0 2px 0;
-    }
-
-    .school-name p {
-      font-size: 0.75rem;
-      color: var(--text-gray);
-      margin: 0;
-    }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .school-logo { width: 45px; height: 45px; object-fit: contain; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+    .school-name h1 { font-size: 1.05rem; font-weight: 700; color: var(--text-dark); margin: 0 0 2px 0; }
+    .school-name p { font-size: 0.75rem; color: var(--text-gray); margin: 0; font-weight: 500; }
 
     .noti-btn {
-      position: relative;
-      background: none;
-      border: none;
-      font-size: 1.4rem;
-      color: #94a3b8;
-      cursor: pointer;
-      text-decoration: none;
+      position: relative; background: white; border: none;
+      width: 42px; height: 42px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text-gray); font-size: 1.2rem; cursor: pointer;
+      text-decoration: none; box-shadow: 0 4px 15px rgba(0,0,0,0.05);
     }
-
     .noti-badge {
-      position: absolute;
-      top: -2px;
-      right: -2px;
-      background: #ef4444;
-      color: white;
-      font-size: 0.65rem;
-      font-weight: 700;
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border: 2px solid var(--bg-color);
+      position: absolute; top: 0; right: 0;
+      background: #ef4444; color: white; font-size: 0.65rem; font-weight: 700;
+      width: 18px; height: 18px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      border: 2px solid white;
     }
 
+    /* Profile Card - Revamped */
     .student-card {
-      background: var(--primary);
-      border-radius: 16px;
-      padding: 20px;
-      margin: 5px 20px 20px;
-      color: white;
-      box-shadow: 0 10px 20px rgba(90, 66, 160, 0.2);
+      background: linear-gradient(135deg, var(--primary), #6366f1);
+      border-radius: var(--radius);
+      padding: 20px; margin: 0 20px 25px;
+      color: white; box-shadow: 0 15px 30px rgba(79, 70, 229, 0.25);
+      display: flex; align-items: center; gap: 15px; position: relative; overflow: hidden;
     }
-
-    .badges {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 12px;
+    .student-card::after {
+      content: ''; position: absolute; right: -20px; bottom: -20px;
+      width: 100px; height: 100px; background: rgba(255,255,255,0.1);
+      border-radius: 50%;
     }
-
+    .profile-img {
+      width: 70px; height: 70px; border-radius: 50%;
+      border: 3px solid rgba(255, 255, 255, 0.4);
+      object-fit: cover; background-color: #fff; z-index: 1;
+    }
+    .student-info { z-index: 1; flex: 1; }
+    .student-info h2 { font-size: 1.15rem; font-weight: 600; margin: 0 0 5px 0; line-height: 1.2; }
+    .student-info p { font-size: 0.85rem; margin: 0 0 8px 0; opacity: 0.9; }
+    .badges { display: flex; flex-wrap: wrap; gap: 6px; }
     .badge-item {
-      background: rgba(255, 255, 255, 0.2);
-      border: 1px solid rgba(255, 255, 255, 0.4);
-      padding: 4px 12px;
-      border-radius: 20px;
-      font-size: 0.75rem;
-      font-weight: 500;
-      backdrop-filter: blur(4px);
+      background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.3);
+      padding: 3px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 500; backdrop-filter: blur(4px);
     }
+    .badge-danger { background: #ef4444 !important; border-color: #f87171 !important; color: white;}
 
-    .badge-danger {
-      background: rgba(220, 38, 38, 0.8) !important;
-      border-color: #f87171 !important;
-    }
-
-    .student-card h2 {
-      font-size: 1.3rem;
-      font-weight: 600;
-      margin: 0 0 4px 0;
-    }
-
-    .student-card p {
-      font-size: 0.85rem;
-      margin: 0;
-      opacity: 0.9;
-    }
-
+    /* Section Headers */
     .section-title {
-      display: flex;
-      align-items: center;
-      gap: 10px;
+      display: flex; align-items: center; justify-content: space-between;
       margin: 0 20px 15px;
     }
-
-    .section-pill {
-      width: 5px;
-      height: 24px;
-      background: var(--primary);
-      border-radius: 4px;
-    }
-
     .section-title h3 {
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: var(--text-dark);
-      margin: 0;
+      font-size: 1rem; font-weight: 700; color: var(--text-dark); margin: 0;
     }
 
-    .news-carousel {
-      display: flex;
-      overflow-x: auto;
-      gap: 16px;
-      padding: 4px 20px 15px 20px;
-      scroll-snap-type: x mandatory;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
-      scroll-behavior: smooth;
-    }
-
-    .news-carousel::-webkit-scrollbar {
-      display: none;
-    }
-
-    .news-card {
-      min-width: 86%;
-      max-width: 86%;
-      background: #ffffff;
-      border-radius: 20px;
-      overflow: hidden;
-      scroll-snap-align: center;
-      flex-shrink: 0;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
-      border: 1px solid rgba(226, 232, 240, 0.8);
-      display: flex;
-      flex-direction: column;
-      transition: transform 0.25s ease, box-shadow 0.25s ease;
-    }
-
-    .news-card:active {
-      transform: scale(0.98);
-    }
-
-    .news-media {
-      position: relative;
-      width: 100%;
-      height: 165px;
-      overflow: hidden;
-      background-color: #f1f5f9;
-      cursor: pointer;
-    }
-
-    .news-media img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      transition: transform 0.4s ease;
-    }
-
-    .news-media:hover img {
-      transform: scale(1.03);
-    }
-
-    .news-media-overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.15);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      opacity: 0;
-      transition: opacity 0.25s ease;
-    }
-
-    .news-media:hover .news-media-overlay {
-      opacity: 1;
-    }
-
-    .zoom-icon {
-      color: white;
-      font-size: 1.5rem;
-      background: rgba(0,0,0,0.5);
-      width: 42px;
-      height: 42px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      backdrop-filter: blur(4px);
-    }
-
-    .news-tag {
-      position: absolute;
-      top: 12px;
-      left: 12px;
-      background: rgba(15, 23, 42, 0.65);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      color: #ffffff;
-      font-size: 0.7rem;
-      font-weight: 600;
-      padding: 4px 10px;
-      border-radius: 20px;
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-    }
-
-    .news-card-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 16px 18px 0 18px;
-    }
-
-    .news-tag-inline {
-      background: rgba(90, 66, 160, 0.08);
-      color: var(--primary);
-      font-size: 0.7rem;
-      font-weight: 600;
-      padding: 4px 10px;
-      border-radius: 20px;
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-    }
-
-    .news-body {
-      padding: 16px 18px 18px;
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-    }
-
-    .news-meta {
-      margin-bottom: 6px;
-    }
-
-    .news-date {
-      font-size: 0.72rem;
-      color: #94a3b8;
-      font-weight: 500;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .news-title {
-      font-size: 0.98rem;
-      font-weight: 700;
-      color: #0f172a;
-      margin: 0 0 6px 0;
-      line-height: 1.4;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
-
-    .news-desc {
-      font-size: 0.82rem;
-      color: #475569;
-      line-height: 1.5;
-      margin: 0;
-      display: -webkit-box;
-      -webkit-line-clamp: 3;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-      white-space: pre-line;
-    }
-
-    .news-file-btn {
-      margin-top: 14px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 14px;
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-radius: 12px;
-      color: var(--primary);
-      font-size: 0.78rem;
-      font-weight: 600;
-      text-decoration: none;
-      transition: background 0.2s, border-color 0.2s;
-    }
-
-    .news-file-btn:active {
-      background: #f1f5f9;
-    }
-
-    .news-file-btn .arrow-icon {
-      font-size: 0.7rem;
-      opacity: 0.6;
-    }
-
-    .carousel-dots {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 6px;
-      margin: 0 0 20px 0;
-    }
-
-    .dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background-color: #cbd5e1;
-      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-
-    .dot.active {
-      width: 22px;
-      border-radius: 10px;
-      background-color: var(--primary);
-    }
-
-    .empty-news-card {
-      width: 100%;
-      background: #ffffff;
-      border-radius: 20px;
-      padding: 30px 20px;
-      text-align: center;
-      border: 1px dashed #cbd5e1;
-      color: #94a3b8;
-    }
-
-    .empty-news-icon {
-      width: 50px;
-      height: 50px;
-      background: #f1f5f9;
-      color: #94a3b8;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.3rem;
-      margin: 0 auto 10px;
-    }
-
-    .empty-news-card p {
-      margin: 0;
-      font-size: 0.85rem;
-      font-weight: 500;
-    }
-
-    .image-modal {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      background-color: rgba(15, 23, 42, 0.88);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      z-index: 99999;
-      justify-content: center;
-      align-items: center;
-      padding: 20px;
-      box-sizing: border-box;
-      opacity: 0;
-      transition: opacity 0.3s ease;
-    }
-
-    .image-modal.show {
-      display: flex;
-      opacity: 1;
-    }
-
-    .modal-body-container {
-      position: relative;
-      max-width: 100%;
-      max-height: 90vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      transform: scale(0.9);
-      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-
-    .image-modal.show .modal-body-container {
-      transform: scale(1);
-    }
-
-    .modal-content-img {
-      max-width: 100%;
-      max-height: 80vh;
-      border-radius: 16px;
-      object-fit: contain;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
-    }
-
-    .modal-close-btn {
-      position: absolute;
-      top: -45px;
-      right: 0;
-      background: rgba(255, 255, 255, 0.2);
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      color: white;
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.1rem;
-      cursor: pointer;
-      backdrop-filter: blur(4px);
-    }
-
-    .duty-alert-container {
-      margin: 0 20px 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
+    /* Modern Alert Cards */
+    .duty-alert-container { margin: 0 20px 25px; display: flex; flex-direction: column; gap: 12px; }
     .duty-alert-card {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 14px 16px;
-      border-radius: 14px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+      display: flex; align-items: center; gap: 15px;
+      padding: 16px; border-radius: 16px; background: var(--card-bg);
+      box-shadow: 0 4px 15px rgba(0,0,0,0.03); position: relative; overflow: hidden;
     }
-
-    .duty-alert-card.urgent {
-      background-color: #fef2f2;
-      border: 1px solid #fecaca;
-      color: #991b1b;
+    /* Left colored bar */
+    .duty-alert-card::before {
+      content: ''; position: absolute; left: 0; top: 0; height: 100%; width: 5px;
     }
+    .duty-alert-card.urgent::before { background-color: #ef4444; }
+    .duty-alert-card.warning::before { background-color: #f59e0b; }
+    .duty-alert-card.success::before { background-color: #10b981; }
 
-    .duty-alert-card.warning {
-      background-color: #fff7ed;
-      border: 1px solid #ffedd5;
-      color: #9a3412;
-    }
+    .alert-icon { font-size: 1.4rem; }
+    .urgent .alert-icon { color: #ef4444; }
+    .warning .alert-icon { color: #f59e0b; }
+    .success .alert-icon { color: #10b981; }
 
-    .duty-alert-card.success {
-      background-color: #f0fdf4;
-      border: 1px solid #bbf7d0;
-      color: #166534;
-    }
-
-    .alert-icon { font-size: 1.5rem; }
     .alert-info { flex: 1; }
-    .alert-info h4 { margin: 0 0 2px 0; font-size: 0.9rem; font-weight: 700; }
-    .alert-info p { margin: 0; font-size: 0.8rem; opacity: 0.85; }
+    .alert-info h4 { margin: 0 0 3px 0; font-size: 0.9rem; font-weight: 700; color: var(--text-dark); }
+    .alert-info p { margin: 0; font-size: 0.8rem; color: var(--text-gray); }
 
-    .btn-action-alert {
-      background-color: #dc2626;
-      color: white;
-      text-decoration: none;
-      padding: 6px 12px;
-      border-radius: 8px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      white-space: nowrap;
-      box-shadow: 0 2px 4px rgba(220, 38, 38, 0.2);
+    .btn-action {
+      padding: 6px 14px; border-radius: 10px; font-size: 0.75rem; font-weight: 600;
+      text-decoration: none; text-align: center; white-space: nowrap; transition: 0.2s;
     }
-    
-    .btn-action-warning {
-      background-color: #ea580c;
-      color: white;
-      text-decoration: none;
-      padding: 6px 12px;
-      border-radius: 8px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      white-space: nowrap;
-    }
+    .btn-action.urgent { background-color: #fee2e2; color: #ef4444; }
+    .btn-action.warning { background-color: #fef3c7; color: #f59e0b; }
 
+    /* Menu Grid */
     .menu-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-      margin: 0 20px 25px;
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 12px; margin: 0 20px 25px;
     }
-
     .menu-item {
-      background: white;
-      border-radius: 16px;
-      padding: 18px 5px;
-      text-decoration: none;
-      color: var(--text-dark);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.03);
-      transition: transform 0.2s, box-shadow 0.2s;
+      background: var(--card-bg); border-radius: 16px; padding: 15px 5px;
+      text-decoration: none; color: var(--text-dark);
+      display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.03); transition: transform 0.2s;
     }
-    
     .menu-item:active { transform: scale(0.95); }
-
     .icon-box {
-      width: 52px;
-      height: 52px;
-      border-radius: 14px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.5rem;
-      margin-bottom: 10px;
+      width: 45px; height: 45px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem; margin-bottom: 8px;
     }
+    .menu-text { font-size: 0.7rem; font-weight: 600; line-height: 1.2; }
+    
+    .bg-purple { background: #eef2ff; color: var(--primary); }
+    .bg-orange { background: #fff7ed; color: #ea580c; }
+    .bg-blue { background: #f0f9ff; color: #0284c7; }
+    .bg-red { background: #fef2f2; color: #dc2626; }
+    .bg-green { background: #ecfdf5; color: #059669; }
 
-    .menu-text {
-      font-size: 0.8rem;
-      font-weight: 600;
-      line-height: 1.2;
+    /* News Carousel */
+    .news-carousel {
+      display: flex; overflow-x: auto; gap: 16px;
+      padding: 5px 20px 20px 20px; scroll-snap-type: x mandatory;
+      scrollbar-width: none; scroll-behavior: smooth;
     }
-
-    .bg-purple { background: #f3e8ff; color: #9333ea; }
-    .bg-orange { background: #ffedd5; color: #ea580c; }
-    .bg-blue { background: #dbeafe; color: #2563eb; }
-    .bg-red { background: #fee2e2; color: #dc2626; }
-
-    .app-container {
-      width: 100%;
-      max-width: 430px;
-      background-color: var(--bg-color);
-      min-height: 100vh;
-      position: relative;
-      padding-bottom: 90px;
-      box-shadow: 0 0 20px rgba(0,0,0,0.1);
+    .news-carousel::-webkit-scrollbar { display: none; }
+    .news-card {
+      min-width: 85%; max-width: 85%; background: var(--card-bg);
+      border-radius: var(--radius); scroll-snap-align: center; flex-shrink: 0;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.04); display: flex; flex-direction: column; overflow: hidden;
     }
-
+    .news-media { position: relative; width: 100%; height: 180px; background: #e2e8f0; cursor: pointer; }
+    .news-media img { width: 100%; height: 100%; object-fit: cover; }
+    .news-tag {
+      position: absolute; top: 12px; left: 12px;
+      background: rgba(255,255,255,0.9); color: var(--primary); font-size: 0.7rem; font-weight: 700;
+      padding: 4px 10px; border-radius: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    .news-body { padding: 15px; display: flex; flex-direction: column; flex: 1; }
+    .news-date { font-size: 0.7rem; color: #94a3b8; margin-bottom: 5px; font-weight: 500; }
+    .news-title { font-size: 0.95rem; font-weight: 700; margin: 0 0 5px 0; color: var(--text-dark); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .news-desc { font-size: 0.8rem; color: var(--text-gray); margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    
+    /* Bottom Nav (Glassmorphism) */
     .bottom-nav {
-      position: fixed; 
-      bottom: 0;
-      width: 100%;
-      max-width: 430px; 
-      left: 50%;
-      transform: translateX(-50%); 
-      height: 70px;
-      background: white;
-      border-top-left-radius: 25px;
-      border-top-right-radius: 25px;
-      display: flex;
-      justify-content: space-around;
-      align-items: center;
-      box-shadow: 0 -5px 20px rgba(0,0,0,0.03);
-      padding: 0 10px;
-      z-index: 1000; 
+      position: fixed; bottom: 0; width: 100%; max-width: 430px; left: 50%; transform: translateX(-50%);
+      height: 75px; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      border-top: 1px solid rgba(0,0,0,0.05);
+      display: flex; justify-content: space-around; align-items: center; z-index: 1000;
+      padding-bottom: env(safe-area-inset-bottom, 0); /* Support for iPhone notch */
     }
-
     .nav-link {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      text-decoration: none;
-      color: #94a3b8;
-      font-size: 0.7rem;
-      font-weight: 600;
-      width: 30%;
-      gap: 4px;
+      display: flex; flex-direction: column; align-items: center; gap: 5px;
+      text-decoration: none; color: #94a3b8; font-size: 0.7rem; font-weight: 600; width: 25%;
     }
-
     .nav-link.active { color: var(--primary); }
-    .nav-link i { font-size: 1.3rem; }
+    .nav-link i { font-size: 1.4rem; }
+
+    /* Modal Image */
+    .image-modal {
+      display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0, 0, 0, 0.9); z-index: 99999; justify-content: center; align-items: center;
+      opacity: 0; transition: 0.3s;
+    }
+    .image-modal.show { display: flex; opacity: 1; }
+    .modal-content-img { max-width: 90%; max-height: 80vh; border-radius: 12px; }
+    .modal-close-btn {
+      position: absolute; top: 20px; right: 20px;
+      background: rgba(255,255,255,0.2); border: none; color: white; width: 40px; height: 40px;
+      border-radius: 50%; font-size: 1.5rem; cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -877,22 +436,21 @@ try {
   <div id="page-loader">
     <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg" alt="Loading Logo" class="loader-logo">
     <div class="loader-spinner"></div>
-    <div class="loader-text">กำลังโหลดข้อมูล...</div>
   </div>
   <?php endif; ?>
 
   <div class="app-container">
     
+    <!-- Top Header -->
     <div class="top-header fade-in-up delay-1">
       <div class="header-left">
         <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg" alt="Logo" class="school-logo">
         <div class="school-name">
-          <h1>ระบบบริการสารสนเทศ กองพันนักเรียนที่ 1</h1>
+          <h1>กองพันนักเรียนที่ 1</h1>
           <p>โรงเรียนช่างฝีมือทหาร</p>
         </div>
       </div>
-
-      <a href="nofitication.php" class="noti-btn" id="notiBellBtn" title="ดูการแจ้งเตือน">
+      <a href="nofitication.php" class="noti-btn" id="notiBellBtn">
         <i class="far fa-bell"></i>
         <?php if ($noti_count > 0): ?>
           <span class="noti-badge"><?= $noti_count ?></span>
@@ -900,75 +458,64 @@ try {
       </a>
     </div>
 
+    <!-- Student Profile Card (New Design) -->
     <div class="student-card fade-in-up delay-2">
-      <div class="badges">
-        <div class="badge-item">ปีการศึกษา 2569</div>
-        <div class="badge-item"><?= htmlspecialchars($student_unit) ?></div>
-        <?php if ($total_cards_history > 0): ?>
-          <div class="badge-item badge-danger"><i class="fas fa-exclamation-circle"></i> โดนตัดบัตรสะสม: <?= $total_cards_history ?> ใบ</div>
-        <?php endif; ?>
+      <img src="<?= htmlspecialchars($profile_image) ?>" alt="Profile" class="profile-img">
+      <div class="student-info">
+        <h2><?= htmlspecialchars($name) ?></h2>
+        <p><?= htmlspecialchars($student_code_display) ?></p>
+        <div class="badges">
+          <div class="badge-item"><?= htmlspecialchars($student_unit) ?></div>
+          <?php if ($total_cards_history > 0): ?>
+            <div class="badge-item badge-danger">โดนตัดบัตรสะสม: <?= $total_cards_history ?> ใบ</div>
+          <?php endif; ?>
+        </div>
       </div>
-      <h2><?= htmlspecialchars($name) ?></h2>
-      <p><?= htmlspecialchars($student_code_display) ?></p>
     </div>
 
+    <!-- Alerts Section -->
     <div class="section-title fade-in-up delay-3">
-      <div class="section-pill"></div>
-      <h3>บัตรวินัย</h3>
+      <h3>การแจ้งเตือนของฉัน</h3>
     </div>
 
     <div class="duty-alert-container fade-in-up delay-3">
-      <!-- 1. การ์ดแสดงสถานะบัตรวินัยประจำวันนี้ -->
+      <!-- 1. บัตรวินัย -->
       <?php if ($today_disc_count > 0): ?>
         <?php 
           $tot = $today_disc_count;
           $color = strtolower(trim($today_discipline['status_color'] ?? ''));
-
           $items = [];
-          if (!empty($today_discipline['card_bed']))     $items[] = "เตียง (" . (int)$today_discipline['card_bed'] . ")";
-          if (!empty($today_discipline['card_cabinet'])) $items[] = "ตู้ (" . (int)$today_discipline['card_cabinet'] . ")";
-          if (!empty($today_discipline['card_shoe']))    $items[] = "รองเท้า (" . (int)$today_discipline['card_shoe'] . ")";
-          
-          $items_str = !empty($items) ? implode(", ", $items) : "โดนตัดบัตรวินัยประจำวันนี้";
+          if (!empty($today_discipline['card_bed']))     $items[] = "เตียง";
+          if (!empty($today_discipline['card_cabinet'])) $items[] = "ตู้";
+          if (!empty($today_discipline['card_shoe']))    $items[] = "รองเท้า";
+          $items_str = !empty($items) ? implode(", ", $items) : "บัตรวินัย";
         ?>
 
         <?php if ($tot >= 3 || $color === 'red'): ?>
           <div class="duty-alert-card urgent">
             <div class="alert-icon"><i class="fas fa-id-card-alt"></i></div>
             <div class="alert-info">
-              <h4>วันนี้สถานะบัตร: แดง (โดน <?= $tot ?> ใบ)</h4>
+              <h4>สถานะ: แดง (<?= $tot ?> ใบ)</h4>
               <p>รายการ: <?= htmlspecialchars($items_str) ?></p>
             </div>
-            <a href="discipline_history.php" class="btn-action-alert">ดูรายละเอียด</a>
+            <a href="discipline_history.php" class="btn-action urgent">ตรวจสอบ</a>
           </div>
-
-        <?php elseif ($tot == 2 || $color === 'yellow'): ?>
-          <div class="duty-alert-card warning">
-            <div class="alert-icon"><i class="fas fa-id-card-alt"></i></div>
-            <div class="alert-info">
-              <h4>วันนี้สถานะบัตร: เหลือง (โดน <?= $tot ?> ใบ)</h4>
-              <p>รายการ: <?= htmlspecialchars($items_str) ?></p>
-            </div>
-            <a href="discipline_history.php" class="btn-action-warning">ดูรายละเอียด</a>
-          </div>
-
         <?php else: ?>
-          <div class="duty-alert-card warning" style="background-color: #fff3cd; color: #856404; border-color: #ffeeba;">
+          <div class="duty-alert-card warning">
             <div class="alert-icon"><i class="fas fa-exclamation-triangle"></i></div>
             <div class="alert-info">
-              <h4>วันนี้สถานะบัตร: เตือน (โดน <?= $tot ?> ใบ)</h4>
+              <h4>สถานะ: เตือน (<?= $tot ?> ใบ)</h4>
               <p>รายการ: <?= htmlspecialchars($items_str) ?></p>
             </div>
-            <a href="discipline_history.php" class="btn-action-warning">ดูรายละเอียด</a>
+            <a href="discipline_history.php" class="btn-action warning">ตรวจสอบ</a>
           </div>
         <?php endif; ?>
-
       <?php else: ?>
         <div class="duty-alert-card success">
-          <div class="alert-icon"><i class="fas fa-shield-alt"></i></div>
+          <div class="alert-icon"><i class="fas fa-check-circle"></i></div>
           <div class="alert-info">
-            <h4>สถานะบัตรวินัยวันนี้: ปกติ</h4>
-            <p>ยังไม่มีรายการโดนตัดบัตรวินัยประจำวันนี้</p>
+            <h4>บัตรวินัยวันนี้: ปกติ</h4>
+            <p>ยังไม่มีรายการโดนตัดบัตรวินัย</p>
           </div>
         </div>
       <?php endif; ?>
@@ -976,37 +523,31 @@ try {
       <!-- 2. แจ้งเตือนโหวต -->
       <?php if (!$has_voted): ?>
         <div class="duty-alert-card urgent">
-          <div class="alert-icon"><i class="fas fa-exclamation-triangle"></i></div>
+          <div class="alert-icon"><i class="fas fa-vote-yea"></i></div>
           <div class="alert-info">
-            <h4>ท่านยังไม่ได้โหวตประสงค์กลับบ้าน</h4>
-            <p>กรุณาทำรายการโหวตสำหรับสัปดาห์นี้</p>
+            <h4>ยังไม่ได้โหวตกลับบ้าน</h4>
+            <p>กรุณาทำรายการในสัปดาห์นี้</p>
           </div>
-          <a href="fill.php" class="btn-action-alert">โหวตเลย</a>
+          <a href="fill.php" class="btn-action urgent">โหวตเลย</a>
         </div>
       <?php endif; ?>
 
-      <!-- 3. แจ้งเตือนเข้าเวร -->
+      <!-- 3. แจ้งเตือนเวร -->
       <?php foreach ($duty_notifications as $noti): ?>
-        <?php 
-          $is_urgent = ($noti['days_left'] == 1);
-          $card_class = $is_urgent ? 'urgent' : 'warning';
-          $icon_class = $is_urgent ? 'fa-exclamation-circle' : 'fa-clock';
-          $date_str = date('d/m/Y', strtotime($noti['duty_date']));
-        ?>
-        <div class="duty-alert-card <?= $card_class ?>">
-          <div class="alert-icon"><i class="fas <?= $icon_class ?>"></i></div>
+        <?php $is_urgent = ($noti['days_left'] == 1); ?>
+        <div class="duty-alert-card <?= $is_urgent ? 'urgent' : 'warning' ?>">
+          <div class="alert-icon"><i class="fas fa-clock"></i></div>
           <div class="alert-info">
-            <h4>แจ้งเตือนเข้าเวร: <?= htmlspecialchars($noti['duty_name'] ?? 'ปฏิบัติหน้าที่เวร') ?></h4>
-            <p>อีก <?= $noti['days_left'] ?> วัน (วันที่ <?= $date_str ?>) กรุณาเตรียมตัวให้พร้อม</p>
+            <h4>เวร: <?= htmlspecialchars($noti['duty_name']) ?></h4>
+            <p>อีก <?= $noti['days_left'] ?> วัน (<?= date('d/m/Y', strtotime($noti['duty_date'])) ?>)</p>
           </div>
         </div>
       <?php endforeach; ?>
-
     </div>
 
+    <!-- Main Menus -->
     <div class="section-title fade-in-up delay-4">
-      <div class="section-pill"></div>
-      <h3>เมนูหลัก</h3>
+      <h3>บริการระบบ</h3>
     </div>
 
     <div class="menu-grid fade-in-up delay-4">
@@ -1020,104 +561,75 @@ try {
       </a>
       <a href="reqdoc.php" class="menu-item">
         <div class="icon-box bg-blue"><i class="fas fa-file-alt"></i></div>
-        <span class="menu-text">คำร้องขอเอกสาร</span>
+        <span class="menu-text">ขอเอกสาร</span>
       </a>
       <a href="duty_substitutions.php" class="menu-item">
-        <div class="icon-box bg-blue"><i class="fas fa-address-book"></i></div>
+        <div class="icon-box bg-green"><i class="fas fa-address-book"></i></div>
         <span class="menu-text">เปลี่ยนเวร</span>
       </a>
-      <a href="discipline_history.php" class="menu-item">
-        <div class="icon-box bg-red"><i class="fas fa-id-card"></i></div>
-        <span class="menu-text">ประวัติบัตรวินัย</span>
-      </a>
     </div>
 
-    <!-- ส่วนแสดงข่าวสาร / ประกาศ (CAROUSEL WIDGET WITH POPUP) -->
+    <!-- News Carousel -->
     <div class="section-title fade-in-up delay-4">
-      <div class="section-pill"></div>
-      <h3>ข่าวประชาสัมพันธ์</h3>
+      <h3>ประชาสัมพันธ์</h3>
     </div>
 
-    <div class="fade-in-up delay-4">
-      <div class="news-carousel" id="newsCarousel">
-        <?php if (!empty($announcements)): ?>
-          <?php foreach ($announcements as $index => $news): ?>
-            <?php 
-              $attachment_path = $news['attachment'] ?? '';
-              if (!empty($attachment_path) && !preg_match('/^https?:\/\//i', $attachment_path) && strpos($attachment_path, 'uploads/') !== 0) {
-                  $attachment_path = 'uploads/news/' . $attachment_path;
-              }
-              
-              $ext = strtolower(pathinfo($attachment_path, PATHINFO_EXTENSION));
-              $is_image = in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp']);
-              $cache_buster = "?v=" . time();
-              $full_img_url = htmlspecialchars($attachment_path) . $cache_buster;
-            ?>
+    <div class="news-carousel fade-in-up delay-4" id="newsCarousel">
+      <?php if (!empty($announcements)): ?>
+        <?php foreach ($announcements as $index => $news): ?>
+          <?php 
+            $attachment_path = $news['attachment'] ?? '';
+            if (!empty($attachment_path) && !preg_match('/^https?:\/\//i', $attachment_path) && strpos($attachment_path, 'uploads/') !== 0) {
+                $attachment_path = 'uploads/news/' . $attachment_path;
+            }
+            $ext = strtolower(pathinfo($attachment_path, PATHINFO_EXTENSION));
+            $is_image = in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp']);
+            $full_img_url = htmlspecialchars($attachment_path) . "?v=" . time();
+          ?>
 
-            <div class="news-card">
-              <?php if (!empty($news['attachment']) && $is_image): ?>
-                <div class="news-media" onclick="openImageModal('<?= $full_img_url ?>')">
-                  <img src="<?= $full_img_url ?>" alt="ข่าวสาร" loading="lazy">
-                  <div class="news-media-overlay">
-                    <div class="zoom-icon"><i class="fas fa-search-plus"></i></div>
-                  </div>
-                  <div class="news-tag"><i class="fas fa-bullhorn"></i> ประกาศ</div>
-                </div>
-              <?php else: ?>
-                <div class="news-card-header">
-                  <span class="news-tag-inline"><i class="fas fa-bullhorn"></i> ประกาศข่าว</span>
-                  <span class="news-date"><i class="far fa-clock"></i> <?= date('d/m/Y', strtotime($news['created_at'])) ?></span>
-                </div>
-              <?php endif; ?>
-
-              <div class="news-body">
-                <?php if (!empty($news['attachment']) && $is_image): ?>
-                  <div class="news-meta">
-                    <span class="news-date"><i class="far fa-clock"></i> <?= date('d/m/Y H:i', strtotime($news['created_at'])) ?> น.</span>
-                  </div>
-                <?php endif; ?>
-                
-                <h4 class="news-title"><?= htmlspecialchars($news['title']) ?></h4>
-                <p class="news-desc"><?= htmlspecialchars($news['content']) ?></p>
-
-                <?php if (!empty($news['attachment']) && !$is_image): ?>
-                  <a href="<?= $full_img_url ?>" target="_blank" class="news-file-btn">
-                    <span><i class="fas fa-paperclip"></i> เปิดลิงก์ / ดาวน์โหลดไฟล์</span>
-                    <i class="fas fa-chevron-right arrow-icon"></i>
-                  </a>
-                <?php endif; ?>
+          <div class="news-card">
+            <?php if (!empty($news['attachment']) && $is_image): ?>
+              <div class="news-media" onclick="openImageModal('<?= $full_img_url ?>')">
+                <img src="<?= $full_img_url ?>" alt="ข่าวสาร" loading="lazy">
+                <div class="news-tag">ประกาศ</div>
               </div>
+            <?php else: ?>
+              <div class="news-media" style="background: var(--primary); display: flex; align-items: center; justify-content: center; height: 120px;">
+                <i class="fas fa-bullhorn" style="font-size: 3rem; color: rgba(255,255,255,0.5);"></i>
+                <div class="news-tag">ประกาศ</div>
+              </div>
+            <?php endif; ?>
+
+            <div class="news-body">
+              <div class="news-date"><i class="far fa-clock"></i> <?= date('d/m/Y H:i', strtotime($news['created_at'])) ?></div>
+              <h4 class="news-title"><?= htmlspecialchars($news['title']) ?></h4>
+              <p class="news-desc"><?= htmlspecialchars($news['content']) ?></p>
             </div>
-          <?php endforeach; ?>
-        <?php else: ?>
-          <div class="empty-news-card">
-            <div class="empty-news-icon"><i class="fas fa-newspaper"></i></div>
-            <p>ยังไม่มีข่าวประชาสัมพันธ์ในขณะนี้</p>
           </div>
-        <?php endif; ?>
-      </div>
-      <div class="carousel-dots" id="carouselDots"></div>
+        <?php endforeach; ?>
+      <?php else: ?>
+        <div style="padding: 20px; text-align: center; color: var(--text-gray); width: 100%;">ยังไม่มีประกาศในขณะนี้</div>
+      <?php endif; ?>
     </div>
 
-  </div>
+  </div> <!-- End App Container -->
 
-  <!-- Modal สำหรับขยายรูปภาพ -->
+  <!-- Image Modal -->
   <div id="imageModal" class="image-modal" onclick="closeImageModal()">
-    <div class="modal-body-container" onclick="event.stopPropagation()">
-      <button class="modal-close-btn" onclick="closeImageModal()">&times;</button>
-      <img id="modalImage" class="modal-content-img" src="" alt="ขยายรูปภาพ">
-    </div>
+    <button class="modal-close-btn" onclick="closeImageModal()">&times;</button>
+    <img id="modalImage" class="modal-content-img" src="" alt="Zoom">
   </div>
 
-  <!-- เมนูด้านล่าง Bottom Navigation -->
+  <!-- Bottom Navigation -->
   <div class="bottom-nav">
     <a href="main.php" class="nav-link active">
       <i class="fas fa-home"></i>
       <span>หน้าหลัก</span>
     </a>
+
     <a href="logout.php" class="nav-link">
-      <i class="fa fa-sign-out"></i>
-      <span>ออกจากระบบ</span>
+      <i class="fas fa-sign-out-alt"></i>
+      <span>ออกระบบ</span>
     </a>
   </div>
 
@@ -1126,13 +638,11 @@ try {
     window.addEventListener('load', () => {
       const loader = document.getElementById('page-loader');
       if (loader) {
-        setTimeout(() => {
-          loader.classList.add('hidden');
-        }, 300);
+        setTimeout(() => { loader.classList.add('hidden'); }, 300);
       }
     });
 
-    // 2. ฟังก์ชัน Modal สำหรับดูรูปภาพข่าวแบบเต็มหน้าจอ
+    // 2. ฟังก์ชัน Modal
     function openImageModal(src) {
       const modal = document.getElementById('imageModal');
       const modalImg = document.getElementById('modalImage');
@@ -1141,39 +651,12 @@ try {
         modal.classList.add('show');
       }
     }
-
     function closeImageModal() {
       const modal = document.getElementById('imageModal');
-      if (modal) {
-        modal.classList.remove('show');
-      }
+      if (modal) { modal.classList.remove('show'); }
     }
 
-    // 3. จัดการ Carousel Dots บอกตำแหน่งข่าว
-    const carousel = document.getElementById('newsCarousel');
-    const dotsContainer = document.getElementById('carouselDots');
-    if (carousel && dotsContainer) {
-      const cards = carousel.querySelectorAll('.news-card');
-      if (cards.length > 1) {
-        cards.forEach((_, idx) => {
-          const dot = document.createElement('div');
-          dot.classList.add('dot');
-          if (idx === 0) dot.classList.add('active');
-          dotsContainer.appendChild(dot);
-        });
-
-        carousel.addEventListener('scroll', () => {
-          const cardWidth = cards[0].offsetWidth + 16;
-          const activeIndex = Math.round(carousel.scrollLeft / cardWidth);
-          const dots = dotsContainer.querySelectorAll('.dot');
-          dots.forEach((dot, idx) => {
-            dot.classList.toggle('active', idx === activeIndex);
-          });
-        });
-      }
-    }
-
-    // 4. สคริปต์บันทึก Push Notification อัตโนมัติเมื่อเข้าหน้า main.php (แก้ไขใหม่)
+    // 3. สคริปต์ Push Notification
     const applicationServerPublicKey = 'BDcVYH88lfTwHxM-yyzWmQzIc6_orJpWxXr156VsSppe-srH4z1gYGz0W6z9I67JHkBkcnnbrwqoLuBZLAzC7HA';
 
     function urlB64ToUint8Array(base64String) {
@@ -1190,40 +673,21 @@ try {
     function sendSubscriptionToServer(subscription) {
       fetch('save_subscription.php', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(subscription)
       })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('Network response was not ok');
-        }
-        return response.text();
-      })
-      .then(data => {
-        console.log('บันทึกการสมัครรับแจ้งเตือนไปยังเซิร์ฟเวอร์เรียบร้อย:', data);
-      })
-      .catch(error => {
-        console.error('เกิดข้อผิดพลาดในการส่งข้อมูลไปเซิร์ฟเวอร์:', error);
-      });
+      .then(response => response.text())
+      .then(data => console.log('บันทึกแจ้งเตือน:', data))
+      .catch(error => console.error('เกิดข้อผิดพลาด:', error));
     }
 
     if ('serviceWorker' in navigator && 'PushManager' in window) {
       window.addEventListener('load', async () => {
         try {
-          // 4.1 ขออนุญาตการแจ้งเตือนจากผู้ใช้ก่อน
           const permission = await Notification.requestPermission();
-          if (permission !== 'granted') {
-            console.warn('ผู้ใช้ไม่อนุญาตการแจ้งเตือน (Permission denied)');
-            return; // หยุดทำงานถ้าผู้ใช้ไม่อนุญาต
-          }
+          if (permission !== 'granted') return;
 
-          // 4.2 ลงทะเบียน Service Worker
           const swReg = await navigator.serviceWorker.register('sw.js');
-          console.log('ลงทะเบียน ServiceWorker สำเร็จ');
-          
-          // 4.3 ตรวจสอบและสร้าง Subscription
           let subscription = await swReg.pushManager.getSubscription();
           
           if (!subscription) {
@@ -1231,14 +695,8 @@ try {
               userVisibleOnly: true,
               applicationServerKey: urlB64ToUint8Array(applicationServerPublicKey)
             });
-            console.log('ลงทะเบียนผู้รับข่าวสารใหม่สำเร็จ');
-          } else {
-            console.log('ผู้ใช้นี้เคยลงทะเบียนรับการแจ้งเตือนไว้แล้ว อัปเดตข้อมูลไปยังเซิร์ฟเวอร์');
           }
-
-          // 4.4 ส่งข้อมูล Subscription ไปยังฐานข้อมูล
           sendSubscriptionToServer(subscription);
-          
         } catch (error) {
           console.error('Push Registration Error:', error);
         }
