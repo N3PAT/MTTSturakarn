@@ -168,14 +168,21 @@ try {
     if (!empty($student['company']))   $unit_parts[] = "ร้อย." . $student['company'];
     if (!empty($student['platoon']))   $unit_parts[] = "หมวด " . $student['platoon'];
     if (!empty($student['section']))   $unit_parts[] = "ตอนเรียน " . $student['section'];
-    $student_unit = !empty($unit_parts) ? implode(" ", $unit_parts) : "นักเรียนทหาร";
+    $student_unit = !empty($unit_parts) ? implode(" ", $unit_parts) : "ไม่มีข้อมูล";
 
-    if (empty($profile_image) || $profile_image === "default_student.png" || $profile_image === "0") {
-        $profile_image = "https://ui-avatars.com/api/?name=" . urlencode($name) . "&background=4f46e5&color=fff&size=128";
-    } else {
-        // กรณีมีรูปในระบบ ปรับ Path ให้ตรงตามที่ใช้งานจริง
-        $profile_image = "uploads/profiles/" . $profile_image;
-    }
+    // สมมติว่า $profile_image คือค่าที่ดึงมาจากคอลัมน์ 'image' ในฐานข้อมูล
+
+if (empty($profile_image)) {
+    // เผื่อกรณีที่ค่าใน DB ว่างจริงๆ (กันเหนียว) ให้ดึง URL ค่าเริ่มต้นมาใส่
+    $profile_image = "https://taothetutor.wordpress.com/wp-content/uploads/2026/10/300-400-px.png";
+} elseif (preg_match('/^https?:\/\//i', $profile_image)) {
+    // ถ้าค่าที่ดึงมาเป็น URL อยู่แล้ว (ตรงกับค่า Default ใน DB)
+    // ไม่ต้องทำอะไร นำไปใช้งานได้เลย
+    $profile_image = $profile_image; 
+} else {
+    // ถ้าไม่ใช่ URL แปลว่าเป็นชื่อไฟล์ที่อัปโหลดเข้าระบบมาใหม่ ให้เติม Path ข้างหน้า
+    $profile_image = "uploads/profiles/" . $profile_image;
+}
 
     // คำนวณนับการแจ้งเตือน
     $has_discipline_alert = ($today_disc_count > 0);
