@@ -389,7 +389,7 @@ try {
     <div class="info-section fade-in-up delay-3">
         <div class="section-header">
             <div class="section-icon bg-green"><i class="fas fa-weight-scale"></i></div>
-            <h3>ข้อมูลทางกายภาพ</h3>
+            <h3>ข้อมูลสุขภาพ</h3>
         </div>
         <div class="info-row">
             <span class="info-label">น้ำหนัก</span>
