@@ -297,6 +297,38 @@ if (ob_get_length()) ob_end_flush();
     .nav-link { display: flex; flex-direction: column; align-items: center; text-decoration: none; color: #94a3b8; font-size: 0.7rem; font-weight: 600; width: 30%; gap: 4px; }
     .nav-link.active { color: var(--primary); }
     .nav-link i { font-size: 1.3rem; }
+
+    /* =========================================
+       CSS สำหรับ Modal และเอฟเฟกต์การกด
+       ========================================= */
+    .clickable-noti { cursor: pointer; transition: transform 0.1s, box-shadow 0.2s; }
+    .clickable-noti:active { transform: scale(0.98); }
+
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5); z-index: 2000;
+      display: none; justify-content: center; align-items: center;
+      opacity: 0; transition: opacity 0.3s;
+    }
+    .modal-overlay.show { display: flex; opacity: 1; }
+    .modal-box {
+      background: white; width: 90%; max-width: 380px;
+      border-radius: 16px; padding: 20px;
+      transform: translateY(20px); transition: transform 0.3s;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    }
+    .modal-overlay.show .modal-box { transform: translateY(0); }
+    .modal-header { 
+      display: flex; justify-content: space-between; align-items: center; 
+      border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px; 
+    }
+    .modal-title { font-size: 1.1rem; font-weight: 700; color: var(--text-dark); margin: 0; }
+    .close-modal { background: none; border: none; font-size: 1.5rem; color: #94a3b8; cursor: pointer; }
+    .modal-body { 
+      font-size: 0.95rem; color: var(--text-gray); line-height: 1.5; 
+      max-height: 60vh; overflow-y: auto; white-space: pre-wrap; 
+    }
+    .modal-footer { margin-top: 20px; font-size: 0.8rem; color: #94a3b8; text-align: right; }
   </style>
 </head>
 <body>
@@ -335,7 +367,10 @@ if (ob_get_length()) ob_end_flush();
 
       <!-- 1. แจ้งเตือนกักบริเวณ (แสดงบนสุด สำคัญสุด) -->
       <?php if ($student_restriction): ?>
-        <div class="noti-item danger">
+        <div class="noti-item danger clickable-noti"
+             data-title="คุณถูกกักบริเวณ"
+             data-detail="งดกลับบ้าน: คุณถูกโทษกักบริเวณเป็นจำนวน <?= htmlspecialchars($student_restriction['weeks_count'], ENT_QUOTES, 'UTF-8') ?> สัปดาห์"
+             data-time="<?= date('d/m/Y', strtotime($student_restriction['created_at'])) ?>">
           <div class="noti-icon">
             <i class="fas fa-ban"></i>
           </div>
@@ -361,7 +396,10 @@ if (ob_get_length()) ob_end_flush();
           $items_str = !empty($items) ? implode(", ", $items) : "ไม่มีรายละเอียด";
           $card_class = ($tot >= 3 || $color == 'red') ? 'urgent' : 'warning';
         ?>
-        <div class="noti-item <?= $card_class ?>">
+        <div class="noti-item <?= $card_class ?> clickable-noti"
+             data-title="โดนตัดบัตรวินัยวันนี้! (จำนวน <?= $tot ?> ใบ)"
+             data-detail="รายการที่ไม่เรียบร้อย: <?= htmlspecialchars($items_str, ENT_QUOTES, 'UTF-8') ?>"
+             data-time="ตรวจพบวันนี้">
           <div class="noti-icon">
             <i class="fas fa-id-card-alt"></i>
           </div>
@@ -375,7 +413,10 @@ if (ob_get_length()) ob_end_flush();
 
       <!-- 3. แจ้งเตือนการโหวตกลับบ้าน -->
       <?php if (!$has_voted): ?>
-        <div class="noti-item urgent">
+        <div class="noti-item urgent clickable-noti"
+             data-title="ยังไม่ได้โหวตประสงค์กลับบ้าน"
+             data-detail="กรุณาลงทำรายการโหวตความประสงค์ประจำสัปดาห์นี้ให้เรียบร้อยโดยการกดที่ปุ่ม 'ทำรายการโหวต'"
+             data-time="สัปดาห์นี้">
           <div class="noti-icon"><i class="fas fa-vote-yea"></i></div>
           <div class="noti-content">
             <h4>ยังไม่ได้โหวตประสงค์กลับบ้าน</h4>
@@ -394,7 +435,10 @@ if (ob_get_length()) ob_end_flush();
           else { $card_type = 'info'; $icon_class = 'fa-bell'; }
           $noti_date = !empty($sys_noti['created_at']) ? date('d/m/Y H:i', strtotime($sys_noti['created_at'])) : date('d/m/Y H:i');
         ?>
-        <div class="noti-item <?= $card_type ?>">
+        <div class="noti-item <?= $card_type ?> clickable-noti"
+             data-title="<?= htmlspecialchars($sys_noti['title'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+             data-detail="<?= htmlspecialchars($sys_noti['message'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+             data-time="<?= $noti_date ?> น.">
           <div class="noti-icon"><i class="fas <?= $icon_class ?>"></i></div>
           <div class="noti-content">
             <h4><?= htmlspecialchars($sys_noti['title'] ?? '') ?></h4>
@@ -413,7 +457,10 @@ if (ob_get_length()) ob_end_flush();
           else { $card_type = 'info'; $icon_class = 'fa-calendar-alt'; $time_text = "อีก {$days} วัน"; }
           $duty_date_fmt = !empty($duty['duty_date']) ? date('d/m/Y', strtotime($duty['duty_date'])) : '';
         ?>
-        <div class="noti-item <?= $card_type ?>">
+        <div class="noti-item <?= $card_type ?> clickable-noti"
+             data-title="แจ้งเตือนเข้าเวร: <?= htmlspecialchars($duty['duty_name'] ?? 'ปฏิบัติหน้าที่เวร', ENT_QUOTES, 'UTF-8') ?>"
+             data-detail="คุณมีกำหนดปฏิบัติหน้าที่ในวันที่ <?= $duty_date_fmt ?> (<?= $time_text ?>)"
+             data-time="<?= $duty_date_fmt ?>">
           <div class="noti-icon"><i class="fas <?= $icon_class ?>"></i></div>
           <div class="noti-content">
             <h4>แจ้งเตือนเข้าเวร: <?= htmlspecialchars($duty['duty_name'] ?? 'ปฏิบัติหน้าที่เวร') ?></h4>
@@ -429,7 +476,10 @@ if (ob_get_length()) ob_end_flush();
           $content = $news['content'] ?? $news['detail'] ?? $news['description'] ?? '';
           $date = $news['created_at'] ?? $news['date'] ?? $news['created_date'] ?? date('Y-m-d H:i:s');
         ?>
-        <div class="noti-item info">
+        <div class="noti-item info clickable-noti"
+             data-title="<?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?>"
+             data-detail="<?= htmlspecialchars($content, ENT_QUOTES, 'UTF-8') ?>"
+             data-time="<?= date('d/m/Y H:i', strtotime($date)) ?> น.">
           <div class="noti-icon"><i class="fas fa-bullhorn"></i></div>
           <div class="noti-content">
             <h4><?= htmlspecialchars($title) ?></h4>
@@ -449,6 +499,18 @@ if (ob_get_length()) ob_end_flush();
 
     </div>
 
+    <!-- Modal Detail -->
+    <div class="modal-overlay" id="detailModal">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h3 class="modal-title" id="modalTitle">รายละเอียด</h3>
+          <button class="close-modal" id="closeModal">&times;</button>
+        </div>
+        <div class="modal-body" id="modalBody"></div>
+        <div class="modal-footer" id="modalTime"></div>
+      </div>
+    </div>
+
     <!-- Bottom Navigation -->
     <div class="bottom-nav">
       <a href="main.php" class="nav-link"><i class="fas fa-home"></i><span>หน้าหลัก</span></a>
@@ -457,9 +519,48 @@ if (ob_get_length()) ob_end_flush();
     </div>
   </div>
 
-  <!-- Script สำหรับ Local Notification ของนักเรียนคนนั้น -->
   <script>
     document.addEventListener('DOMContentLoaded', function() {
+        
+        // ==========================================
+        // 1. ระบบจัดการ Modal เมื่อคลิกดูรายละเอียด
+        // ==========================================
+        const modal = document.getElementById('detailModal');
+        const closeBtn = document.getElementById('closeModal');
+        const mTitle = document.getElementById('modalTitle');
+        const mBody = document.getElementById('modalBody');
+        const mTime = document.getElementById('modalTime');
+
+        // เมื่อกดที่รายการที่มี class 'clickable-noti'
+        document.querySelectorAll('.clickable-noti').forEach(item => {
+          item.addEventListener('click', function(e) {
+            // ป้องกันกรณีคลิกโดนปุ่ม a (เช่น ปุ่มโหวตกลับบ้าน) แล้ว Modal เด้งซ้อน
+            if(e.target.tagName.toLowerCase() === 'a' || e.target.closest('a')) return; 
+
+            mTitle.textContent = this.getAttribute('data-title');
+            mBody.textContent = this.getAttribute('data-detail');
+            mTime.innerHTML = '<i class="far fa-clock"></i> ' + this.getAttribute('data-time');
+            
+            modal.style.display = 'flex';
+            // ใช้ setTimeout เพื่อให้ CSS transition ทำงานได้สมูท
+            setTimeout(() => modal.classList.add('show'), 10);
+          });
+        });
+
+        // ฟังก์ชันปิด Modal
+        const closeModal = () => {
+          modal.classList.remove('show');
+          setTimeout(() => modal.style.display = 'none', 300); // รอให้ animation จบก่อนค่อยซ่อน
+        };
+        
+        closeBtn.addEventListener('click', closeModal);
+        modal.addEventListener('click', (e) => {
+          if(e.target === modal) closeModal(); // ปิดเมื่อคลิกพื้นที่สีดำรอบๆ
+        });
+
+        // ==========================================
+        // 2. ระบบ Web Push Notification (แจ้งเตือนข้ามเบราว์เซอร์)
+        // ==========================================
         const pushMessages = <?= json_encode($push_messages) ?>;
         
         if (pushMessages.length > 0 && "Notification" in window) {
@@ -479,7 +580,7 @@ if (ob_get_length()) ob_end_flush();
                 setTimeout(() => {
                     new Notification(msg.title, {
                         body: msg.body,
-                        icon: 'https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg?utm_source=th.wikipedia.org&utm_campaign=imageinfo&utm_content=original',
+                        icon: 'https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg',
                         vibrate: [200, 100, 200, 100, 200]
                     });
                 }, index * 1000);
