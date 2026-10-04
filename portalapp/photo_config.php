@@ -11,8 +11,8 @@ const RATIO_MIN       = 0.75;                         // สัดส่วน �
 const RATIO_MAX       = 1.25;                         // (ภาพตัวอย่างเกือบจัตุรัส)
 const REFERENCE_IMAGE = __DIR__ . '/uniform_reference.jpg';
 const AI_PROVIDER     = 'gemini';                     // 'gemini' (มีโควตาฟรี) หรือ 'claude' (ต้องเติมเครดิต)
-const GEMINI_MODEL    = 'gemini-3.8-flash';           // ใช้รุ่น Flash สำหรับโควตาฟรี (เช็กรายชื่อรุ่นล่าสุดใน Google AI Studio)
-const AI_MODEL        = 'claude-sonnet-5-5';          // ใช้เมื่อ AI_PROVIDER = 'claude' (ประหยัดขึ้น: claude-haiku-4-5-20251001)
+const GEMINI_MODEL = 'gemini-1.5-flash'; // โมเดลแนะนำสำหรับงานวิเคราะห์ภาพ (รวดเร็ว และมีโควตาฟรี)
+const AI_MODEL     = 'claude-3-5-sonnet-20241022'; // หรือใช้ claude-3-haiku-20240307 เพื่อความประหยัด
 const AI_TIMEOUT_SEC  = 40;
 
 // เกณฑ์ตรวจรูป (สรุปจากภาพตัวอย่าง — ปรับให้ตรงกับระเบียบจริงของหน่วยได้)
