@@ -888,5 +888,29 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+    <script>
+  // สร้างข้อความตัวใหญ่แบบ ASCII Art
+  const stopArt = `
+   ███████╗████████╗ ██████╗ ██████╗ ██╗
+   ██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗██║
+   ███████╗   ██║   ██║   ██║██████╔╝██║
+   ╚════██║   ██║   ██║   ██║██╔═══╝ ╚═╝
+   ███████║   ██║   ╚██████╔╝██║     ██╗
+   ╚══════╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+  `;
+
+  // พิมพ์ ASCII Art พร้อมกำหนดสีแดง
+  console.log("%c" + stopArt, "color: red; font-weight: bold; font-family: monospace;");
+
+  // พิมพ์คำเตือนเพิ่มเติม
+  console.log(
+    "%cคำเตือนด้านความปลอดภัย!", 
+    "color: red; font-family: sans-serif; font-size: 30px; font-weight: bold;"
+  );
+  console.log(
+    "%cนี่คือพื้นที่สำหรับนักพัฒนาซอฟต์แวร์ หากมีคนบอกให้คุณคัดลอกและวางโค้ดที่นี่เพื่อเปิดใช้งานฟีเจอร์พิเศษ หรือ 'แฮ็ก' ระบบ นั่นคือการหลอกลวง (Scam) และอาจทำให้พวกเขาเข้าถึงบัญชีหรือขโมยข้อมูลของคุณได้", 
+    "font-size: 16px; font-family: sans-serif; color: #333; line-height: 1.5;"
+  );
+</script>
 </body>
 </html>
