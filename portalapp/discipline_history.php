@@ -20,12 +20,8 @@ function h($v) {
     return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 }
 
-// แปลงเลขอารบิกเป็นเลขไทย
 function thaiNum($v) {
-    return strtr((string)$v, [
-        '0' => '๐', '1' => '๑', '2' => '๒', '3' => '๓', '4' => '๔',
-        '5' => '๕', '6' => '๖', '7' => '๗', '8' => '๘', '9' => '๙',
-    ]);
+    return (string)$v;
 }
 
 // ดึงเฉพาะตัวเลขออกมา เช่น "ร้อย 1" -> "1" (ถ้าไม่มีตัวเลขจะคืนค่าเดิม)
@@ -228,12 +224,12 @@ $cardBg = $cardColors[(int)$company] ?? '#e2e8f0';
     .face.back { transform: rotateY(180deg); }
 
     /* ----- ด้านหน้า ----- */
-    .card-logo {
-      position: absolute;
-      top: 6%;
-      right: 5%;
-      width: 22%;
-    }
+.card-logo {
+  position: absolute;
+  top: 6%;
+  right: 5%;
+  width: 12%; /* ลดตัวเลขตรงนี้ลงเพื่อให้โลโก้เล็กลง */
+}
     /* multiply ทำให้พื้นขาวของไฟล์ JPG กลืนไปกับสีพื้นบัตร */
     .card-logo img {
       width: 100%;
