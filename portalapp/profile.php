@@ -1,7 +1,7 @@
 <?php
 session_start();
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
+ini_set('display_errors', 0);
+ini_set('display_startup_errors', 0);
 error_reporting(E_ALL);
 
 header("Cache-Control: no-cache, no-store, must-revalidate");
@@ -54,13 +54,15 @@ try {
     $stmt_bmi->close();
 
     // 5. เตรียมข้อมูลตัวแปรสำหรับแสดงผล
-    $image_path   = htmlspecialchars(!empty($student['image']) ? $student['image'] : 'default_student.png');
+    $image_status = $student['image_status'] ?? '';
+    $image_note   = $student['image_note'] ?? '';
+    // รูปที่เจ้าหน้าที่ปฏิเสธจะไม่แสดง ให้ใช้รูปเริ่มต้นจนกว่าจะอัปโหลดใหม่
+    $image_path   = htmlspecialchars((!empty($student['image']) && $image_status !== 'rejected') ? $student['image'] : 'default_student.png');
     $full_name    = htmlspecialchars(($student['prefix'] ?? '') . ($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''));
     $student_code = htmlspecialchars($student['student_code'] ?? '-');
 
     // แก้ไขรูปได้เฉพาะโปรไฟล์ของตัวเอง
     $is_own_profile = hash_equals((string)$student['student_code'], (string)$_SESSION['student_code']);
-    $image_status   = $student['image_status'] ?? '';
 
     // ดึงข้อมูลกายภาพ (ถ้าไม่มีใน bmi_records ให้ดึงจาก students แทน หรือใส่ค่าว่าง)
     $display_age      = htmlspecialchars($bmi_record['age'] ?? $student['age'] ?? '-');
@@ -228,6 +230,13 @@ try {
             border-radius: 20px;
             background: #fef3c7;
             color: #92400e;
+        }
+
+        .photo-status-bad {
+            background: #fee2e2;
+            color: #991b1b;
+            line-height: 1.5;
+            max-width: 100%;
         }
 
         /* Info Sections */
@@ -501,6 +510,13 @@ try {
         <p><i class="fa-solid fa-id-badge"></i> รหัสประจำตัว: <?php echo $student_code; ?></p>
         <?php if ($image_status === 'pending'): ?>
             <div><span class="photo-status"><i class="fas fa-hourglass-half"></i> รูปรอเจ้าหน้าที่ตรวจสอบ</span></div>
+        <?php elseif ($image_status === 'rejected'): ?>
+            <div>
+                <span class="photo-status photo-status-bad">
+                    <i class="fas fa-circle-exclamation"></i> รูปไม่ผ่านการตรวจ<?php echo ($is_own_profile && $image_note !== '') ? ': ' . htmlspecialchars($image_note) : ''; ?>
+                    <?php if ($is_own_profile): ?><br>กรุณาอัปโหลดรูปใหม่<?php endif; ?>
+                </span>
+            </div>
         <?php endif; ?>
     </div>
 
