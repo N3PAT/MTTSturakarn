@@ -157,11 +157,11 @@ try {
         $stmt_disc->close();
     }
 
-    // 5. ดึงประกาศ/ข่าวสาร (ระบุชื่อคอลัมน์ชัดเจนแทน SELECT * เพื่อลด Memory)
-    $sql_news = "SELECT id, title, topic, subject, content, detail, description, created_at, date, created_date, attachment FROM announcements WHERE status = 'active' OR status = '1' ORDER BY id DESC LIMIT 10";
+    // 5. ดึงประกาศ/ข่าวสาร (แก้ไข SQL Query ให้ตรงตามคอลัมน์ในฐานข้อมูล)
+    $sql_news = "SELECT id, title, content, attachment, created_at FROM announcements WHERE status = 'active' ORDER BY is_pinned DESC, id DESC LIMIT 10";
     $res_news = $conn->query($sql_news);
     if (!$res_news) {
-        $sql_fallback = "SELECT id, title, topic, subject, content, detail, description, created_at, date, created_date, attachment FROM announcements ORDER BY id DESC LIMIT 10";
+        $sql_fallback = "SELECT id, title, content, attachment, created_at FROM announcements ORDER BY is_pinned DESC, id DESC LIMIT 10";
         $res_news = $conn->query($sql_fallback);
     }
     if ($res_news) {
@@ -388,9 +388,9 @@ if (ob_get_length()) ob_end_flush();
       <!-- 6. ประกาศ/ข่าวสาร -->
       <?php foreach ($announcements as $news): ?>
         <?php 
-          $title = $news['title'] ?? $news['topic'] ?? $news['subject'] ?? 'ประกาศข่าวสาร';
-          $content = $news['content'] ?? $news['detail'] ?? $news['description'] ?? '';
-          $date = $news['created_at'] ?? $news['date'] ?? $news['created_date'] ?? date('Y-m-d H:i:s');
+          $title = $news['title'] ?? 'ประกาศข่าวสาร';
+          $content = $news['content'] ?? '';
+          $date = $news['created_at'] ?? date('Y-m-d H:i:s');
           $attachment = $news['attachment'] ?? '';
         ?>
         <div class="noti-item info clickable-noti"
