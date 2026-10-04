@@ -415,11 +415,8 @@ try {
             <i class="fas fa-home"></i>
             <span>หน้าหลัก</span>
         </a>
-        <a href="profile.php" class="nav-link active">
-            <i class="fas fa-user"></i>
-            <span>โปรไฟล์</span>
-        </a>
-        <a href="logout.php" class="nav-link">
+        <!-- เพิ่ม style="color: #dc2626;" เข้าไปที่คลาส nav-link ของปุ่ม logout -->
+        <a href="logout.php" class="nav-link" style="color: #dc2626;">
             <i class="fas fa-sign-out-alt"></i>
             <span>ออกจากระบบ</span>
         </a>
