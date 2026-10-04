@@ -10,7 +10,9 @@ const OUTPUT_MAX_PX   = 800;                          // ย่อด้าน�
 const RATIO_MIN       = 0.75;                         // สัดส่วน กว้าง/สูง ที่ยอมรับ
 const RATIO_MAX       = 1.25;                         // (ภาพตัวอย่างเกือบจัตุรัส)
 const REFERENCE_IMAGE = __DIR__ . '/uniform_reference.jpg';
-const AI_MODEL        = 'claude-sonnet-5-5';          // ถ้าอยากประหยัดค่าใช้จ่าย ลองเปลี่ยนเป็น claude-haiku-4-5-20251001
+const AI_PROVIDER     = 'gemini';                     // 'gemini' (มีโควตาฟรี) หรือ 'claude' (ต้องเติมเครดิต)
+const GEMINI_MODEL    = 'gemini-3.8-flash';           // ใช้รุ่น Flash สำหรับโควตาฟรี (เช็กรายชื่อรุ่นล่าสุดใน Google AI Studio)
+const AI_MODEL        = 'claude-sonnet-5-5';          // ใช้เมื่อ AI_PROVIDER = 'claude' (ประหยัดขึ้น: claude-haiku-4-5-20251001)
 const AI_TIMEOUT_SEC  = 40;
 
 // เกณฑ์ตรวจรูป (สรุปจากภาพตัวอย่าง — ปรับให้ตรงกับระเบียบจริงของหน่วยได้)
