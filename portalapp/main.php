@@ -383,18 +383,46 @@ if (empty($profile_image)) {
     .bg-red { background: #fef2f2; color: #dc2626; }
     .bg-green { background: #ecfdf5; color: #059669; }
 
-    /* News Carousel */
-    .news-carousel {
-      display: flex; overflow-x: auto; gap: 16px;
-      padding: 5px 20px 20px 20px; scroll-snap-type: x mandatory;
-      scrollbar-width: none; scroll-behavior: smooth;
-    }
-    .news-carousel::-webkit-scrollbar { display: none; }
-    .news-card {
-      min-width: 85%; max-width: 85%; background: var(--card-bg);
-      border-radius: var(--radius); scroll-snap-align: center; flex-shrink: 0;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.04); display: flex; flex-direction: column; overflow: hidden;
-    }
+  /* CSS สำหรับ Dots ของ News Carousel */
+.carousel-dots {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  margin-bottom: 20px;
+}
+
+.carousel-dots .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #cbd5e1; /* สีเทาตอนยังไม่ Active */
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.carousel-dots .dot.active {
+  width: 20px;
+  border-radius: 10px;
+  background-color: var(--primary); /* สีหลักตอน Active */
+}
+
+/* แนะนำให้เพิ่ม scroll-behavior และ snap ให้ news-carousel ถ้ายังไม่มี */
+.news-carousel {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: none; /* ซ่อน Scrollbar ใน Firefox */
+}
+.news-carousel::-webkit-scrollbar {
+  display: none; /* ซ่อน Scrollbar ใน Chrome/Safari */
+}
+.news-card {
+  scroll-snap-align: center;
+  flex: 0 0 90%; /* ขนาดของการ์ด ให้เต็มหน้าจอแต่เว้นขอบนิดหน่อย */
+}
     .news-media { position: relative; width: 100%; height: 180px; background: #e2e8f0; cursor: pointer; }
     .news-media img { width: 100%; height: 100%; object-fit: cover; }
     .news-tag {
@@ -619,6 +647,13 @@ if (empty($profile_image)) {
       <?php endif; ?>
     </div>
 
+    <!-- ส่วนที่เพิ่มเข้ามา: กล่องสำหรับจุด Dots -->
+    <?php if (!empty($announcements) && count($announcements) > 1): ?>
+    <div class="carousel-dots fade-in-up delay-4" id="newsDots">
+        <!-- จุดจะถูกสร้างที่นี่ด้วย JavaScript -->
+    </div>
+    <?php endif; ?>
+
   </div> <!-- End App Container -->
 
   <!-- Image Modal -->
@@ -710,5 +745,67 @@ if (empty($profile_image)) {
       });
     }
   </script>
+    <script>
+document.addEventListener('DOMContentLoaded', function() {
+    const carousel = document.getElementById('newsCarousel');
+    const dotsContainer = document.getElementById('newsDots');
+
+    if (carousel && dotsContainer) {
+        const cards = carousel.querySelectorAll('.news-card');
+        const numCards = cards.length;
+
+        // ถ้ามีข่าวมากกว่า 1 ข่าว ถึงจะสร้างจุด
+        if (numCards > 1) {
+            // 1. สร้างจุด (Dots) ตามจำนวนการ์ดข่าว
+            for (let i = 0; i < numCards; i++) {
+                const dot = document.createElement('div');
+                dot.classList.add('dot');
+                if (i === 0) dot.classList.add('active'); // ให้จุดแรกเป็น Active เริ่มต้น
+
+                // 2. เมื่อคลิกที่จุด ให้เลื่อนไปยังการ์ดนั้นๆ
+                dot.addEventListener('click', () => {
+                    // หาความกว้างของการ์ด + ระยะห่าง
+                    const cardWidth = cards[0].offsetWidth;
+                    // สั่ง Scroll
+                    carousel.scrollTo({
+                        left: cards[i].offsetLeft - carousel.offsetLeft, 
+                        behavior: 'smooth'
+                    });
+                });
+                
+                dotsContainer.appendChild(dot);
+            }
+
+            // 3. ตรวจจับเวลาใช้นิ้วปัด (Scroll) เพื่อเปลี่ยนสีของจุด
+            carousel.addEventListener('scroll', () => {
+                const dots = dotsContainer.querySelectorAll('.dot');
+                let maxVisibleIndex = 0;
+                let minDiff = Infinity;
+                
+                // คำนวณว่าการ์ดไหนอยู่ตรงกลางจอมากที่สุด
+                cards.forEach((card, index) => {
+                    const cardCenter = card.offsetLeft + (card.offsetWidth / 2);
+                    const carouselCenter = carousel.scrollLeft + (carousel.clientWidth / 2);
+                    const diff = Math.abs(cardCenter - carouselCenter);
+                    
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        maxVisibleIndex = index;
+                    }
+                });
+
+                // อัปเดตคลาส Active ให้กับจุด
+                dots.forEach((dot, index) => {
+                    if (index === maxVisibleIndex) {
+                        dot.classList.add('active');
+                    } else {
+                        dot.classList.remove('active');
+                    }
+                });
+            });
+        }
+    }
+});
+</script>
 </body>
 </html>
