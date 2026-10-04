@@ -438,8 +438,10 @@ if (ob_get_length()) ob_end_flush();
 
     <div class="bottom-nav">
       <a href="main.php" class="nav-link"><i class="fas fa-home"></i><span>หน้าหลัก</span></a>
-      <a href="duty.php" class="nav-link"><i class="fas fa-calendar-alt"></i><span>เวรของฉัน</span></a>
-      <a href="logout.php" class="nav-link"><i class="far fa-user"></i><span>ออกจากระบบ</span></a>
+      <a href="notification.php" class="nav-link">
+  <i class="fas fa-bell"></i>
+  <span>แจ้งเตือน</span>
+</a>
     </div>
   </div>
 
