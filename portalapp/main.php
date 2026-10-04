@@ -383,7 +383,116 @@ if (empty($profile_image)) {
     .bg-red { background: #fef2f2; color: #dc2626; }
     .bg-green { background: #ecfdf5; color: #059669; }
 
-  /* CSS สำหรับ Dots ของ News Carousel */
+
+/* คอนเทนเนอร์หลักของ Carousel */
+.news-carousel {
+  display: flex;
+  gap: 14px;
+  padding: 10px 20px; /* เพิ่ม padding เพื่อไม่ให้เงา (box-shadow) โดนตัด */
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch; /* เลื่อนลื่นขึ้นบน iOS */
+  scrollbar-width: none; /* ซ่อน Scrollbar ใน Firefox */
+}
+
+/* ซ่อน Scrollbar ใน Chrome / Safari / Edge */
+.news-carousel::-webkit-scrollbar {
+  display: none;
+}
+
+/* การ์ดข่าวแต่ละใบ */
+.news-card {
+  scroll-snap-align: center;
+  flex: 0 0 85%; /* ขนาดการ์ด 85% เพื่อให้เห็นขอบของการ์ดถัดไปเล็กน้อย */
+  max-width: 350px;
+  background: #ffffff;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* สื่อรูปภาพ/แบนเนอร์ข่าว */
+.news-media {
+  position: relative;
+  width: 100%;
+  height: 180px;
+  background: #e2e8f0;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.news-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.news-media:hover img {
+  transform: scale(1.03); /* ซูมรูปเล็กน้อยเมื่อ hover */
+}
+
+/* แท็กประเภทข่าว */
+.news-tag {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--primary);
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(4px);
+}
+
+/* ส่วนเนื้อหาข่าว */
+.news-body {
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.news-date {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  margin-bottom: 6px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.news-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0 0 6px 0;
+  color: var(--text-dark);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.news-desc {
+  font-size: 0.8rem;
+  color: var(--text-gray);
+  margin: 0;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* จุดบอกตำแหน่ง (Dots) */
 .carousel-dots {
   display: flex;
   justify-content: center;
@@ -397,44 +506,16 @@ if (empty($profile_image)) {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background-color: #cbd5e1; /* สีเทาตอนยังไม่ Active */
+  background-color: #cbd5e1;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .carousel-dots .dot.active {
-  width: 20px;
+  width: 22px;
   border-radius: 10px;
-  background-color: var(--primary); /* สีหลักตอน Active */
+  background-color: var(--primary);
 }
-
-/* แนะนำให้เพิ่ม scroll-behavior และ snap ให้ news-carousel ถ้ายังไม่มี */
-.news-carousel {
-  display: flex;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  scroll-behavior: smooth;
-  scrollbar-width: none; /* ซ่อน Scrollbar ใน Firefox */
-}
-.news-carousel::-webkit-scrollbar {
-  display: none; /* ซ่อน Scrollbar ใน Chrome/Safari */
-}
-.news-card {
-  scroll-snap-align: center;
-  flex: 0 0 90%; /* ขนาดของการ์ด ให้เต็มหน้าจอแต่เว้นขอบนิดหน่อย */
-}
-    .news-media { position: relative; width: 100%; height: 180px; background: #e2e8f0; cursor: pointer; }
-    .news-media img { width: 100%; height: 100%; object-fit: cover; }
-    .news-tag {
-      position: absolute; top: 12px; left: 12px;
-      background: rgba(255,255,255,0.9); color: var(--primary); font-size: 0.7rem; font-weight: 700;
-      padding: 4px 10px; border-radius: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    }
-    .news-body { padding: 15px; display: flex; flex-direction: column; flex: 1; }
-    .news-date { font-size: 0.7rem; color: #94a3b8; margin-bottom: 5px; font-weight: 500; }
-    .news-title { font-size: 0.95rem; font-weight: 700; margin: 0 0 5px 0; color: var(--text-dark); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-    .news-desc { font-size: 0.8rem; color: var(--text-gray); margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-    
     /* Bottom Nav (Glassmorphism) */
     .bottom-nav {
       position: fixed; bottom: 0; width: 100%; max-width: 430px; left: 50%; transform: translateX(-50%);
