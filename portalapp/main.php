@@ -675,9 +675,9 @@ if (empty($profile_image)) {
         <div class="icon-box bg-orange"><i class="fas fa-vote-yea"></i></div>
         <span class="menu-text">โหวตกลับบ้าน</span>
       </a>
-      <a href="reqdoc.php" class="menu-item">
+      <a href="discipline_history.php" class="menu-item">
         <div class="icon-box bg-blue"><i class="fas fa-file-alt"></i></div>
-        <span class="menu-text">ขอเอกสาร</span>
+        <span class="menu-text">บัตรวินัย</span>
       </a>
       <a href="duty_substitutions.php" class="menu-item">
         <div class="icon-box bg-green"><i class="fas fa-address-book"></i></div>
