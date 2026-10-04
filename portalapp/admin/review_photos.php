@@ -1,181 +1,216 @@
 <?php
 session_start();
-ini_set('display_errors', 0);
-ini_set('display_startup_errors', 0);
+
+// 1. เปิดการแสดงผล Error ชั่วคราว เพื่อหาต้นตอของ 500 Error (เมื่อแก้ปัญหาเสร็จค่อยแก้กลับเป็น 0)
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-header('Cache-Control: no-cache, no-store, must-revalidate');
-header('Pragma: no-cache');
-header('Expires: 0');
+try {
+    // ==========================================
+    // ส่วนประมวลผลหลัก (คลุมด้วย Try...Catch ทั้งหมด)
+    // ==========================================
+    header('Cache-Control: no-cache, no-store, must-revalidate');
+    header('Pragma: no-cache');
+    header('Expires: 0');
 
-require_once 'db.php';
-require_once 'photo_config.php';
+    // ตรวจสอบว่ามีไฟล์อยู่จริงไหมก่อนเรียกใช้
+    if (!file_exists('db.php')) { throw new Exception("ไม่พบไฟล์ db.php"); }
+    if (!file_exists('photo_config.php')) { throw new Exception("ไม่พบไฟล์ photo_config.php"); }
 
-const PER_PAGE = 12;
+    require_once 'db.php';
+    require_once 'photo_config.php';
 
-/* ---------- สิทธิ์การเข้าถึง ---------- */
-if (empty($_SESSION['student_code'])) {
-    header('Location: login.php');
-    exit();
-}
-if (!is_photo_reviewer()) {
-    http_response_code(403);
-    die("<div style='text-align:center; margin-top:50px; font-family:sans-serif;'>คุณไม่มีสิทธิ์เข้าหน้านี้</div>");
-}
-if (empty($_SESSION['csrf'])) {
-    $_SESSION['csrf'] = bin2hex(random_bytes(32));
-}
-
-function esc($s): string
-{
-    return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
-}
-
-function back_url(string $tab, string $q, int $page): string
-{
-    $params = ['tab' => $tab];
-    if ($q !== '') {
-        $params['q'] = $q;
+    if (!defined('PER_PAGE')) {
+        define('PER_PAGE', 12);
     }
-    if ($page > 1) {
-        $params['page'] = $page;
+
+    // ตรวจสอบตัวแปรการเชื่อมต่อ DB
+    if (!isset($conn) || $conn->connect_error) {
+        throw new Exception("เชื่อมต่อฐานข้อมูลล้มเหลว กรุณาตรวจสอบไฟล์ db.php");
     }
-    return 'review_photos.php?' . http_build_query($params);
-}
 
-$allowed_tabs = ['pending', 'approved', 'rejected', 'all'];
-$tab_labels   = ['pending' => 'รอตรวจ', 'approved' => 'ผ่านแล้ว', 'rejected' => 'ไม่ผ่าน', 'all' => 'ทั้งหมด'];
+    /* ---------- ฟังก์ชัน ---------- */
+    if (!function_exists('esc')) {
+        function esc($s): string {
+            return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
+        }
+    }
 
-/* ---------- บันทึกผลการตรวจ (POST) ---------- */
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $rtab  = in_array($_POST['tab'] ?? '', $allowed_tabs, true) ? $_POST['tab'] : 'pending';
-    $rq    = trim((string)($_POST['q'] ?? ''));
-    $rpage = max(1, (int)($_POST['page'] ?? 1));
+    if (!function_exists('back_url')) {
+        function back_url(string $tab, string $q, int $page): string {
+            $params = ['tab' => $tab];
+            if ($q !== '') { $params['q'] = $q; }
+            if ($page > 1) { $params['page'] = $page; }
+            return 'review_photos.php?' . http_build_query($params);
+        }
+    }
 
-    $flash = ['type' => 'bad', 'text' => 'คำขอไม่ถูกต้อง กรุณารีเฟรชหน้าแล้วลองใหม่'];
+    $allowed_tabs = ['pending', 'approved', 'rejected', 'all'];
+    $tab_labels   = ['pending' => 'รอตรวจ', 'approved' => 'ผ่านแล้ว', 'rejected' => 'ไม่ผ่าน', 'all' => 'ทั้งหมด'];
 
-    if (hash_equals($_SESSION['csrf'], (string)($_POST['csrf'] ?? ''))) {
-        $id       = (int)($_POST['id'] ?? 0);
-        $action   = (string)($_POST['action'] ?? '');
-        $expected = (string)($_POST['expected'] ?? ''); // สถานะที่ผู้ตรวจเห็นตอนกดปุ่ม (กันสองคนตรวจชนกัน)
-        $reason   = trim((string)preg_replace('/[\x00-\x1F\x7F]+/u', ' ', (string)($_POST['reason'] ?? '')));
-        $reason   = mb_substr($reason, 0, 200);
+    /* ---------- สิทธิ์การเข้าถึง ---------- */
+    if (empty($_SESSION['student_code'])) {
+        header('Location: login.php');
+        exit();
+    }
+    if (!function_exists('is_photo_reviewer')) {
+        throw new Exception("ไม่พบฟังก์ชัน is_photo_reviewer() ตรวจสอบว่ามีฟังก์ชันนี้ในไฟล์ photo_config.php หรือไม่");
+    }
+    if (!is_photo_reviewer()) {
+        http_response_code(403);
+        die("<div style='text-align:center; margin-top:50px; font-family:sans-serif;'>คุณไม่มีสิทธิ์เข้าหน้านี้</div>");
+    }
+    if (empty($_SESSION['csrf'])) {
+        $_SESSION['csrf'] = bin2hex(random_bytes(32));
+    }
 
-        if ($id > 0
-            && in_array($action, ['approve', 'reject'], true)
-            && in_array($expected, ['pending', 'approved', 'rejected'], true)) {
+    /* ---------- บันทึกผลการตรวจ (POST) ---------- */
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $rtab  = in_array($_POST['tab'] ?? '', $allowed_tabs, true) ? $_POST['tab'] : 'pending';
+        $rq    = trim((string)($_POST['q'] ?? ''));
+        $rpage = max(1, (int)($_POST['page'] ?? 1));
 
-            if ($action === 'reject' && $reason === '') {
-                $flash = ['type' => 'bad', 'text' => 'กรุณาระบุเหตุผลที่ปฏิเสธรูป เพื่อให้นักเรียนแก้ไขได้ถูกต้อง'];
-            } else {
-                try {
-                    $newStatus = ($action === 'approve') ? 'approved' : 'rejected';
-                    $note      = ($action === 'approve') ? 'เจ้าหน้าที่อนุมัติรูปแล้ว' : $reason;
+        $flash = ['type' => 'bad', 'text' => 'คำขอไม่ถูกต้อง กรุณารีเฟรชหน้าแล้วลองใหม่'];
 
-                    $stmt = $conn->prepare(
-                        "UPDATE students
-                            SET image_status = ?, image_note = ?, image_checked_at = NOW()
-                          WHERE id = ? AND image_status = ? AND image IS NOT NULL AND image <> ''"
-                    );
-                    $stmt->bind_param('ssis', $newStatus, $note, $id, $expected);
-                    $stmt->execute();
-                    $changed = $stmt->affected_rows;
-                    $stmt->close();
+        if (hash_equals($_SESSION['csrf'], (string)($_POST['csrf'] ?? ''))) {
+            $id       = (int)($_POST['id'] ?? 0);
+            $action   = (string)($_POST['action'] ?? '');
+            $expected = (string)($_POST['expected'] ?? ''); 
+            $reason   = trim((string)preg_replace('/[\x00-\x1F\x7F]+/u', ' ', (string)($_POST['reason'] ?? '')));
+            $reason   = mb_substr($reason, 0, 200);
 
-                    if ($changed > 0) {
-                        $flash = ['type' => 'ok', 'text' => ($action === 'approve') ? 'อนุมัติรูปเรียบร้อย' : 'ปฏิเสธรูปเรียบร้อย นักเรียนจะเห็นเหตุผลในหน้าโปรไฟล์'];
-                    } else {
-                        $flash = ['type' => 'bad', 'text' => 'รายการนี้ถูกตรวจหรือเปลี่ยนแปลงไปแล้ว กรุณาดูรายการล่าสุด'];
+            if ($id > 0
+                && in_array($action, ['approve', 'reject'], true)
+                && in_array($expected, ['pending', 'approved', 'rejected'], true)) {
+
+                if ($action === 'reject' && $reason === '') {
+                    $flash = ['type' => 'bad', 'text' => 'กรุณาระบุเหตุผลที่ปฏิเสธรูป เพื่อให้นักเรียนแก้ไขได้ถูกต้อง'];
+                } else {
+                    try {
+                        $newStatus = ($action === 'approve') ? 'approved' : 'rejected';
+                        $note      = ($action === 'approve') ? 'เจ้าหน้าที่อนุมัติรูปแล้ว' : $reason;
+
+                        $stmt = $conn->prepare(
+                            "UPDATE students
+                                SET image_status = ?, image_note = ?, image_checked_at = NOW()
+                              WHERE id = ? AND image_status = ? AND image IS NOT NULL AND image <> ''"
+                        );
+                        $stmt->bind_param('ssis', $newStatus, $note, $id, $expected);
+                        $stmt->execute();
+                        $changed = $stmt->affected_rows;
+                        $stmt->close();
+
+                        if ($changed > 0) {
+                            $flash = ['type' => 'ok', 'text' => ($action === 'approve') ? 'อนุมัติรูปเรียบร้อย' : 'ปฏิเสธรูปเรียบร้อย นักเรียนจะเห็นเหตุผลในหน้าโปรไฟล์'];
+                        } else {
+                            $flash = ['type' => 'bad', 'text' => 'รายการนี้ถูกตรวจหรือเปลี่ยนแปลงไปแล้ว กรุณาดูรายการล่าสุด'];
+                        }
+                    } catch (Throwable $e) {
+                        error_log('review_photos: ' . $e->getMessage());
+                        $flash = ['type' => 'bad', 'text' => 'บันทึกผลไม่สำเร็จ กรุณาลองใหม่'];
                     }
-                } catch (Throwable $e) {
-                    error_log('review_photos: ' . $e->getMessage());
-                    $flash = ['type' => 'bad', 'text' => 'บันทึกผลไม่สำเร็จ กรุณาลองใหม่'];
                 }
             }
         }
+
+        $_SESSION['flash'] = $flash;
+        header('Location: ' . back_url($rtab, $rq, $rpage));
+        exit();
     }
 
-    $_SESSION['flash'] = $flash;
-    header('Location: ' . back_url($rtab, $rq, $rpage));
-    exit();
-}
+    $flash = $_SESSION['flash'] ?? null;
+    unset($_SESSION['flash']);
 
-$flash = $_SESSION['flash'] ?? null;
-unset($_SESSION['flash']);
+    /* ---------- ดึงรายการ ---------- */
+    $tab  = in_array($_GET['tab'] ?? '', $allowed_tabs, true) ? $_GET['tab'] : 'pending';
+    $q    = mb_substr(trim((string)($_GET['q'] ?? '')), 0, 60);
+    $page = max(1, (int)($_GET['page'] ?? 1));
 
-/* ---------- ดึงรายการ ---------- */
-$tab  = in_array($_GET['tab'] ?? '', $allowed_tabs, true) ? $_GET['tab'] : 'pending';
-$q    = mb_substr(trim((string)($_GET['q'] ?? '')), 0, 60);
-$page = max(1, (int)($_GET['page'] ?? 1));
+    $rows   = [];
+    $counts = ['pending' => 0, 'approved' => 0, 'rejected' => 0];
+    $total  = 0;
+    $pages  = 1;
+    $error  = '';
 
-$rows   = [];
-$counts = ['pending' => 0, 'approved' => 0, 'rejected' => 0];
-$total  = 0;
-$pages  = 1;
-$error  = '';
+    try {
+        $base = "FROM students WHERE image IS NOT NULL AND image <> '' AND image_status IS NOT NULL";
 
-try {
-    $base = "FROM students WHERE image IS NOT NULL AND image <> '' AND image_status IS NOT NULL";
-
-    $res = $conn->query("SELECT image_status, COUNT(*) AS c $base GROUP BY image_status");
-    while ($row = $res->fetch_assoc()) {
-        if (isset($counts[$row['image_status']])) {
-            $counts[$row['image_status']] = (int)$row['c'];
+        $res = $conn->query("SELECT image_status, COUNT(*) AS c $base GROUP BY image_status");
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                if (isset($counts[$row['image_status']])) {
+                    $counts[$row['image_status']] = (int)$row['c'];
+                }
+            }
         }
-    }
-    $counts['all'] = array_sum($counts);
+        $counts['all'] = array_sum($counts);
 
-    $where  = '';
-    $types  = '';
-    $params = [];
-    if ($tab !== 'all') {
-        $where .= ' AND image_status = ?';
-        $types .= 's';
-        $params[] = $tab;
-    }
-    if ($q !== '') {
-        $like = '%' . addcslashes($q, '%_\\') . '%';
-        $where .= ' AND (student_code LIKE ? OR first_name LIKE ? OR last_name LIKE ?)';
-        $types .= 'sss';
-        array_push($params, $like, $like, $like);
+        $where  = '';
+        $types  = '';
+        $params = [];
+        if ($tab !== 'all') {
+            $where .= ' AND image_status = ?';
+            $types .= 's';
+            $params[] = $tab;
+        }
+        if ($q !== '') {
+            $like = '%' . addcslashes($q, '%_\\') . '%';
+            $where .= ' AND (student_code LIKE ? OR first_name LIKE ? OR last_name LIKE ?)';
+            $types .= 'sss';
+            array_push($params, $like, $like, $like);
+        }
+
+        $stmt = $conn->prepare("SELECT COUNT(*) AS c $base$where");
+        if ($types !== '') {
+            $stmt->bind_param($types, ...$params);
+        }
+        $stmt->execute();
+        $total = (int)$stmt->get_result()->fetch_assoc()['c'];
+        $stmt->close();
+
+        $pages  = max(1, (int)ceil($total / PER_PAGE));
+        $page   = min($page, $pages);
+        $offset = ($page - 1) * PER_PAGE;
+        $order  = ($tab === 'pending') ? 'ASC' : 'DESC';
+
+        $stmt = $conn->prepare(
+            "SELECT id, student_code, prefix, first_name, last_name, battalion, company, platoon, section,
+                    image, image_status, image_note, image_checked_at
+               $base$where
+             ORDER BY image_checked_at $order, id $order
+             LIMIT ? OFFSET ?"
+        );
+        $types2  = $types . 'ii';
+        $params2 = array_merge($params, [PER_PAGE, $offset]);
+        $stmt->bind_param($types2, ...$params2);
+        $stmt->execute();
+        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+    } catch (Throwable $e) {
+        error_log('review_photos list: ' . $e->getMessage());
+        $error = 'โหลดรายการไม่สำเร็จ ตรวจสอบว่าได้รัน migration.sql เพิ่มคอลัมน์สถานะรูปแล้ว หรือตรวจสอบ Error Log';
     }
 
-    $stmt = $conn->prepare("SELECT COUNT(*) AS c $base$where");
-    if ($types !== '') {
-        $stmt->bind_param($types, ...$params);
-    }
-    $stmt->execute();
-    $total = (int)$stmt->get_result()->fetch_assoc()['c'];
-    $stmt->close();
+    $status_chip = [
+        'pending'  => ['รอตรวจ', 'chip-pending'],
+        'approved' => ['ผ่านแล้ว', 'chip-approved'],
+        'rejected' => ['ไม่ผ่าน', 'chip-rejected'],
+    ];
 
-    $pages  = max(1, (int)ceil($total / PER_PAGE));
-    $page   = min($page, $pages);
-    $offset = ($page - 1) * PER_PAGE;
-    $order  = ($tab === 'pending') ? 'ASC' : 'DESC'; // รอตรวจ: เก่าสุดก่อน
-
-    $stmt = $conn->prepare(
-        "SELECT id, student_code, prefix, first_name, last_name, battalion, company, platoon, section,
-                image, image_status, image_note, image_checked_at
-           $base$where
-          ORDER BY image_checked_at $order, id $order
-          LIMIT ? OFFSET ?"
-    );
-    $types2  = $types . 'ii';
-    $params2 = array_merge($params, [PER_PAGE, $offset]);
-    $stmt->bind_param($types2, ...$params2);
-    $stmt->execute();
-    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    $stmt->close();
 } catch (Throwable $e) {
-    error_log('review_photos list: ' . $e->getMessage());
-    $error = 'โหลดรายการไม่สำเร็จ ตรวจสอบว่าได้รัน migration.sql เพิ่มคอลัมน์สถานะรูปแล้ว';
+    // ==========================================
+    // จัดการ Error 500 ทั่วไประดับระบบที่นี่
+    // ==========================================
+    http_response_code(500);
+    die("<div style='max-width:600px; margin:50px auto; font-family:sans-serif; color:#991b1b; background:#fee2e2; padding:20px; border-radius:10px; border: 1px solid #f87171; text-align: left;'>
+            <h2 style='margin-top:0;'>⚠️ ระบบขัดข้อง (HTTP 500)</h2>
+            <p><b>ข้อผิดพลาด:</b> " . htmlspecialchars($e->getMessage()) . "</p>
+            <p><b>ไฟล์:</b> " . htmlspecialchars($e->getFile()) . " <br><b>บรรทัด:</b> " . $e->getLine() . "</p>
+            <hr style='border:0; border-top:1px solid #fca5a5;'>
+            <p style='font-size:0.9em;'><em>คำแนะนำ: กรุณานำข้อความข้อผิดพลาดนี้ไปตรวจสอบในไฟล์ที่ระบุ (เช่น ตั้งค่า DB ผิด หรือโค้ดเรียกใช้งานฟังก์ชันที่ไม่ถูกต้อง)</em></p>
+         </div>");
 }
-
-$status_chip = [
-    'pending'  => ['รอตรวจ', 'chip-pending'],
-    'approved' => ['ผ่านแล้ว', 'chip-approved'],
-    'rejected' => ['ไม่ผ่าน', 'chip-rejected'],
-];
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -335,9 +370,9 @@ $status_chip = [
         <div class="criteria-body">
             <img src="uniform_reference.jpg" alt="ภาพตัวอย่างที่ถูกต้อง">
             <ul>
-                <?php foreach ($UNIFORM_CRITERIA as $c): ?>
+                <?php if (!empty($UNIFORM_CRITERIA)) { foreach ($UNIFORM_CRITERIA as $c): ?>
                     <li><b><?php echo esc($c['label']); ?>:</b> <?php echo esc($c['desc']); ?></li>
-                <?php endforeach; ?>
+                <?php endforeach; } ?>
             </ul>
         </div>
     </details>
@@ -399,9 +434,9 @@ $status_chip = [
 
                     <div class="reject-panel" hidden>
                         <div class="chips">
-                            <?php foreach ($UNIFORM_CRITERIA as $c): ?>
+                            <?php if (!empty($UNIFORM_CRITERIA)) { foreach ($UNIFORM_CRITERIA as $c): ?>
                                 <button type="button" class="chip" data-text="<?php echo esc($c['label'] . ' ไม่ถูกต้อง'); ?>"><?php echo esc($c['label']); ?></button>
-                            <?php endforeach; ?>
+                            <?php endforeach; } ?>
                         </div>
                         <textarea name="reason" rows="2" maxlength="200" required placeholder="ระบุเหตุผล เพื่อให้นักเรียนแก้ไขและส่งใหม่"></textarea>
                         <button type="submit" name="action" value="reject" class="btn btn-bad">ยืนยันปฏิเสธ</button>
