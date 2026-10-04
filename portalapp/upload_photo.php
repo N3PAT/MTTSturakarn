@@ -125,13 +125,8 @@ $jpegBytes = (string)ob_get_clean();
 imagedestroy($canvas);
 
 /* ---------- 4. ให้ AI เทียบกับภาพตัวอย่าง ---------- */
-function check_uniform_with_ai(string $jpegBytes, array $criteria): array
+function build_uniform_prompt(array $criteria): string
 {
-    $apiKey = getenv('ANTHROPIC_API_KEY') ?: (defined('ANTHROPIC_API_KEY') ? ANTHROPIC_API_KEY : '');
-    if ($apiKey === '' || !is_readable(REFERENCE_IMAGE)) {
-        return ['status' => 'error', 'message' => 'ระบบตรวจรูปอัตโนมัติยังไม่พร้อมใช้งาน'];
-    }
-
     $criteriaText = '';
     $shape = [];
     foreach ($criteria as $key => $c) {
@@ -140,7 +135,7 @@ function check_uniform_with_ai(string $jpegBytes, array $criteria): array
     }
     $shapeText = '{"checks":{' . implode(',', $shape) . '},"summary":""}';
 
-    $prompt = <<<PROMPT
+    return <<<PROMPT
 You are a photo compliance checker for student ID photos.
 Image 1 is the REFERENCE: an example of a correct photo.
 Image 2 is the SUBMITTED photo that must be checked.
@@ -158,39 +153,18 @@ Reply with JSON only (no markdown fences, no extra text), in exactly this shape:
 - "note" is a short explanation in Thai of what is wrong (empty string when ok).
 - "summary" is one or two sentences in Thai telling the student what to fix, or confirming the photo is fine.
 PROMPT;
+}
 
-    $payload = [
-        'model'      => AI_MODEL,
-        'max_tokens' => 1000,
-        'messages'   => [[
-            'role'    => 'user',
-            'content' => [
-                ['type' => 'text', 'text' => 'Image 1 - REFERENCE (correct example):'],
-                ['type' => 'image', 'source' => [
-                    'type' => 'base64', 'media_type' => 'image/jpeg',
-                    'data' => base64_encode((string)file_get_contents(REFERENCE_IMAGE)),
-                ]],
-                ['type' => 'text', 'text' => 'Image 2 - SUBMITTED photo to check:'],
-                ['type' => 'image', 'source' => [
-                    'type' => 'base64', 'media_type' => 'image/jpeg',
-                    'data' => base64_encode($jpegBytes),
-                ]],
-                ['type' => 'text', 'text' => $prompt],
-            ],
-        ]],
-    ];
-
-    $ch = curl_init('https://api.anthropic.com/v1/messages');
+// ส่ง JSON ไปที่ API แล้วคืนค่าที่ถอดรหัสแล้ว (หรือ null ถ้าล้มเหลว)
+function post_json(string $url, array $headers, array $payload): ?array
+{
+    $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_POST           => true,
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_CONNECTTIMEOUT => 10,
         CURLOPT_TIMEOUT        => AI_TIMEOUT_SEC,
-        CURLOPT_HTTPHEADER     => [
-            'content-type: application/json',
-            'x-api-key: ' . $apiKey,
-            'anthropic-version: 2023-06-01',
-        ],
+        CURLOPT_HTTPHEADER     => array_merge(['content-type: application/json'], $headers),
         CURLOPT_POSTFIELDS     => json_encode($payload, JSON_UNESCAPED_UNICODE),
     ]);
     $resp = curl_exec($ch);
@@ -200,16 +174,97 @@ PROMPT;
 
     if ($resp === false || $http !== 200) {
         error_log("photo check: HTTP {$http} {$err} " . substr((string)$resp, 0, 300));
-        return ['status' => 'error', 'message' => 'ตรวจรูปอัตโนมัติไม่สำเร็จ'];
+        return null;
+    }
+    $data = json_decode($resp, true);
+    return is_array($data) ? $data : null;
+}
+
+// ส่งภาพตัวอย่าง + ภาพที่ตรวจไปให้ AI คืนข้อความตอบกลับ (หรือ null ถ้าไม่สำเร็จ/ยังไม่ได้ตั้งค่า key)
+function ask_ai(string $jpegBytes, string $prompt): ?string
+{
+    $refB64 = base64_encode((string)file_get_contents(REFERENCE_IMAGE));
+    $imgB64 = base64_encode($jpegBytes);
+
+    if (AI_PROVIDER === 'gemini') {
+        $apiKey = getenv('GEMINI_API_KEY') ?: (defined('GEMINI_API_KEY') ? GEMINI_API_KEY : '');
+        if ($apiKey === '') {
+            return null;
+        }
+        $data = post_json(
+            'https://generativelanguage.googleapis.com/v1beta/models/' . GEMINI_MODEL . ':generateContent',
+            ['x-goog-api-key: ' . $apiKey],
+            [
+                'contents' => [[
+                    'parts' => [
+                        ['text' => 'Image 1 - REFERENCE (correct example):'],
+                        ['inline_data' => ['mime_type' => 'image/jpeg', 'data' => $refB64]],
+                        ['text' => 'Image 2 - SUBMITTED photo to check:'],
+                        ['inline_data' => ['mime_type' => 'image/jpeg', 'data' => $imgB64]],
+                        ['text' => $prompt],
+                    ],
+                ]],
+                'generationConfig' => ['responseMimeType' => 'application/json'],
+            ]
+        );
+        if ($data === null) {
+            return null;
+        }
+        $text = '';
+        foreach (($data['candidates'][0]['content']['parts'] ?? []) as $part) {
+            if (empty($part['thought']) && isset($part['text'])) {
+                $text .= $part['text'];
+            }
+        }
+        return $text !== '' ? $text : null; // ว่าง = ถูกบล็อกโดย safety filter หรือไม่มีคำตอบ
     }
 
-    $data = json_decode($resp, true);
+    // AI_PROVIDER = 'claude'
+    $apiKey = getenv('ANTHROPIC_API_KEY') ?: (defined('ANTHROPIC_API_KEY') ? ANTHROPIC_API_KEY : '');
+    if ($apiKey === '') {
+        return null;
+    }
+    $data = post_json(
+        'https://api.anthropic.com/v1/messages',
+        ['x-api-key: ' . $apiKey, 'anthropic-version: 2023-06-01'],
+        [
+            'model'      => AI_MODEL,
+            'max_tokens' => 1000,
+            'messages'   => [[
+                'role'    => 'user',
+                'content' => [
+                    ['type' => 'text', 'text' => 'Image 1 - REFERENCE (correct example):'],
+                    ['type' => 'image', 'source' => ['type' => 'base64', 'media_type' => 'image/jpeg', 'data' => $refB64]],
+                    ['type' => 'text', 'text' => 'Image 2 - SUBMITTED photo to check:'],
+                    ['type' => 'image', 'source' => ['type' => 'base64', 'media_type' => 'image/jpeg', 'data' => $imgB64]],
+                    ['type' => 'text', 'text' => $prompt],
+                ],
+            ]],
+        ]
+    );
+    if ($data === null) {
+        return null;
+    }
     $text = '';
     foreach (($data['content'] ?? []) as $block) {
         if (($block['type'] ?? '') === 'text') {
             $text .= $block['text'];
         }
     }
+    return $text !== '' ? $text : null;
+}
+
+function check_uniform_with_ai(string $jpegBytes, array $criteria): array
+{
+    if (!is_readable(REFERENCE_IMAGE)) {
+        return ['status' => 'error', 'message' => 'ระบบตรวจรูปอัตโนมัติยังไม่พร้อมใช้งาน'];
+    }
+
+    $text = ask_ai($jpegBytes, build_uniform_prompt($criteria));
+    if ($text === null) {
+        return ['status' => 'error', 'message' => 'ตรวจรูปอัตโนมัติไม่สำเร็จหรือยังไม่ได้ตั้งค่า API key'];
+    }
+
     $start = strpos($text, '{');
     $end   = strrpos($text, '}');
     $parsed = ($start !== false && $end !== false) ? json_decode(substr($text, $start, $end - $start + 1), true) : null;
