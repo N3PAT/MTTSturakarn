@@ -208,9 +208,9 @@ if (empty($profile_image)) {
   
   <style>
     :root {
-      --primary: #4f46e5;      /* Modern Indigo */
-      --primary-light: #818cf8;
-      --bg-color: #f8fafc;     /* Light slate */
+      --primary: #5a42a0;      /* Modern Indigo */
+      --primary-light: #7c5dfa;
+      --bg-color: #f6f8fc;     /* Light slate */
       --card-bg: #ffffff;
       --text-dark: #0f172a;
       --text-gray: #64748b;
@@ -634,10 +634,10 @@ if (empty($profile_image)) {
       <span>หน้าหลัก</span>
     </a>
 
-    <a href="logout.php" class="nav-link">
-      <i class="fas fa-sign-out-alt"></i>
-      <span>ออกระบบ</span>
-    </a>
+   <a href="profile.php" class="nav-link">
+  <i class="fas fa-user"></i>
+  <span>โปรไฟล์</span>
+</a>
   </div>
 
  <script>
