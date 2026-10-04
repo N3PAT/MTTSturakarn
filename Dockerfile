@@ -1,10 +1,15 @@
 # ใช้ Image PHP 8.2 พร้อม Apache (อัปเกรดเพื่อรองรับ Web Push)
 FROM php:8.2-apache
 
-# 1. ติดตั้ง Extension สำหรับ MySQL และ Curl
+# 1. ติดตั้ง Extension สำหรับ MySQL, Curl และ GD Library (สำหรับประมวลผลรูปภาพ)
 RUN apt-get update && apt-get install -y \
     libcurl4-openssl-dev \
-    && docker-php-ext-install mysqli pdo pdo_mysql curl \
+    libfreetype6-dev \
+    libjpeg62-turbo-dev \
+    libpng-dev \
+    libwebp-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
+    && docker-php-ext-install -j$(nproc) gd mysqli pdo pdo_mysql curl \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # 2. เปิดใช้งาน mod_rewrite และตั้งค่า Apache อนุญาตให้ใช้ .htaccess (แก้ไขปัญหา 403 Forbidden)
