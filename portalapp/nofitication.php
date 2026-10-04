@@ -23,7 +23,7 @@ if (empty($_SESSION['student_code'])) {
 $studentCode = $_SESSION['student_code'];
 
 // ====================================================================================
-// ส่วนที่ 1: การจัดการ API สำหรับบันทึก Push Subscription
+// ส่วนที่ 1: การจัดการ API สำหรับบันทึก/อัปเดต Push Subscription
 // ====================================================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ini_set('display_errors', 0);
@@ -38,24 +38,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $auth = $_POST['auth'] ?? '';
 
         try {
+            // ตรวจสอบว่าเคยลงทะเบียนไว้แล้วหรือไม่
             $checkStmt = $conn->prepare("SELECT id FROM push_subscriptions WHERE student_id = ? LIMIT 1");
             $checkStmt->bind_param("s", $studentCode);
             $checkStmt->execute();
             $res = $checkStmt->get_result();
 
             if ($res->num_rows > 0) {
-                echo json_encode(['success' => true, 'message' => 'มีข้อมูลนักเรียนนี้ในระบบแล้ว']);
-                $checkStmt->close();
-                exit();
+                // หากมีแล้ว ให้ทำการ UPDATE เพื่อรองรับการเปลี่ยน Device หรือ Token ใหม่
+                $updateStmt = $conn->prepare("UPDATE push_subscriptions SET endpoint = ?, p256dh = ?, auth = ? WHERE student_id = ?");
+                $updateStmt->bind_param("ssss", $endpoint, $p256dh, $auth, $studentCode);
+                $updateStmt->execute();
+                $updateStmt->close();
+                
+                echo json_encode(['success' => true, 'message' => 'อัปเดตการแจ้งเตือนสำเร็จ']);
+            } else {
+                // หากยังไม่มี ให้ INSERT ข้อมูลใหม่
+                $stmt = $conn->prepare("INSERT INTO push_subscriptions (student_id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?)");
+                $stmt->bind_param("ssss", $studentCode, $endpoint, $p256dh, $auth);
+                $stmt->execute();
+                $stmt->close();
+
+                echo json_encode(['success' => true, 'message' => 'บันทึกการแจ้งเตือนสำเร็จ']);
             }
             $checkStmt->close();
 
-            $stmt = $conn->prepare("INSERT INTO push_subscriptions (student_id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?)");
-            $stmt->bind_param("ssss", $studentCode, $endpoint, $p256dh, $auth);
-            $stmt->execute();
-            $stmt->close();
-
-            echo json_encode(['success' => true, 'message' => 'บันทึกการแจ้งเตือนสำเร็จ']);
         } catch (Exception $e) {
             if ($conn->errno === 1062) {
                 echo json_encode(['success' => true, 'message' => 'มีข้อมูล endpoint นี้ในระบบแล้ว']);
@@ -79,7 +86,6 @@ $has_voted = true;
 $error_message = ""; 
 $today_discipline = null; 
 $student_restriction = null; 
-$push_messages = []; 
 
 try {
     if (!isset($conn) || !($conn instanceof mysqli)) {
@@ -88,6 +94,7 @@ try {
 
     $conn->set_charset("utf8mb4");
 
+    // ตรวจสอบข้อมูลนักเรียน
     $stmt = $conn->prepare("SELECT student_code FROM students WHERE student_code = ? LIMIT 1");
     if (!$stmt) throw new Exception("Query ข้อมูลนักเรียนผิดพลาด: " . $conn->error);
     $stmt->bind_param("s", $studentCode);
@@ -102,7 +109,7 @@ try {
         exit();
     }
 
-    // กักบริเวณ
+    // 1. กักบริเวณ
     $stmt_restrict = $conn->prepare("SELECT weeks_count, created_at FROM restrictions WHERE student_code = ? ORDER BY created_at DESC LIMIT 1");
     if ($stmt_restrict) {
         $stmt_restrict->bind_param("s", $studentCode);
@@ -114,7 +121,7 @@ try {
         $stmt_restrict->close();
     }
 
-    // การเข้าเวร
+    // 2. การเข้าเวร
     $stmt_duty = $conn->prepare("SELECT duty_name, duty_date, DATEDIFF(duty_date, CURDATE()) AS days_left FROM student_duties WHERE student_code = ? AND duty_date >= CURDATE() ORDER BY duty_date ASC");
     if ($stmt_duty) {
         $stmt_duty->bind_param("s", $studentCode);
@@ -126,7 +133,7 @@ try {
         $stmt_duty->close();
     }
 
-    // โหวตประสงค์กลับบ้าน
+    // 3. โหวตประสงค์กลับบ้าน
     $stmt_vote = $conn->prepare("SELECT COUNT(*) as vote_count FROM weekly_votes WHERE student_code = ? AND YEARWEEK(vote_date, 1) = YEARWEEK(CURDATE(), 1)");
     if ($stmt_vote) {
         $stmt_vote->bind_param("s", $studentCode);
@@ -138,7 +145,7 @@ try {
         $stmt_vote->close();
     }
 
-    // บัตรวินัยวันนี้
+    // 4. บัตรวินัยวันนี้
     $stmt_disc = $conn->prepare("SELECT card_bed, card_shoe, card_cabinet, total_cards, status_color FROM discipline_cards WHERE student_code = ? AND check_date = CURDATE() LIMIT 1");
     if ($stmt_disc) {
         $stmt_disc->bind_param("s", $studentCode);
@@ -150,11 +157,11 @@ try {
         $stmt_disc->close();
     }
 
-    // ดึงประกาศ/ข่าวสาร (มีคอลัมน์ attachment ตามที่เพิ่มมา)
-    $sql_news = "SELECT * FROM announcements WHERE status = 'active' OR status = '1' ORDER BY id DESC LIMIT 10";
+    // 5. ดึงประกาศ/ข่าวสาร (ระบุชื่อคอลัมน์ชัดเจนแทน SELECT * เพื่อลด Memory)
+    $sql_news = "SELECT id, title, topic, subject, content, detail, description, created_at, date, created_date, attachment FROM announcements WHERE status = 'active' OR status = '1' ORDER BY id DESC LIMIT 10";
     $res_news = $conn->query($sql_news);
     if (!$res_news) {
-        $sql_fallback = "SELECT * FROM announcements ORDER BY id DESC LIMIT 10";
+        $sql_fallback = "SELECT id, title, topic, subject, content, detail, description, created_at, date, created_date, attachment FROM announcements ORDER BY id DESC LIMIT 10";
         $res_news = $conn->query($sql_fallback);
     }
     if ($res_news) {
@@ -163,8 +170,8 @@ try {
         }
     }
 
-    // ดึงการแจ้งเตือนจากตาราง notifications
-    $stmt_noti = $conn->prepare("SELECT * FROM notifications WHERE student_code = ? OR student_code IS NULL OR student_code = '' ORDER BY created_at DESC LIMIT 15");
+    // 6. ดึงการแจ้งเตือนจากตาราง notifications
+    $stmt_noti = $conn->prepare("SELECT id, title, message, alert_level, created_at FROM notifications WHERE student_code = ? OR student_code IS NULL OR student_code = '' ORDER BY created_at DESC LIMIT 15");
     if ($stmt_noti) {
         $stmt_noti->bind_param("s", $studentCode);
         $stmt_noti->execute();
@@ -176,7 +183,7 @@ try {
     }
 
 } catch (Throwable $e) {
-    $error_message = "System Error: " . htmlspecialchars($e->getMessage());
+    $error_message = "System Error: " . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8');
 }
 
 $has_discipline_alert = ($today_discipline !== null);
@@ -271,7 +278,7 @@ if (ob_get_length()) ob_end_flush();
     
     <div class="top-header fade-in-up delay-1">
       <div class="header-left">
-        <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg" alt="Logo" class="school-logo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg" alt="Logo" class="school-logo" loading="lazy">
         <div class="school-name">
           <h1>การแจ้งเตือน</h1>
           <p>โรงเรียนช่างฝีมือทหาร</p>
@@ -302,7 +309,7 @@ if (ob_get_length()) ob_end_flush();
           <div class="noti-icon"><i class="fas fa-ban"></i></div>
           <div class="noti-content">
             <h4 style="color: #991b1b;">คุณถูกกักบริเวณ</h4>
-            <p><strong>งดกลับบ้าน:</strong> คุณถูกโทษกักบริเวณเป็นจำนวน <strong><?= htmlspecialchars($student_restriction['weeks_count']) ?> สัปดาห์</strong></p>
+            <p><strong>งดกลับบ้าน:</strong> คุณถูกโทษกักบริเวณเป็นจำนวน <strong><?= htmlspecialchars($student_restriction['weeks_count'], ENT_QUOTES, 'UTF-8') ?> สัปดาห์</strong></p>
             <div class="noti-time"><i class="far fa-calendar-times"></i> วันที่สั่งกัก: <?= date('d/m/Y', strtotime($student_restriction['created_at'])) ?></div>
           </div>
         </div>
@@ -323,7 +330,7 @@ if (ob_get_length()) ob_end_flush();
           <div class="noti-icon"><i class="fas fa-id-card-alt"></i></div>
           <div class="noti-content">
             <h4>โดนตัดบัตรวินัยวันนี้! (จำนวน <?= $tot ?> ใบ)</h4>
-            <p><strong>รายการที่ไม่เรียบร้อย:</strong> <?= $items_str ?></p>
+            <p><strong>รายการที่ไม่เรียบร้อย:</strong> <?= htmlspecialchars($items_str, ENT_QUOTES, 'UTF-8') ?></p>
             <div class="noti-time"><i class="far fa-clock"></i> ตรวจพบวันนี้</div>
           </div>
         </div>
@@ -353,8 +360,8 @@ if (ob_get_length()) ob_end_flush();
         <div class="noti-item <?= $card_type ?> clickable-noti" data-title="<?= htmlspecialchars($sys_noti['title'] ?? '', ENT_QUOTES, 'UTF-8') ?>" data-detail="<?= htmlspecialchars($sys_noti['message'] ?? '', ENT_QUOTES, 'UTF-8') ?>" data-time="<?= $noti_date ?> น.">
           <div class="noti-icon"><i class="fas <?= $icon_class ?>"></i></div>
           <div class="noti-content">
-            <h4><?= htmlspecialchars($sys_noti['title'] ?? '') ?></h4>
-            <p><?= nl2br(htmlspecialchars($sys_noti['message'] ?? '')) ?></p>
+            <h4><?= htmlspecialchars($sys_noti['title'] ?? '', ENT_QUOTES, 'UTF-8') ?></h4>
+            <p><?= nl2br(htmlspecialchars($sys_noti['message'] ?? '', ENT_QUOTES, 'UTF-8')) ?></p>
             <div class="noti-time"><i class="far fa-clock"></i> <?= $noti_date ?> น.</div>
           </div>
         </div>
@@ -372,19 +379,19 @@ if (ob_get_length()) ob_end_flush();
         <div class="noti-item <?= $card_type ?> clickable-noti" data-title="แจ้งเตือนเข้าเวร: <?= htmlspecialchars($duty['duty_name'] ?? 'ปฏิบัติหน้าที่เวร', ENT_QUOTES, 'UTF-8') ?>" data-detail="คุณมีกำหนดปฏิบัติหน้าที่ในวันที่ <?= $duty_date_fmt ?> (<?= $time_text ?>)" data-time="<?= $duty_date_fmt ?>">
           <div class="noti-icon"><i class="fas <?= $icon_class ?>"></i></div>
           <div class="noti-content">
-            <h4>แจ้งเตือนเข้าเวร: <?= htmlspecialchars($duty['duty_name'] ?? 'ปฏิบัติหน้าที่เวร') ?></h4>
+            <h4>แจ้งเตือนเข้าเวร: <?= htmlspecialchars($duty['duty_name'] ?? 'ปฏิบัติหน้าที่เวร', ENT_QUOTES, 'UTF-8') ?></h4>
             <p>คุณมีกำหนดปฏิบัติหน้าที่ในวันที่ <?= $duty_date_fmt ?> (<?= $time_text ?>)</p>
           </div>
         </div>
       <?php endforeach; ?>
 
-      <!-- 6. ประกาศ/ข่าวสาร (มีเพิ่ม data-image เพื่อส่งภาพไปที่ Modal) -->
+      <!-- 6. ประกาศ/ข่าวสาร -->
       <?php foreach ($announcements as $news): ?>
         <?php 
           $title = $news['title'] ?? $news['topic'] ?? $news['subject'] ?? 'ประกาศข่าวสาร';
           $content = $news['content'] ?? $news['detail'] ?? $news['description'] ?? '';
           $date = $news['created_at'] ?? $news['date'] ?? $news['created_date'] ?? date('Y-m-d H:i:s');
-          $attachment = $news['attachment'] ?? ''; // <--- รับค่ารูปภาพจากคอลัมน์ attachment
+          $attachment = $news['attachment'] ?? '';
         ?>
         <div class="noti-item info clickable-noti"
              data-title="<?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?>"
@@ -393,9 +400,8 @@ if (ob_get_length()) ob_end_flush();
              data-image="<?= htmlspecialchars($attachment, ENT_QUOTES, 'UTF-8') ?>"> 
           <div class="noti-icon"><i class="fas fa-bullhorn"></i></div>
           <div class="noti-content">
-            <h4><?= htmlspecialchars($title) ?></h4>
-            <p><?= nl2br(htmlspecialchars($content)) ?></p>
-            <!-- แสดงไอคอนรูปภาพเล็กๆ หากมีแนบมาด้วย -->
+            <h4><?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?></h4>
+            <p><?= nl2br(htmlspecialchars($content, ENT_QUOTES, 'UTF-8')) ?></p>
             <?php if (!empty($attachment)): ?>
               <div style="font-size: 0.75rem; color: var(--primary); margin-bottom: 5px;">
                 <i class="far fa-image"></i> มีรูปภาพแนบ
@@ -415,7 +421,7 @@ if (ob_get_length()) ob_end_flush();
 
     </div>
 
-    <!-- Modal Detail (มีการเพิ่ม <img> ภายใน modal-body) -->
+    <!-- Modal Detail -->
     <div class="modal-overlay" id="detailModal">
       <div class="modal-box">
         <div class="modal-header">
@@ -423,7 +429,7 @@ if (ob_get_length()) ob_end_flush();
           <button class="close-modal" id="closeModal">&times;</button>
         </div>
         <div class="modal-body">
-          <img id="modalImage" class="modal-image" src="" alt="ภาพประกอบ">
+          <img id="modalImage" class="modal-image" src="" alt="ภาพประกอบ" loading="lazy">
           <div id="modalBodyText"></div>
         </div>
         <div class="modal-footer" id="modalTime"></div>
@@ -441,7 +447,7 @@ if (ob_get_length()) ob_end_flush();
     document.addEventListener('DOMContentLoaded', function() {
         
         // ==========================================
-        // 1. ระบบจัดการ Modal
+        // ระบบจัดการ Modal
         // ==========================================
         const modal = document.getElementById('detailModal');
         const closeBtn = document.getElementById('closeModal');
@@ -452,7 +458,7 @@ if (ob_get_length()) ob_end_flush();
 
         document.querySelectorAll('.clickable-noti').forEach(item => {
           item.addEventListener('click', function(e) {
-            if(e.target.tagName.toLowerCase() === 'a' || e.target.closest('a')) return; 
+            if (e.target.tagName.toLowerCase() === 'a' || e.target.closest('a')) return; 
 
             mTitle.textContent = this.getAttribute('data-title');
             mBodyText.textContent = this.getAttribute('data-detail');
@@ -477,13 +483,13 @@ if (ob_get_length()) ob_end_flush();
           modal.classList.remove('show');
           setTimeout(() => {
               modal.style.display = 'none';
-              mImage.src = ''; // เคลียร์รูปออกกันค้าง
+              mImage.src = ''; // เคลียร์รูปออกเพื่อกันแสดงผลค้าง
           }, 300);
         };
         
         closeBtn.addEventListener('click', closeModal);
         modal.addEventListener('click', (e) => {
-          if(e.target === modal) closeModal(); 
+          if (e.target === modal) closeModal(); 
         });
     });
   </script>
