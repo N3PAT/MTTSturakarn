@@ -382,9 +382,51 @@ $profile = [
       background: linear-gradient(135deg, var(--primary), #6366f1);
       box-shadow: 0 15px 30px rgba(79,70,229,0.25);
     }
+
+    /* พื้นหลังเคลื่อนไหว: ไล่สีเลื่อน + ลูกบอลแสงลอย + แสงวิ่งผ่านการ์ด */
+    .card-bg {
+      position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+      background: linear-gradient(120deg, #5a42a0, #6366f1, #7c5dfa, #4f46e5, #5a42a0);
+      background-size: 300% 300%;
+      animation: cardGradient 10s ease-in-out infinite;
+    }
+    .card-bg span {
+      position: absolute; border-radius: 50%; will-change: transform;
+      background: radial-gradient(circle, rgba(255,255,255,0.28), rgba(255,255,255,0) 70%);
+    }
+    .card-bg span:nth-child(1) { width: 130px; height: 130px; top: -45px; right: -25px; animation: orbFloatA 7s ease-in-out infinite; }
+    .card-bg span:nth-child(2) { width: 100px; height: 100px; bottom: -40px; left: 32%;  animation: orbFloatB 9s ease-in-out infinite; }
+    .card-bg span:nth-child(3) { width: 70px;  height: 70px;  top: 25%;     left: -20px; animation: orbFloatC 11s ease-in-out infinite; }
+
     .student-card::after {
-      content: ''; position: absolute; right: -20px; bottom: -20px; width: 100px; height: 100px;
-      background: rgba(255,255,255,0.1); border-radius: 50%;
+      content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+      background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,0.18) 50%, transparent 65%);
+      transform: translateX(-120%);
+      animation: cardShine 6s ease-in-out infinite;
+    }
+
+    @keyframes cardGradient {
+      0%, 100% { background-position: 0% 50%; }
+      50%      { background-position: 100% 50%; }
+    }
+    @keyframes orbFloatA {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      50%      { transform: translate(-25px, 22px) scale(1.15); }
+    }
+    @keyframes orbFloatB {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      50%      { transform: translate(30px, -18px) scale(0.9); }
+    }
+    @keyframes orbFloatC {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      50%      { transform: translate(22px, 14px) scale(1.2); }
+    }
+    @keyframes cardShine {
+      0%, 55%  { transform: translateX(-120%); }
+      100%     { transform: translateX(120%); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .card-bg, .card-bg span, .student-card::after { animation: none; }
     }
     .profile-img {
       z-index: 1; width: 70px; height: 70px; border-radius: 50%; object-fit: cover; background: #fff;
@@ -539,6 +581,7 @@ $profile = [
     <main>
       <!-- Student profile -->
       <section class="student-card fade-in-up delay-2" aria-label="ข้อมูลนักเรียน">
+        <div class="card-bg" aria-hidden="true"><span></span><span></span><span></span></div>
         <img src="<?= e($profile['image']) ?>" alt="Profile" class="profile-img">
         <div class="student-info">
           <h2><?= e($profile['name']) ?></h2>
