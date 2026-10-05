@@ -303,43 +303,62 @@ PROMPT;
     $status = ($ai['status'] === 'done') ? 'approved' : 'pending';
     $note   = ($ai['status'] === 'done') ? $ai['summary'] : $ai['message'];
 
-    /* ---------- 5. บันทึกไฟล์ไปที่ ImgBB + อัปเดตฐานข้อมูล ---------- */
-    // ใส่ API Key ของคุณที่สมัครได้จาก api.imgbb.com
-    $imgbb_api_key = 'c6a9c1c34886763d807dcd3d440e5068'; 
-    
-    // ตั้งชื่อไฟล์ตามที่ต้องการ (รหัสนักเรียน_รหัสสุ่ม)
+    /* ---------- 5. บันทึกไฟล์ไปที่ Cloudinary + อัปเดตฐานข้อมูล ---------- */
+    // ใส่ข้อมูล Cloudinary API ของคุณที่สมัครได้จาก cloudinary.com
+    $cloudinary_cloud_name = 'mediaflows_6c984adb-8ba3-4dc4-ba7f-434cf654c82a';
+    $cloudinary_api_key    = '878158844658136';
+    $cloudinary_api_secret = 'o3AB1G0hnTZ6E4NYLVtG8jxr63k';
+
     $safeCode = preg_replace('/[^A-Za-z0-9_-]/', '', $student_code) ?: 'student';
-    $customFilename = $safeCode . '_' . bin2hex(random_bytes(6));
+    $public_id = $safeCode . '_' . bin2hex(random_bytes(6));
 
-    // แปลงภาพเป็น Base64
-    $base64Image = base64_encode($jpegBytes);
+    $timestamp = time();
+    $params_to_sign = [
+        'folder'    => 'student_photos',
+        'public_id' => $public_id,
+        'timestamp' => $timestamp,
+    ];
+    ksort($params_to_sign);
 
-    // ส่งไฟล์ไปที่ ImgBB
+    $to_sign = [];
+    foreach ($params_to_sign as $k => $v) {
+        $to_sign[] = "{$k}={$v}";
+    }
+    $string_to_sign = implode('&', $to_sign) . $cloudinary_api_secret;
+    $signature = sha1($string_to_sign);
+
+    $post_fields = [
+        'file'      => 'data:image/jpeg;base64,' . base64_encode($jpegBytes),
+        'api_key'   => $cloudinary_api_key,
+        'timestamp' => $timestamp,
+        'signature' => $signature,
+        'folder'    => 'student_photos',
+        'public_id' => $public_id,
+    ];
+
     $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, 'https://api.imgbb.com/1/upload?key=' . $imgbb_api_key);
-    curl_setopt($ch, CURLOPT_POST, 1);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, [
-        'image' => $base64Image,
-        'name'  => $customFilename
-    ]);
+    curl_setopt($ch, CURLOPT_URL, "https://api.cloudinary.com/v1_1/{$cloudinary_cloud_name}/image/upload");
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $post_fields);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 15);
     $response = curl_exec($ch);
     $curl_error = curl_error($ch);
     curl_close($ch);
 
     if ($response === false) {
-        error_log('ImgBB Request Error: ' . $curl_error);
-        fail('อัปโหลดไฟล์ไปที่ ImgBB ไม่สำเร็จ กรุณาลองใหม่', 500);
+        error_log('Cloudinary Request Error: ' . $curl_error);
+        fail('อัปโหลดไฟล์ไปที่ Cloudinary ไม่สำเร็จ กรุณาลองใหม่', 500);
     }
 
-    $imgbb_data = json_decode($response, true);
-    if (!isset($imgbb_data['success']) || $imgbb_data['success'] !== true) {
-        error_log('ImgBB API Error: ' . $response);
+    $cloudinary_data = json_decode($response, true);
+    if (!isset($cloudinary_data['secure_url'])) {
+        error_log('Cloudinary API Error: ' . $response);
         fail('เซิร์ฟเวอร์รับฝากรูปปฏิเสธการเชื่อมต่อ', 500);
     }
 
-    // ได้ลิงก์ของรูปมาจาก ImgBB นำไปเซฟลง Database ได้เลย
-    $finalImageUrl = $imgbb_data['data']['url'];
+    // ได้ลิงก์ของรูปมาจาก Cloudinary
+    $finalImageUrl = $cloudinary_data['secure_url'];
 
     try {
         // เก็บชื่อรูปเดิมไว้เช็คเผื่อเป็นไฟล์เก่าในระบบจะได้ลบทิ้ง
@@ -349,7 +368,7 @@ PROMPT;
         $oldImage = (string)($stmt->get_result()->fetch_assoc()['image'] ?? '');
         $stmt->close();
 
-        // บันทึกลิงก์ ImgBB ลง Database
+        // บันทึกลิงก์ Cloudinary ลง Database
         $stmt = $conn->prepare('UPDATE students SET image = ?, image_status = ?, image_note = ?, image_checked_at = NOW() WHERE student_code = ?');
         $stmt->bind_param('ssss', $finalImageUrl, $status, $note, $student_code);
         $stmt->execute();
@@ -372,7 +391,7 @@ PROMPT;
         'status'    => $status,
         'message'   => $status === 'approved'
             ? 'รูปผ่านการตรวจสอบและบันทึกแล้ว'
-            : 'บันทึกรูปแล้ว แต่ระบบตรวจอัตโนมัติไม่พร้อมใช้งาน รูปจะรอเจ้าแอดมินตรวจสอบ',
+            : 'บันทึกรูปแล้ว แต่ระบบตรวจอัตโนมัติไม่พร้อมใช้งาน รูปจะรอเจ้าหน้าที่ตรวจสอบ',
         'image_url' => $finalImageUrl . '?v=' . $now,
         'checks'    => $ai['status'] === 'done' ? $ai['checks'] : [],
     ]);
