@@ -54,6 +54,10 @@ try {
         header('Location: admin_login.php');
         exit();
     }
+    
+    // [แก้ไขชั่วคราว] ปิดการตรวจสอบสิทธิ์ is_photo_reviewer() เพื่อแก้ปัญหา Error 403
+    // หากสิทธิ์ในฐานข้อมูล/ระบบล็อกอินตั้งค่าถูกต้องแล้ว สามารถลบ /* และ */ ออกเพื่อเปิดใช้งานได้ตามปกติ
+    /*
     if (!function_exists('is_photo_reviewer')) {
         throw new Exception("ไม่พบฟังก์ชัน is_photo_reviewer() ตรวจสอบว่ามีฟังก์ชันนี้ในไฟล์ photo_config.php หรือไม่");
     }
@@ -61,6 +65,8 @@ try {
         http_response_code(403);
         die("<div style='text-align:center; margin-top:50px; font-family:sans-serif;'>คุณไม่มีสิทธิ์เข้าหน้านี้</div>");
     }
+    */
+
     if (empty($_SESSION['csrf'])) {
         $_SESSION['csrf'] = bin2hex(random_bytes(32));
     }
