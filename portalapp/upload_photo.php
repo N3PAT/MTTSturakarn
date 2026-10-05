@@ -305,7 +305,7 @@ PROMPT;
 
     /* ---------- 5. บันทึกไฟล์ไปที่ ImgBB + อัปเดตฐานข้อมูล ---------- */
     // ใส่ API Key ของคุณที่สมัครได้จาก api.imgbb.com
-    $imgbb_api_key = 'ใส่_API_KEY_ของคุณที่นี่'; 
+    $imgbb_api_key = 'c6a9c1c34886763d807dcd3d440e5068'; 
     
     // ตั้งชื่อไฟล์ตามที่ต้องการ (รหัสนักเรียน_รหัสสุ่ม)
     $safeCode = preg_replace('/[^A-Za-z0-9_-]/', '', $student_code) ?: 'student';
