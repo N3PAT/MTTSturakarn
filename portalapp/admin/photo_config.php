@@ -9,10 +9,12 @@ const MAX_PIXELS      = 40000000;                     // กันภาพใ�
 const OUTPUT_MAX_PX   = 800;                          // ย่อด้านยาวสุดเหลือ 800 px ก่อนบันทึก
 const RATIO_MIN       = 0.75;                         // สัดส่วน กว้าง/สูง ที่ยอมรับ
 const RATIO_MAX       = 1.25;                         // (ภาพตัวอย่างเกือบจัตุรัส)
+// ภาพตัวอย่างที่ถูกต้อง — แนะนำให้ตั้งชื่อไฟล์เป็นภาษาอังกฤษ (ชื่อไทยอาจเปิดไม่ได้บนบางเซิร์ฟเวอร์/Windows)
 const REFERENCE_IMAGE = __DIR__ . '/เครื่องแบบ.png';
+define('REFERENCE_IMAGE_URL', rawurlencode(basename(REFERENCE_IMAGE))); // ใช้แสดงในหน้าเว็บ
 const AI_PROVIDER     = 'gemini';                     // 'gemini' (มีโควตาฟรี) หรือ 'claude' (ต้องเติมเครดิต)
-const GEMINI_MODEL = 'gemini-1.5-flash'; // โมเดลแนะนำสำหรับงานวิเคราะห์ภาพ (รวดเร็ว และมีโควตาฟรี)
-const AI_MODEL     = 'claude-3-5-sonnet-20241022'; // หรือใช้ claude-3-haiku-20240307 เพื่อความประหยัด
+const GEMINI_MODEL    = 'gemini-3.8-flash';           // รุ่น Flash (มีโควตาฟรี) — เช็กชื่อรุ่นล่าสุดใน Google AI Studio
+const AI_MODEL        = 'claude-sonnet-5-5';          // ใช้เมื่อ AI_PROVIDER = 'claude' (ประหยัดขึ้น: claude-haiku-4-5-20251001)
 const AI_TIMEOUT_SEC  = 40;
 
 // เกณฑ์ตรวจรูป (สรุปจากภาพตัวอย่าง — ปรับให้ตรงกับระเบียบจริงของหน่วยได้)
@@ -55,3 +57,14 @@ $UNIFORM_CRITERIA = [
         'desc'  => 'ภาพคมชัด แสงพอดี ไม่ใช่ภาพถ่ายหน้าจอ ไม่ใส่ฟิลเตอร์หรือแต่งภาพมากเกินไป',
     ],
 ];
+
+// ผู้มีสิทธิ์เข้าหน้า review_photos.php (ตรวจ/อนุมัติ/ปฏิเสธรูป)
+// ค่าเริ่มต้น: ยังไม่มีใครเข้าได้ ต้องใส่รหัสผู้ตรวจที่นี่ก่อน (รหัสที่ใช้ล็อกอิน = $_SESSION['student_code'])
+const PHOTO_REVIEWER_CODES = [];   // เช่น ['admin01', 'teacher01']
+
+function is_photo_reviewer(): bool
+{
+    // ถ้าระบบของคุณมีบัญชีแอดมิน/ครูแยกอยู่แล้ว ให้เช็กจาก session ของระบบนั้นแทนบรรทัดล่าง
+    // เช่น: return ($_SESSION['role'] ?? '') === 'admin';
+    return in_array((string)($_SESSION['student_code'] ?? ''), PHOTO_REVIEWER_CODES, true);
+}
