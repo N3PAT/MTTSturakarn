@@ -2,18 +2,29 @@
 // ตั้งค่ากลางของระบบอัปโหลดรูป
 // แก้เกณฑ์ตรวจเครื่องแบบที่นี่ที่เดียว — ใช้ทั้งในหน้าโปรไฟล์ (รายการแนะนำ) และตัวตรวจสอบรูป
 
-const UPLOAD_DIR_REL  = 'uploads/students/';          // โฟลเดอร์เก็บรูป (ต้องเขียนไฟล์ได้)
-const MAX_FILE_BYTES  = 5 * 1024 * 1024;              // ขนาดไฟล์สูงสุด 5 MB
-const MIN_SIDE_PX     = 300;                          // ด้านสั้นสุดอย่างน้อย 300 px
-const MAX_PIXELS      = 40000000;                     // กันภาพใหญ่เกินจนกิน RAM
-const OUTPUT_MAX_PX   = 800;                          // ย่อด้านยาวสุดเหลือ 800 px ก่อนบันทึก
-const RATIO_MIN       = 0.75;                         // สัดส่วน กว้าง/สูง ที่ยอมรับ
-const RATIO_MAX       = 1.25;                         // (ภาพตัวอย่างเกือบจัตุรัส)
-const REFERENCE_IMAGE = __DIR__ . '/เครื่องแบบ.png';
-const AI_PROVIDER     = 'gemini';                     // 'gemini' (มีโควตาฟรี) หรือ 'claude' (ต้องเติมเครดิต)
-const GEMINI_MODEL = 'gemini-1.5-flash'; // โมเดลแนะนำสำหรับงานวิเคราะห์ภาพ (รวดเร็ว และมีโควตาฟรี)
-const AI_MODEL     = 'claude-3-5-sonnet-20241022'; // หรือใช้ claude-3-haiku-20240307 เพื่อความประหยัด
-const AI_TIMEOUT_SEC  = 40;
+const UPLOAD_DIR_REL   = 'uploads/students/';          // โฟลเดอร์เก็บรูป (ต้องเขียนไฟล์ได้)
+const MAX_FILE_BYTES   = 5 * 1024 * 1024;              // ขนาดไฟล์สูงสุด 5 MB
+const MIN_SIDE_PX      = 300;                          // ด้านสั้นสุดอย่างน้อย 300 px
+const MAX_PIXELS       = 40000000;                     // กันภาพใหญ่เกินจนกิน RAM
+const OUTPUT_MAX_PX    = 800;                          // ย่อด้านยาวสุดเหลือ 800 px ก่อนบันทึก
+const RATIO_MIN        = 0.75;                         // สัดส่วน กว้าง/สูง ที่ยอมรับ
+const RATIO_MAX        = 1.25;                         // (ภาพตัวอย่างเกือบจัตุรัส)
+const REFERENCE_IMAGE  = __DIR__ . '/เครื่องแบบ.png';
+const AI_PROVIDER      = 'gemini';                     // 'gemini' (มีโควตาฟรี) หรือ 'claude' (ต้องเติมเครดิต)
+
+// โมเดลหลักที่แนะนำ (ประมวลผลเร็ว โควตาสูงถึง 500 RPD)
+const GEMINI_MODEL = 'gemini-3.5-flash-lite'; 
+
+// โมเดลสำรองเรียงลำดับ 4 ตัว (ระบบจะสลับใช้อัตโนมัติหากโมเดลหลักติด Error/โควตาเต็ม)
+const GEMINI_FALLBACK_MODELS = [
+    'gemini-3.1-flash-lite',
+    'gemini-2.5-flash-lite',
+    'gemini-1.5-flash',
+    'gemini-1.5-flash-8b'
+];
+
+const AI_MODEL         = 'claude-3-5-sonnet-20241022'; // หรือใช้ claude-3-haiku-20240307 เพื่อความประหยัด
+const AI_TIMEOUT_SEC   = 40;
 
 // เกณฑ์ตรวจรูป (สรุปจากภาพตัวอย่าง — ปรับให้ตรงกับระเบียบจริงของหน่วยได้)
 // label = ชื่อสั้นที่แสดงในผลตรวจ, desc = คำอธิบายที่ให้นักเรียนอ่านและให้ AI ใช้ตัดสิน
