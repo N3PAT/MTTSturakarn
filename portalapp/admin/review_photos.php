@@ -50,7 +50,7 @@ try {
     $tab_labels   = ['pending' => 'รอตรวจ', 'approved' => 'ผ่านแล้ว', 'rejected' => 'ไม่ผ่าน', 'all' => 'ทั้งหมด'];
 
     /* ---------- สิทธิ์การเข้าถึง ---------- */
-    if (empty($_SESSION['student_code'])) {
+    if (empty($_SESSION['admin_id'])) {
         header('Location: login.php');
         exit();
     }
