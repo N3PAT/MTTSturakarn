@@ -400,7 +400,9 @@ try {
                         $unit_parts[] = $lbl . ' ' . $r[$col];
                     }
                 }
-                $img_src = $r['image'] . '?v=' . rawurlencode((string)$r['image_checked_at']);
+                
+                // [แก้ไขแล้ว] เติม ../ นำหน้าเพื่อถอยหลัง 1 โฟลเดอร์ 
+                $img_src = '../' . $r['image'] . '?v=' . rawurlencode((string)$r['image_checked_at']);
             ?>
             <article class="card">
                 <div class="card-top">
