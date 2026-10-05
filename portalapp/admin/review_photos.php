@@ -401,8 +401,13 @@ try {
                     }
                 }
                 
-                // [แก้ไขแล้ว] เติม ../ นำหน้าเพื่อถอยหลัง 1 โฟลเดอร์ 
-                $img_src = '../' . $r['image'] . '?v=' . rawurlencode((string)$r['image_checked_at']);
+                // [แก้ไขแล้ว] ตรวจสอบว่าเป็นลิงก์ Cloud (http://, https://) หรือเป็นไฟล์ในเครื่อง
+                $db_image = (string)($r['image'] ?? '');
+                if (preg_match('/^https?:\/\//i', $db_image)) {
+                    $img_src = $db_image;
+                } else {
+                    $img_src = '../' . $db_image . '?v=' . rawurlencode((string)($r['image_checked_at'] ?? ''));
+                }
             ?>
             <article class="card">
                 <div class="card-top">
