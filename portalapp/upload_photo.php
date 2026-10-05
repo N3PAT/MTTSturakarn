@@ -305,7 +305,7 @@ PROMPT;
 
     /* ---------- 5. บันทึกไฟล์ไปที่ Cloudinary + อัปเดตฐานข้อมูล ---------- */
     // ใส่ข้อมูล Cloudinary API ของคุณที่สมัครได้จาก cloudinary.com
-    $cloudinary_cloud_name = 'mediaflows_6c984adb-8ba3-4dc4-ba7f-434cf654c82a';
+    $cloudinary_cloud_name = 'dndpjv8gm';
     $cloudinary_api_key    = '878158844658136';
     $cloudinary_api_secret = 'o3AB1G0hnTZ6E4NYLVtG8jxr63k';
 
