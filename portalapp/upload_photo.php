@@ -36,7 +36,7 @@ try {
         fail('คำขอไม่ถูกต้อง กรุณารีเฟรชหน้าแล้วลองใหม่', 403);
     }
 
-    // อัปโหลดได้เฉพาะรูปของบัญชีที่ล็อกอินอยู่ (ไม่รับ id จากฝั่งผู้ใช้)
+    // อัปโหลดได้เฉพาะรูปของบัญชีที่ล็อกอินอยู่
     $student_code = (string)$_SESSION['student_code'];
 
     /* ---------- 2. จำกัดจำนวนครั้ง (กัน spam และควบคุมค่าใช้จ่าย AI) ---------- */
@@ -164,7 +164,7 @@ PROMPT;
             CURLOPT_POST           => true,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_CONNECTTIMEOUT => 10,
-            CURLOPT_TIMEOUT        => AI_TIMEOUT_SEC,
+            CURLOPT_TIMEOUT        => defined('AI_TIMEOUT_SEC') ? AI_TIMEOUT_SEC : 20,
             CURLOPT_HTTPHEADER     => array_merge(['content-type: application/json'], $headers),
             CURLOPT_POSTFIELDS     => json_encode($payload, JSON_UNESCAPED_UNICODE),
         ]);
@@ -185,14 +185,15 @@ PROMPT;
     {
         $refB64 = base64_encode((string)file_get_contents(REFERENCE_IMAGE));
         $imgB64 = base64_encode($jpegBytes);
+        $provider = defined('AI_PROVIDER') ? AI_PROVIDER : 'gemini';
 
-        if (AI_PROVIDER === 'gemini') {
+        if ($provider === 'gemini') {
             $apiKey = getenv('GEMINI_API_KEY') ?: (defined('GEMINI_API_KEY') ? GEMINI_API_KEY : '');
-            if ($apiKey === '') {
-                return null;
-            }
+            if ($apiKey === '') return null;
+            $model = defined('GEMINI_MODEL') ? GEMINI_MODEL : 'gemini-1.5-flash';
+            
             $data = post_json(
-                'https://generativelanguage.googleapis.com/v1beta/models/' . GEMINI_MODEL . ':generateContent',
+                'https://generativelanguage.googleapis.com/v1beta/models/' . $model . ':generateContent',
                 ['x-goog-api-key: ' . $apiKey],
                 [
                     'contents' => [[
@@ -207,9 +208,7 @@ PROMPT;
                     'generationConfig' => ['responseMimeType' => 'application/json'],
                 ]
             );
-            if ($data === null) {
-                return null;
-            }
+            if ($data === null) return null;
             $text = '';
             foreach (($data['candidates'][0]['content']['parts'] ?? []) as $part) {
                 if (empty($part['thought']) && isset($part['text'])) {
@@ -220,14 +219,14 @@ PROMPT;
         }
 
         $apiKey = getenv('ANTHROPIC_API_KEY') ?: (defined('ANTHROPIC_API_KEY') ? ANTHROPIC_API_KEY : '');
-        if ($apiKey === '') {
-            return null;
-        }
+        if ($apiKey === '') return null;
+        $model = defined('AI_MODEL') ? AI_MODEL : 'claude-3-haiku-20240307';
+        
         $data = post_json(
             'https://api.anthropic.com/v1/messages',
             ['x-api-key: ' . $apiKey, 'anthropic-version: 2023-06-01'],
             [
-                'model'      => AI_MODEL,
+                'model'      => $model,
                 'max_tokens' => 1000,
                 'messages'   => [[
                     'role'    => 'user',
@@ -241,9 +240,7 @@ PROMPT;
                 ]],
             ]
         );
-        if ($data === null) {
-            return null;
-        }
+        if ($data === null) return null;
         $text = '';
         foreach (($data['content'] ?? []) as $block) {
             if (($block['type'] ?? '') === 'text') {
@@ -264,9 +261,11 @@ PROMPT;
             return ['status' => 'error', 'message' => 'ตรวจรูปอัตโนมัติไม่สำเร็จหรือยังไม่ได้ตั้งค่า API key'];
         }
 
+        // ตัดเฉพาะส่วนที่เป็น JSON ออกมาจากคำตอบของ AI
         $start = strpos($text, '{');
         $end   = strrpos($text, '}');
         $parsed = ($start !== false && $end !== false) ? json_decode(substr($text, $start, $end - $start + 1), true) : null;
+        
         if (!is_array($parsed) || !isset($parsed['checks']) || !is_array($parsed['checks'])) {
             error_log('photo check: unparsable reply ' . substr($text, 0, 300));
             return ['status' => 'error', 'message' => 'อ่านผลตรวจอัตโนมัติไม่ได้'];
@@ -290,6 +289,7 @@ PROMPT;
         ];
     }
 
+    // เริ่มเรียก AI ตรวจสอบรูป
     $ai = check_uniform_with_ai($jpegBytes, $UNIFORM_CRITERIA);
 
     if ($ai['status'] === 'done' && !$ai['pass']) {
@@ -304,7 +304,7 @@ PROMPT;
     $note   = ($ai['status'] === 'done') ? $ai['summary'] : $ai['message'];
 
     /* ---------- 5. บันทึกไฟล์ไปที่ Cloudinary + อัปเดตฐานข้อมูล ---------- */
-    // ใส่ข้อมูล Cloudinary API ของคุณที่สมัครได้จาก cloudinary.com
+    // ควรย้าย 3 ตัวแปรนี้ไปไว้ในไฟล์ photo_config.php หรือ .env เพื่อความปลอดภัย
     $cloudinary_cloud_name = 'dndpjv8gm';
     $cloudinary_api_key    = '878158844658136';
     $cloudinary_api_secret = 'o3AB1G0hnTZ6E4NYLVtG8jxr63k';
