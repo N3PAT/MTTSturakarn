@@ -51,7 +51,7 @@ try {
 
     /* ---------- สิทธิ์การเข้าถึง ---------- */
     if (empty($_SESSION['admin_id'])) {
-        header('Location: login.php');
+        header('Location: admin_login.php');
         exit();
     }
     if (!function_exists('is_photo_reviewer')) {
