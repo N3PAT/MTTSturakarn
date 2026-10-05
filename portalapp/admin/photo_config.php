@@ -13,7 +13,7 @@ const RATIO_MAX       = 1.25;                         // (ภาพตัวอ�
 const REFERENCE_IMAGE = __DIR__ . '/เครื่องแบบ.png';
 define('REFERENCE_IMAGE_URL', rawurlencode(basename(REFERENCE_IMAGE))); // ใช้แสดงในหน้าเว็บ
 const AI_PROVIDER     = 'gemini';                     // 'gemini' (มีโควตาฟรี) หรือ 'claude' (ต้องเติมเครดิต)
-const GEMINI_MODEL    = 'gemini-3.8-flash';           // รุ่น Flash (มีโควตาฟรี) — เช็กชื่อรุ่นล่าสุดใน Google AI Studio
+const GEMINI_MODEL    = 'gemini-1.5-flash';           // รุ่น Flash (มีโควตาฟรี) — เช็กชื่อรุ่นล่าสุดใน Google AI Studio
 const AI_MODEL        = 'claude-sonnet-5-5';          // ใช้เมื่อ AI_PROVIDER = 'claude' (ประหยัดขึ้น: claude-haiku-4-5-20251001)
 const AI_TIMEOUT_SEC  = 40;
 
