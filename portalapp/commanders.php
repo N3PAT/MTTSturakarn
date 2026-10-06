@@ -26,6 +26,23 @@ if (REQUIRE_LOGIN && empty($_SESSION['student_code'])) {
 const APP_LOGO_URL = 'https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg';
 const PHOTO_DIR    = 'uploads/commanders/'; // ตั้งชื่อรูปเป็น "ชื่อ นามสกุล.jpg" แล้วระบบจับคู่ให้อัตโนมัติ
 
+// ตารางยศย่อ -> ยศเต็ม (เพิ่ม/แก้ได้) ถ้าไม่พบในตารางจะแสดงยศย่อตามเดิม
+// หมายเหตุ: ยศที่ย่อซ้ำข้ามเหล่าทัพ (น.อ./น.ท./น.ต., จ.อ./จ.ท./จ.ต.) ตั้งไว้ตามกองทัพเรือ
+//           ถ้าเป็นกองทัพอากาศ ให้แก้เป็น นาวาอากาศเอก / จ่าอากาศเอก ฯลฯ
+const RANK_FULL = [
+    // ทหารบก
+    'พล.อ.' => 'พลเอก', 'พล.ท.' => 'พลโท', 'พล.ต.' => 'พลตรี',
+    'พ.อ.' => 'พันเอก', 'พ.ท.' => 'พันโท', 'พ.ต.' => 'พันตรี',
+    'ร.อ.' => 'ร้อยเอก', 'ร.ท.' => 'ร้อยโท', 'ร.ต.' => 'ร้อยตรี',
+    'จ.ส.อ.' => 'จ่าสิบเอก', 'จ.ส.ท.' => 'จ่าสิบโท', 'จ.ส.ต.' => 'จ่าสิบตรี',
+    'ส.อ.' => 'สิบเอก', 'ส.ท.' => 'สิบโท', 'ส.ต.' => 'สิบตรี',
+    // ทหารเรือ
+    'พล.ร.อ.' => 'พลเรือเอก', 'พล.ร.ท.' => 'พลเรือโท', 'พล.ร.ต.' => 'พลเรือตรี',
+    'น.อ.' => 'นาวาเอก', 'น.ท.' => 'นาวาโท', 'น.ต.' => 'นาวาตรี',
+    'พ.จ.อ.' => 'พันจ่าเอก', 'พ.จ.ท.' => 'พันจ่าโท', 'พ.จ.ต.' => 'พันจ่าตรี',
+    'จ.อ.' => 'จ่าเอก', 'จ.ท.' => 'จ่าโท', 'จ.ต.' => 'จ่าตรี',
+];
+
 /* ========== 3. Helpers ========== */
 function e($v): string
 {
@@ -46,7 +63,21 @@ function rank_tier(string $rank): string
             if (strpos($rank, $prefix) === 0) return $tier;
         }
     }
-    return 'orange'; // นายทหารประทวน (พ.ส.อ., จ.ส.อ., จ.อ. ...)
+    return 'orange'; // นายทหารประทวน (พ.จ.อ., จ.ส.อ., จ.อ. ...)
+}
+
+/** ยศเต็มจากยศย่อ (รองรับต่อท้าย "หญิง") ถ้าไม่พบในตารางจะคืนยศย่อเดิม */
+function rank_full(string $rank): string
+{
+    $map  = RANK_FULL;
+    $base = preg_replace('/หญิง$/u', '', $rank);
+    return isset($map[$base]) ? $map[$base] . ($base !== $rank ? 'หญิง' : '') : $rank;
+}
+
+/** ป้ายยศ: ใส่ทั้งแบบเต็มและแบบย่อ แล้วใช้ CSS สลับตามที่ผู้ใช้เลือก */
+function rank_html(string $rank): string
+{
+    return '<span class="r-full">' . e(rank_full($rank)) . '</span><span class="r-abbr">' . e($rank) . '</span>';
 }
 
 /** หารูปจาก "ชื่อ นามสกุล.jpg|png|webp" ใน PHOTO_DIR (คืนชื่อไฟล์ หรือ '' ถ้าไม่มี) */
@@ -79,9 +110,9 @@ function avatar_html(array $x): string
 
 function person_attrs(array $x, string $group): string
 {
-    return 'data-rank="' . e($x['rank']) . '" data-name="' . e($x['name']) . '" data-role="' . e($x['role'])
+    return 'data-rank="' . e($x['rank']) . '" data-full="' . e(rank_full($x['rank'])) . '" data-name="' . e($x['name']) . '" data-role="' . e($x['role'])
          . '" data-group="' . e($group) . '" data-photo="' . e(photo_url($x)) . '" data-tier="' . rank_tier($x['rank'])
-         . '" data-s="' . e(strtolower($x['rank'] . $x['name'] . $x['role'] . $group)) . '"';
+         . '" data-s="' . e(strtolower($x['rank'] . ' ' . rank_full($x['rank']) . ' ' . $x['name'] . ' ' . $x['role'] . ' ' . $group)) . '"';
 }
 
 function render_person(array $x, string $group): void
@@ -89,7 +120,7 @@ function render_person(array $x, string $group): void
     ?>
     <button type="button" class="person t-<?= rank_tier($x['rank']) ?> reveal" <?= person_attrs($x, $group) ?>>
       <span class="avatar"><?= avatar_html($x) ?></span>
-      <span class="p-text"><small><?= e($x['rank']) ?></small><b><?= e($x['name']) ?></b><em><?= e($x['role']) ?></em></span>
+      <span class="p-text"><small><?= rank_html($x['rank']) ?></small><b><?= e($x['name']) ?></b><em><?= e($x['role']) ?></em></span>
     </button>
     <?php
 }
@@ -136,10 +167,10 @@ $tiers = [
         p('ร.ท.', 'ณัฏฐ์ สิริภิญโญชัยกุล', 'ผบ.มว. กรม นร.พัน นร.1'),
     ]],
     ['ข้าราชการพัน นร.1', 2, [
-        p('พ.ส.อ.', 'วรวุฒิ โสมเกษตริน', 'จ่ากองพัน กรม นร.พัน นร.1'),
+        p('พ.จ.อ.', 'วรวุฒิ โสมเกษตริน', 'จ่ากองพัน กรม นร.พัน นร.1'),
         p('จ.ส.อ.', 'จินตนะ นุชตะมา', 'จ่ากองพัน กรม นร.พัน นร.1'),
         p('จ.อ.', 'เดชธนา มั่นคง', 'เสมียนกองพัน กรม นร.พัน นร.1'),
-        p('พ.ส.อ.', 'เบญญพล ปลอดดี', 'จ่ากองร้อย กรม นร.พัน นร.1'),
+        p('พ.จ.อ.', 'เบญญพล ปลอดดี', 'จ่ากองร้อย กรม นร.พัน นร.1'),
     ]],
 ];
 
@@ -213,6 +244,14 @@ $nav_items = [
     }
     .search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; font: 400 0.85rem 'Prompt', sans-serif; color: var(--text-dark); }
     .count { font-size: 0.75rem; font-weight: 600; color: var(--primary); background: #eef2ff; padding: 8px 14px; border-radius: 20px; white-space: nowrap; }
+
+    /* ===== Rank format toggle ===== */
+    .r-abbr { display: none; }
+    body[data-rankmode="short"] .r-full { display: none; }
+    body[data-rankmode="short"] .r-abbr { display: inline; }
+    .seg { display: flex; width: max-content; margin: -10px var(--gutter) 16px auto; padding: 3px; border-radius: 20px; background: #fff; box-shadow: var(--shadow-card); }
+    .seg button { border: 0; background: none; padding: 5px 14px; border-radius: 17px; font: 600 0.72rem 'Prompt', sans-serif; color: var(--text-gray); cursor: pointer; transition: 0.2s; }
+    .seg button.on { background: var(--primary); color: #fff; }
 
     /* ===== Hero (ผบ.รร.ชท.) ===== */
     .tier { margin: 0 var(--gutter); }
@@ -336,13 +375,18 @@ $nav_items = [
         <span class="count"><b data-count="<?= (int)$total ?>">0</b> นาย</span>
       </div>
 
+      <div class="seg fade-in-up delay-2" role="group" aria-label="รูปแบบยศ">
+        <button type="button" class="on" data-rank-mode="full">ยศเต็ม</button>
+        <button type="button" data-rank-mode="short">ยศย่อ</button>
+      </div>
+
       <!-- ผบ.รร.ชท. -->
       <section class="tier reveal">
         <button type="button" class="hero t-gold" <?= person_attrs($top, 'ผู้บัญชาการ') ?>>
           <span class="orb o1"></span><span class="orb o2"></span>
           <div class="stars"><i class="fas fa-star"></i><i class="fas fa-star"></i></div>
           <div class="h-wrap"><div class="h-avatar"><?= avatar_html($top) ?></div></div>
-          <small><?= e($top['rank']) ?></small>
+          <small><?= rank_html($top['rank']) ?></small>
           <h2><?= e($top['name']) ?></h2>
           <div class="badge-item"><?= e($top['role']) ?></div>
         </button>
@@ -430,7 +474,7 @@ $nav_items = [
       const open = (c) => {
         const d = c.dataset, av = $('sAvatar');
         $('sheetCard').className = 'sheet-card t-' + d.tier;
-        $('sRank').textContent = d.rank;
+        $('sRank').textContent = d.full && d.full !== d.rank ? d.full + ' (' + d.rank + ')' : d.rank;
         $('sName').textContent = d.name;
         $('sRole').textContent = d.role;
         $('sGroup').textContent = d.group;
@@ -449,7 +493,22 @@ $nav_items = [
       document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') sheet.classList.remove('show'); });
     }
 
+    /* ---------- 5. ยศเต็ม / ยศย่อ ---------- */
+    function initRankMode() {
+      const btns = document.querySelectorAll('[data-rank-mode]');
+      const apply = (mode) => {
+        document.body.dataset.rankmode = mode;
+        btns.forEach((b) => b.classList.toggle('on', b.dataset.rankMode === mode));
+        try { localStorage.setItem('rankMode', mode); } catch (_) {}
+      };
+      let saved = 'full';
+      try { saved = localStorage.getItem('rankMode') || 'full'; } catch (_) {}
+      apply(saved === 'short' ? 'short' : 'full');
+      btns.forEach((b) => b.addEventListener('click', () => apply(b.dataset.rankMode)));
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
+      initRankMode();
       initReveal();
       initCount();
       initSearch();
