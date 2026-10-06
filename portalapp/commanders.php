@@ -24,7 +24,7 @@ if (REQUIRE_LOGIN && empty($_SESSION['student_code'])) {
 
 /* ========== 2. Config ========== */
 const APP_LOGO_URL = 'https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg';
-const PHOTO_DIR    = 'uploads/commanders/'; // ใส่รูปไว้ที่นี่ แล้วระบุชื่อไฟล์ในช่อง photo
+const PHOTO_DIR    = 'uploads/commanders/'; // ตั้งชื่อรูปเป็น "ชื่อ นามสกุล.jpg" แล้วระบบจับคู่ให้อัตโนมัติ
 
 /* ========== 3. Helpers ========== */
 function e($v): string
@@ -32,32 +32,55 @@ function e($v): string
     return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 }
 
-/** สีตามชั้นยศ: พล.=ทอง, พ.อ.=ม่วง, น.ท./พ.ท.=ฟ้า, อื่นๆ=เขียว */
+/** สีตามชั้นยศ: พล.=ทอง, พ.อ./น.อ.=ม่วง, พ.ท./น.ท.=ฟ้า, ร้อย-ตรี=เขียว, ประทวน=ส้ม */
 function rank_tier(string $rank): string
 {
-    if (strpos($rank, 'พล.') === 0) return 'gold';
-    if (strpos($rank, 'พ.อ.') === 0) return 'purple';
-    if (strpos($rank, 'น.ท.') === 0 || strpos($rank, 'พ.ท.') === 0) return 'blue';
-    return 'green';
+    $groups = [
+        'gold'   => ['พล.'],
+        'purple' => ['พ.อ.', 'น.อ.'],
+        'blue'   => ['พ.ท.', 'น.ท.'],
+        'green'  => ['พ.ต.', 'น.ต.', 'ร.อ.', 'ร.ท.', 'ร.ต.'],
+    ];
+    foreach ($groups as $tier => $prefixes) {
+        foreach ($prefixes as $prefix) {
+            if (strpos($rank, $prefix) === 0) return $tier;
+        }
+    }
+    return 'orange'; // นายทหารประทวน (พ.ส.อ., จ.ส.อ., จ.อ. ...)
+}
+
+/** หารูปจาก "ชื่อ นามสกุล.jpg|png|webp" ใน PHOTO_DIR (คืนชื่อไฟล์ หรือ '' ถ้าไม่มี) */
+function find_photo(string $name): string
+{
+    foreach (['jpg', 'jpeg', 'png', 'webp', 'JPG', 'JPEG', 'PNG'] as $ext) {
+        if (is_file(__DIR__ . '/' . PHOTO_DIR . $name . '.' . $ext)) return $name . '.' . $ext;
+    }
+    return '';
 }
 
 function p(string $rank, string $name, string $role, string $photo = ''): array
 {
+    $photo = $photo !== '' ? $photo : find_photo($name);
     return compact('rank', 'name', 'role', 'photo');
+}
+
+function photo_url(array $x): string
+{
+    return $x['photo'] !== '' ? PHOTO_DIR . rawurlencode($x['photo']) : '';
 }
 
 function avatar_html(array $x): string
 {
-    return $x['photo'] !== ''
-        ? '<img src="' . e(PHOTO_DIR . $x['photo']) . '" alt="" loading="lazy">'
+    $url = photo_url($x);
+    return $url !== ''
+        ? '<img src="' . e($url) . '" alt="" loading="lazy">'
         : '<i class="fas fa-user-shield"></i>';
 }
 
 function person_attrs(array $x, string $group): string
 {
-    $photo = $x['photo'] !== '' ? PHOTO_DIR . $x['photo'] : '';
     return 'data-rank="' . e($x['rank']) . '" data-name="' . e($x['name']) . '" data-role="' . e($x['role'])
-         . '" data-group="' . e($group) . '" data-photo="' . e($photo) . '" data-tier="' . rank_tier($x['rank'])
+         . '" data-group="' . e($group) . '" data-photo="' . e(photo_url($x)) . '" data-tier="' . rank_tier($x['rank'])
          . '" data-s="' . e(strtolower($x['rank'] . $x['name'] . $x['role'] . $group)) . '"';
 }
 
@@ -72,10 +95,11 @@ function render_person(array $x, string $group): void
 }
 
 /* ========== 4. Data ========== */
-// p(ยศ, ชื่อ-สกุล, ตำแหน่ง, ชื่อไฟล์รูป [ไม่บังคับ])
+// p(ยศ, ชื่อ-สกุล, ตำแหน่ง [, ชื่อไฟล์รูป])
+// รูปจับคู่อัตโนมัติจากชื่อ-สกุล เช่น uploads/commanders/คมศักดิ์ เจียมวัฒนาเลิศ.jpg
 $top = p('พล.ต.', 'คมศักดิ์ เจียมวัฒนาเลิศ', 'ผบ.รร.ชท.');
 
-// [หัวข้อชั้น, จำนวนคอลัมน์, รายชื่อ]  เรียงจากบนลงล่าง
+// [หัวข้อชั้น, จำนวนคอลัมน์, รายชื่อ]  เรียงจากบนลงล่างตามสายการบังคับบัญชา
 $tiers = [
     ['รองผู้บัญชาการ', 2, [
         p('พ.อ.', 'จิรานุวัฒน์ ศักดิ์เสือ', 'รอง.ผบ.รร.ชท.'),
@@ -83,6 +107,9 @@ $tiers = [
     ]],
     ['เสนาธิการ', 1, [
         p('พ.อ.', 'ณัฐวุฒิ ดวงจรัศ', 'เสธ.รร.ชท.'),
+    ]],
+    ['รองเสนาธิการ', 1, [
+        p('น.อ.หญิง', 'วราภร บุญเขียน', 'รอง เสธ.บก.รร.ชท.'),
     ]],
     ['หัวหน้าหน่วยงาน', 2, [
         p('พ.อ.หญิง', 'นภวรรณ แผ้วสกุล', 'ผอ.กฝศ.รร.ชท.'),
@@ -93,25 +120,26 @@ $tiers = [
     ['ผู้บังคับการ กรม นร.', 1, [
         p('พ.อ.', 'พิตติพัฒน์ ไขรัศมี', 'ผบ.กรม.นร.รร.ชท.'),
     ]],
-    ['เสนาธิการ / รองผู้บังคับการ กรม นร.', 2, [
-        p('พ.อ.', 'สายยันต์ ชาติชนะ', 'เสธ.กรม.นร.รร.ชท.'),
+    ['รองผู้บังคับการ กรม นร.', 1, [
         p('พ.อ.', 'ประสพชัย ศิลาอ่อน', 'รอง.ผบ.กรม.นร.รร.ชท.'),
-        p('น.อ.หญิง', 'วราภร บุญเขียน', 'รอง เสธ.บก.รร.ชท.'),
+    ]],
+    ['เสนาธิการ กรม นร.', 1, [
+        p('พ.อ.', 'สายยันต์ ชาติชนะ', 'เสธ.กรม.นร.รร.ชท.'),
     ]],
     ['ผู้บังคับกองพัน นร.', 1, [
         p('น.ท.', 'สุรชาติ นรสิงห์', 'ผบ.พัน. นร.1 กรม นร.รร.ชท.'),
         p('พ.ท.', 'ขจร ยิ้มละมัย', 'ผบ.พัน. นร.2 กรม นร.รร.ชท.'),
         p('พ.ท.', 'สิริโชติ บริบูรณ์ทรัพย์', 'ผบ.พัน. นร.3 กรม นร.รร.ชท.'),
     ]],
-    ['ผู้บังคับหมวด', 2, [
+    ['ผู้บังคับหมวด พัน นร.1', 2, [
         p('ร.ท.', 'ปฏิพัฒ ปิยะธนากร', 'ผบ.มว. กรม นร.พัน นร.1'),
         p('ร.ท.', 'ณัฏฐ์ สิริภิญโญชัยกุล', 'ผบ.มว. กรม นร.พัน นร.1'),
     ]],
-      ['ข้าราชการพัน นร.1', , [
-        p('พ.ส.อ..', 'เบญญพล ปลอดดี', 'จ่ากองร้อย กรม นร.พัน นร.1'),
+    ['ข้าราชการพัน นร.1', 2, [
         p('พ.ส.อ.', 'วรวุฒิ โสมเกษตริน', 'จ่ากองพัน กรม นร.พัน นร.1'),
         p('จ.ส.อ.', 'จินตนะ นุชตะมา', 'จ่ากองพัน กรม นร.พัน นร.1'),
         p('จ.อ.', 'เดชธนา มั่นคง', 'เสมียนกองพัน กรม นร.พัน นร.1'),
+        p('พ.ส.อ.', 'เบญญพล ปลอดดี', 'จ่ากองร้อย กรม นร.พัน นร.1'),
     ]],
 ];
 
@@ -142,7 +170,7 @@ $nav_items = [
       --radius: 20px; --radius-sm: 16px; --shadow-card: 0 4px 15px rgba(0,0,0,0.03); --gutter: 20px;
     }
     .t-gold { --c: var(--gold); } .t-purple { --c: var(--primary); }
-    .t-blue { --c: var(--blue); } .t-green  { --c: var(--green); }
+    .t-blue { --c: var(--blue); } .t-green  { --c: var(--green); } .t-orange { --c: #ea580c; }
 
     /* ===== Base ===== */
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -209,7 +237,7 @@ $nav_items = [
       width: 84px; height: 84px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center;
       border: 3px solid #fbbf24; background: rgba(255,255,255,0.18); font-size: 2.3rem;
     }
-    .h-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .h-avatar img { width: 100%; height: 100%; object-fit: cover; object-position: center 20%; }
     .hero small { z-index: 1; margin-top: 12px; font-size: 0.8rem; font-weight: 600; color: #fde68a; }
     .hero h2 { z-index: 1; margin: 2px 0 8px; font-size: 1.2rem; font-weight: 600; line-height: 1.3; }
     .badge-item {
@@ -244,7 +272,7 @@ $nav_items = [
       background: color-mix(in srgb, var(--c) 14%, #fff); color: var(--c); font-size: 1.1rem;
     }
     .c2 .avatar { flex-basis: 34px; height: 34px; font-size: 0.9rem; }
-    .avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .avatar img { width: 100%; height: 100%; object-fit: cover; object-position: center 20%; }
     .p-text { display: flex; flex-direction: column; min-width: 0; }
     .p-text small { font-size: 0.68rem; font-weight: 600; color: var(--c); }
     .p-text b { font-size: 0.82rem; font-weight: 600; color: var(--text-dark); line-height: 1.3; }
@@ -268,7 +296,7 @@ $nav_items = [
       width: 76px; height: 76px; margin: 0 auto 10px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center;
       font-size: 2rem; border: 3px solid var(--c); color: var(--c); background: color-mix(in srgb, var(--c) 14%, #fff);
     }
-    .s-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .s-avatar img { width: 100%; height: 100%; object-fit: cover; object-position: center 20%; }
     .sheet small { font-weight: 600; color: var(--c); }
     .sheet h3 { margin: 2px 0 4px; font-size: 1.15rem; color: var(--text-dark); }
     .sheet p { margin: 0 0 12px; font-size: 0.85rem; color: var(--text-gray); }
