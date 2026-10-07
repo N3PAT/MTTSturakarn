@@ -416,7 +416,6 @@ dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
   <section class="hero" aria-label="วันที่ที่แจ้งความประสงค์">
     <small>โหวตประสงค์กลับบ้านสำหรับวันศุกร์ที่</small>
     <strong><?php echo htmlspecialchars($date_th); ?></strong>
-    <span class="pill <?php echo $is_voting_open ? '' : 'closed'; ?>"><i class="dot"></i><?php echo $is_voting_open ? 'เปิดรับข้อมูล' : 'ปิดรับข้อมูล'; ?></span>
   </section>
 
 <?php if ($is_voting_open): ?>
