@@ -24,6 +24,7 @@ if (REQUIRE_LOGIN && empty($_SESSION['student_code'])) {
 
 /* ========== 2. Config ========== */
 const APP_LOGO_URL = 'https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg';
+const DEFAULT_AVATAR_URL = 'https://taothetutor.wordpress.com/wp-content/uploads/2026/10/e0b894e0b8b5e0b984e0b88be0b899e0b98ce0b897e0b8b5e0b988e0b8a2e0b8b1e0b887e0b984e0b8a1e0b988e0b984e0b894e0b989e0b895e0b8b1e0b989e0b887e0b88ae0b8b7e0b988e0b8ad.png'; // รูปที่ใช้แทนเมื่อยังไม่มีรูปของคนนั้น
 const PHOTO_DIR    = 'uploads/commanders/'; // ตั้งชื่อรูปเป็น "ชื่อ นามสกุล.jpg" แล้วระบบจับคู่ให้อัตโนมัติ
 
 // ตารางยศย่อ -> ยศเต็ม (เพิ่ม/แก้ได้) ถ้าไม่พบในตารางจะแสดงยศย่อตามเดิม
@@ -41,6 +42,8 @@ const RANK_FULL = [
     'น.อ.' => 'นาวาเอก', 'น.ท.' => 'นาวาโท', 'น.ต.' => 'นาวาตรี',
     'พ.จ.อ.' => 'พันจ่าเอก', 'พ.จ.ท.' => 'พันจ่าโท', 'พ.จ.ต.' => 'พันจ่าตรี',
     'จ.อ.' => 'จ่าเอก', 'จ.ท.' => 'จ่าโท', 'จ.ต.' => 'จ่าตรี',
+    // นักเรียน
+    'นชท.' => 'นักเรียนช่างฝีมือทหาร',
 ];
 
 /* ========== 3. Helpers ========== */
@@ -49,7 +52,7 @@ function e($v): string
     return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 }
 
-/** สีตามชั้นยศ: พล.=ทอง, พ.อ./น.อ.=ม่วง, พ.ท./น.ท.=ฟ้า, ร้อย-ตรี=เขียว, ประทวน=ส้ม */
+/** สีตามชั้นยศ: พล.=ทอง, พ.อ./น.อ.=ม่วง, พ.ท./น.ท.=ฟ้า, ร้อย-ตรี=เขียว, ประทวน=ส้ม, นชท.=แดง */
 function rank_tier(string $rank): string
 {
     $groups = [
@@ -57,7 +60,7 @@ function rank_tier(string $rank): string
         'purple' => ['พ.อ.', 'น.อ.'],
         'blue'   => ['พ.ท.', 'น.ท.'],
         'green'  => ['พ.ต.', 'น.ต.', 'ร.อ.', 'ร.ท.', 'ร.ต.'],
-        'red'  => ['นช.'],
+        'red'    => ['นชท.'],
     ];
     foreach ($groups as $tier => $prefixes) {
         foreach ($prefixes as $prefix) {
@@ -98,15 +101,13 @@ function p(string $rank, string $name, string $role, string $photo = ''): array
 
 function photo_url(array $x): string
 {
-    return $x['photo'] !== '' ? PHOTO_DIR . rawurlencode($x['photo']) : '';
+    return $x['photo'] !== '' ? PHOTO_DIR . rawurlencode($x['photo']) : DEFAULT_AVATAR_URL;
 }
 
 function avatar_html(array $x): string
 {
-    $url = photo_url($x);
-    return $url !== ''
-        ? '<img src="' . e($url) . '" alt="" loading="lazy">'
-        : '<i class="fas fa-user-shield"></i>';
+    $fb = $x['photo'] === '' ? ' data-fb="1"' : ''; // data-fb = เป็นรูปเริ่มต้นอยู่แล้ว
+    return '<img src="' . e(photo_url($x)) . '" alt="" loading="lazy"' . $fb . ' onerror="imgFallback(this)">';
 }
 
 function person_attrs(array $x, string $group): string
@@ -173,17 +174,23 @@ $tiers = [
         p('จ.อ.', 'เดชธนา มั่นคง', 'เสมียนกองพัน กรม นร.พัน นร.1'),
         p('พ.จ.อ.', 'เบญญพล ปลอดดี', 'จ่ากองร้อย กรม นร.พัน นร.1'),
     ]],
-     ['นักเรียนบังคับบัญชา พัน นร.1', 2, [
+    ['นักเรียนบังคับบัญชา พัน นร.1', 2, [
         p('นชท.', 'ปฏิพัทธ์ นาหนองขาม', 'หัวหน้าพัน นร.1'),
         p('นชท.', 'ธาวิน อาชวโรจน์', 'หัวหน้าครูฝึก'),
+    ]],
+    ['หัวหน้าร้อย พัน นร.1', 2, [
         p('นชท.', 'ณัฐพล บุญฤทธิ์', 'หัวหน้าร้อย 1'),
         p('นชท.', 'วริทธิ์ธร ใสใหม่', 'หัวหน้าร้อย 2'),
+    ]],
+    ['หัวหน้าหมวด ร้อย 1', 3, [
         p('นชท.', 'กฤศกร ศิริงาม', 'หัวหน้าหมวด 1 ร้อย 1'),
         p('นชท.', 'ชานนท์ ไชยเพชร', 'หัวหน้าหมวด 2 ร้อย 1'),
-    p('นชท.', 'สรวิชญ์ อิสลาม', 'หัวหน้าหมวด 3 ร้อย 1'),
-    p('นชท.', 'ธนพล นิ่มสุวรรณ์', 'หัวหน้าหมวด 1 ร้อย 2'),
-    p('นชท.', 'นวภัทร อุดมบัว', 'หัวหน้าหมวด 2 ร้อย 2'),
-    p('นชท.', 'นพรัตน์ กันหะบุตร', 'หัวหน้าหมวด 3 ร้อย 2'),
+        p('นชท.', 'สรวิชญ์ อิสลาม', 'หัวหน้าหมวด 3 ร้อย 1'),
+    ]],
+    ['หัวหน้าหมวด ร้อย 2', 3, [
+        p('นชท.', 'ธนพล นิ่มสุวรรณ์', 'หัวหน้าหมวด 1 ร้อย 2'),
+        p('นชท.', 'นวภัทร อุดมบัว', 'หัวหน้าหมวด 2 ร้อย 2'),
+        p('นชท.', 'นพรัตน์ กันหะบุตร', 'หัวหน้าหมวด 3 ร้อย 2'),
     ]],
 ];
 
@@ -205,6 +212,19 @@ $nav_items = [
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
+  <script>
+    // รูปสำรอง: รูปของคนนั้นโหลดไม่ได้ -> ใช้รูปเริ่มต้น -> ถ้ายังโหลดไม่ได้อีก ใช้ไอคอน
+    const DEFAULT_AVATAR = <?= json_encode(DEFAULT_AVATAR_URL, JSON_UNESCAPED_SLASHES) ?>;
+    function imgFallback(img) {
+      if (img.dataset.fb) {
+        img.replaceWith(Object.assign(document.createElement('i'), { className: 'fas fa-user-shield' }));
+        return;
+      }
+      img.dataset.fb = '1';
+      img.src = DEFAULT_AVATAR;
+    }
+  </script>
+
   <style>
     /* ===== Tokens ===== */
     :root {
@@ -214,7 +234,7 @@ $nav_items = [
       --radius: 20px; --radius-sm: 16px; --shadow-card: 0 4px 15px rgba(0,0,0,0.03); --gutter: 20px;
     }
     .t-gold { --c: var(--gold); } .t-purple { --c: var(--primary); }
-    .t-blue { --c: var(--blue); } .t-green  { --c: var(--green); } .t-orange { --c: #ea580c; }
+    .t-blue { --c: var(--blue); } .t-green  { --c: var(--green); } .t-orange { --c: #ea580c; } .t-red { --c: #e11d48; }
 
     /* ===== Base ===== */
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -310,6 +330,7 @@ $nav_items = [
       background: #eef2ff; color: var(--primary); font-size: 0.72rem; font-weight: 600;
     }
     .grid { display: grid; gap: 12px; } .c1 { grid-template-columns: 1fr; } .c2 { grid-template-columns: 1fr 1fr; }
+    .c3 { grid-template-columns: repeat(3, 1fr); gap: 8px; }
     .person {
       position: relative; overflow: hidden; width: 100%; display: flex; align-items: center; gap: 10px;
       padding: 12px 12px 12px 17px; border: 0; border-radius: var(--radius-sm); background: var(--card-bg);
@@ -329,6 +350,10 @@ $nav_items = [
     .p-text small { font-size: 0.68rem; font-weight: 600; color: var(--c); }
     .p-text b { font-size: 0.82rem; font-weight: 600; color: var(--text-dark); line-height: 1.3; }
     .p-text em { font-style: normal; font-size: 0.68rem; color: var(--text-gray); margin-top: 2px; line-height: 1.3; }
+    .c3 .person { flex-direction: column; gap: 6px; padding: 14px 6px 10px; text-align: center; }
+    .c3 .person::before { width: 100%; height: 4px; }
+    .c3 .avatar { flex: 0 0 44px; width: 44px; height: 44px; }
+    .c3 .p-text { align-items: center; } .c3 .p-text b { font-size: 0.76rem; }
     [data-name].dim { opacity: 0.2; } .person.dim { transform: scale(0.97); }
     .person.hit { box-shadow: 0 0 0 2px var(--primary-light), 0 8px 20px rgba(124,93,250,0.2); }
 
@@ -492,8 +517,11 @@ $nav_items = [
         $('sRole').textContent = d.role;
         $('sGroup').textContent = d.group;
         av.replaceChildren();
-        if (d.photo) { const im = new Image(); im.src = d.photo; im.alt = ''; av.appendChild(im); }
-        else av.innerHTML = '<i class="fas fa-user-shield"></i>';
+        const im = new Image(); im.alt = '';
+        if (d.photo === DEFAULT_AVATAR) im.dataset.fb = '1';
+        im.onerror = () => imgFallback(im);
+        im.src = d.photo;
+        av.appendChild(im);
         sheet.classList.add('show');
       };
       document.addEventListener('click', (ev) => {
