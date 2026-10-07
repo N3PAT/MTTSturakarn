@@ -2,8 +2,8 @@
 session_start();
 
 // เปิดการแสดง Error ของ PHP เพื่อให้เห็นปัญหาชัดเจน
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
+ini_set('display_errors', 0);
+ini_set('display_startup_errors', 0);
 error_reporting(E_ALL);
 
 // ปิดเช็คสิทธิ์ไว้ชั่วคราวตามที่คุณต้องการ
