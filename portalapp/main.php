@@ -101,7 +101,7 @@ function build_student_name(array $s): string
 function build_student_unit(array $s): string
 {
     $parts = [];
-    if (!empty($s['battalion'])) $parts[] = 'พัน.' . $s['battalion'];
+    if (!empty($s['battalion'])) $parts[] = 'พัน นร.' . $s['battalion'];
     if (!empty($s['company']))   $parts[] = 'ร้อย.' . $s['company'];
     if (!empty($s['platoon']))   $parts[] = 'หมวด ' . $s['platoon'];
     if (!empty($s['section']))   $parts[] = 'ตอนเรียน ' . $s['section'];
@@ -242,6 +242,7 @@ $menu_items = [
     ['href' => 'fill.php',               'icon' => 'fa-vote-yea',     'color' => 'bg-orange', 'label' => 'โหวตกลับบ้าน'],
     ['href' => 'discipline_history.php', 'icon' => 'fa-file-alt',     'color' => 'bg-blue',   'label' => 'บัตรวินัย'],
     ['href' => 'duty_substitutions.php', 'icon' => 'fa-address-book', 'color' => 'bg-green',  'label' => 'เปลี่ยนเวร'],
+    ['href' => 'commanders.php', 'icon' => 'fa-solid fa-user-tie', 'color' => 'bg-green',  'label' => 'รายนามผู้บังคับบัญชา'],
 ];
 
 $nav_items = [
