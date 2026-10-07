@@ -25,22 +25,24 @@ function json_out(array $data, int $http = 200): void
     exit;
 }
 
-// ช่วงเวลาเปิดรับ + วันศุกร์เป้าหมาย (ตรรกะเดิมทุกอย่าง แค่ย้ายมาไว้ที่เดียว)
 function vote_window(): array
 {
-    $dt   = new DateTime('now', new DateTimeZone('Asia/Bangkok'));
-$dow  = (int)$dt->format('N');
-$hour = (int)$dt->format('H');
+    $dt  = new DateTime('now', new DateTimeZone('Asia/Bangkok'));
+    $dow = (int)$dt->format('N');
 
-$until = 5 - $dow;
-if ($until < 0) { $until += 7; }
-$target = clone $dt;
-$target->modify("+$until days");
+    // คำนวณวันศุกร์เป้าหมาย (Day 5 of week)
+    $until = 5 - $dow;
+    if ($until < 0) {
+        $until += 7;
+    }
 
-return [
-    'target_date' => $target->format('Y-m-d'),
-    'is_open'     => in_array($dow, [6, 7, 4], true) || ($dow === 2 && $hour < 16),
-];
+    $target = clone $dt;
+    $target->modify("+$until days");
+
+    return [
+        'target_date' => $target->format('Y-m-d'),
+        'is_open'     => true, // กำหนดให้เปิดรับตลอดทุกวัน
+    ];
 }
 
 // จำนวนนักเรียนทั้งหมด (แคช 60 วินาทีถ้ามี APCu)
