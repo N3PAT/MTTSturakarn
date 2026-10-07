@@ -7,7 +7,7 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/photo_config.php';
 
 // ป้องกันคนอื่นแอบเรียกไฟล์นี้ทาง HTTP เว้นแต่จะมี Secret Key ตรงกัน
-$cron_secret = 'MY_CRON_SECRET_KEY_12345';
+$cron_secret = 'tXwaV/thNEFhSVQ9/d/4scXFeLFcP4CFMy6phyhooqQ=';
 if (php_sapi_name() !== 'cli') {
     $provided_key = $_GET['key'] ?? '';
     if (!hash_equals($cron_secret, $provided_key)) {
