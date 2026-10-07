@@ -39,7 +39,7 @@ $target->modify("+$until days");
 
 return [
     'target_date' => $target->format('Y-m-d'),
-    'is_open'     => in_array($dow, [6, 7, 1], true) || ($dow === 2 && $hour < 16),
+    'is_open'     => in_array($dow, [6, 7, 4], true) || ($dow === 2 && $hour < 16),
 ];
 }
 
