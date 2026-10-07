@@ -313,11 +313,9 @@ if ($view === 'manage') {
             <div class="form-group">
               <label>จำนวนสัปดาห์</label>
               <select name="restrict_weeks" class="form-control">
-                <option value="1" <?= $weeks == 1 ? 'selected' : '' ?>>1 สัปดาห์</option>
-                <option value="2" <?= $weeks == 2 ? 'selected' : '' ?>>2 สัปดาห์</option>
-                <option value="3" <?= $weeks == 3 ? 'selected' : '' ?>>3 สัปดาห์</option>
-                <option value="4" <?= $weeks == 4 ? 'selected' : '' ?>>4 สัปดาห์</option>
-                <option value="8" <?= $weeks == 8 ? 'selected' : '' ?>>8 สัปดาห์ (ยาว)</option>
+                <?php for($i=1; $i<=30; $i++): ?>
+                  <option value="<?= $i ?>" <?= $weeks == $i ? 'selected' : '' ?>><?= $i ?> สัปดาห์</option>
+                <?php endfor; ?>
               </select>
             </div>
 
@@ -401,10 +399,10 @@ if ($view === 'manage') {
                                       <option value="stay" <?= ($row['restrict_type'] ?? '') == 'stay' ? 'selected' : '' ?>>บังคับอยู่</option>
                                   </select>
                               </div>
-                              <div style="flex:1;">
+                             <div style="flex:1;">
                                   <label style="font-size: 0.75rem; color: var(--text-gray);">สัปดาห์</label>
                                   <select name="edit_weeks" class="manage-select">
-                                      <?php for($i=1; $i<=8; $i++): ?>
+                                      <?php for($i=1; $i<=30; $i++): ?>
                                           <option value="<?= $i ?>" <?= $row['weeks_count'] == $i ? 'selected' : '' ?>><?= $i ?> สัปดาห์</option>
                                       <?php endfor; ?>
                                   </select>
