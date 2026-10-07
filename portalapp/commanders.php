@@ -422,7 +422,6 @@ $nav_items = [
       <section class="tier reveal">
         <button type="button" class="hero t-gold" <?= person_attrs($top, 'ผู้บัญชาการ') ?>>
           <span class="orb o1"></span><span class="orb o2"></span>
-          <div class="stars"><i class="fas fa-star"></i><i class="fas fa-star"></i></div>
           <div class="h-wrap"><div class="h-avatar"><?= avatar_html($top) ?></div></div>
           <small><?= rank_html($top['rank']) ?></small>
           <h2><?= e($top['name']) ?></h2>
