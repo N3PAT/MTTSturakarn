@@ -35,6 +35,7 @@ if ($isPost) {
 $items = [];
 $error_message = '';
 
+try {
     session_write_close();        // ปล่อย lock ของ session ก่อนดึงข้อมูลส่วนที่เหลือ
 
     $items = build_notification_items([
@@ -45,7 +46,7 @@ $error_message = '';
         'duties'      => safe_fetch(fn() => get_duties($conn, $studentCode), []),
         'news'        => safe_fetch(fn() => get_announcements($conn), []),
     ]);
- catch (Throwable $e) {
+} catch (Throwable $e) {
     error_log('notification page: ' . $e->getMessage());
     $error_message = 'ไม่สามารถโหลดการแจ้งเตือนได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง';
 }
