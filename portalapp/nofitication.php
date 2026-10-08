@@ -1,4 +1,6 @@
 <?php
+
+//nofification.php
 ob_start();                       // กันช่องว่างจากไฟล์อื่นหลุดไปรบกวน JSON/Header
 ini_set('display_errors', 0);
 session_start();
@@ -33,14 +35,6 @@ if ($isPost) {
 $items = [];
 $error_message = '';
 
-try {
-    $conn->set_charset('utf8mb4');
-
-    if (!fetch_all($conn, 'SELECT 1 FROM students WHERE student_code = ? LIMIT 1', 's', [$studentCode])) {
-        session_destroy();
-        header('Location: login.php');
-        exit();
-    }
     session_write_close();        // ปล่อย lock ของ session ก่อนดึงข้อมูลส่วนที่เหลือ
 
     $items = build_notification_items([
