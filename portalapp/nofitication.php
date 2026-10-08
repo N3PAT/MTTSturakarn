@@ -88,7 +88,9 @@ body{margin:0;font-family:'Prompt',system-ui,sans-serif;background:#e2e8f0;color
 .logo{width:44px;height:44px;border-radius:10px;object-fit:contain;background:#fff}
 .brand h1{margin:0;font-size:1.05rem;font-weight:700}
 .brand p{margin:0;font-size:.75rem;color:var(--mute)}
-.back{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:#e2e8f0;color:var(--ink);text-decoration:none;font-size:1.1rem}
+.back{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:#e2e8f0;color:var(--ink);text-decoration:none;font-size:1.1rem;transition:background .2s,transform .15s}
+.back:hover{background:#d5dce6}
+.back:active{transform:scale(.9)}
 
 .head{display:flex;align-items:center;justify-content:space-between;margin:8px 20px 12px}
 .head h2{margin:0;font-size:1.05rem;font-weight:700;border-left:5px solid var(--primary);padding-left:10px;line-height:1.3}
@@ -96,16 +98,18 @@ body{margin:0;font-family:'Prompt',system-ui,sans-serif;background:#e2e8f0;color
 
 .chips{display:flex;gap:8px;margin:0 20px 14px;overflow-x:auto;scrollbar-width:none}
 .chips::-webkit-scrollbar{display:none}
-.chip{flex-shrink:0;display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:6px 14px;font:inherit;font-size:.82rem;font-weight:500;color:var(--mute);cursor:pointer}
+.chip{flex-shrink:0;display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:6px 14px;font:inherit;font-size:.82rem;font-weight:500;color:var(--mute);cursor:pointer;transition:background .2s,color .2s,border-color .2s,transform .15s}
+.chip:active{transform:scale(.94)}
 .chip b{font-weight:600}
 .chip[aria-pressed=true]{background:var(--primary);border-color:var(--primary);color:#fff}
 .chip:focus-visible,.noti:focus-visible,.back:focus-visible,.nav a:focus-visible,.x:focus-visible{outline:3px solid #c4b5fd;outline-offset:2px}
 
 .list{display:flex;flex-direction:column;gap:12px;margin:0 20px 24px}
-.noti{display:flex;gap:14px;align-items:flex-start;padding:15px 16px;background:var(--bg,#fff);border:1px solid var(--line);border-left:4px solid var(--lv);border-radius:14px;cursor:pointer;transition:transform .1s}
+.noti{display:flex;gap:14px;align-items:flex-start;padding:15px 16px;background:var(--bg,#fff);border:1px solid var(--line);border-left:4px solid var(--lv);border-radius:14px;cursor:pointer;transition:transform .2s cubic-bezier(.16,1,.3,1),box-shadow .2s}
+@media (hover:hover){.noti:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(15,23,42,.08)}}
 .noti:active{transform:scale(.985)}
-.lv-danger{--lv:#991b1b;--bg:#fef2f2;--ic:#fecaca}
-.lv-urgent{--lv:#dc2626;--bg:#fef2f2;--ic:#fee2e2}
+.lv-danger{--lv:#991b1b;--bg:#fef2f2;--ic:#fecaca;--glow:rgba(153,27,27,.45)}
+.lv-urgent{--lv:#dc2626;--bg:#fef2f2;--ic:#fee2e2;--glow:rgba(220,38,38,.4)}
 .lv-warning{--lv:#ea580c;--bg:#fff7ed;--ic:#ffedd5}
 .lv-info{--lv:#2563eb;--bg:#fff;--ic:#dbeafe}
 .noti-ic{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:var(--ic);color:var(--lv);font-size:1.2rem;flex-shrink:0}
@@ -114,7 +118,9 @@ body{margin:0;font-family:'Prompt',system-ui,sans-serif;background:#e2e8f0;color
 .lv-danger h4{color:#991b1b}
 .summary{margin:0 0 8px;font-size:.82rem;color:var(--mute);line-height:1.5;white-space:pre-line;word-break:break-word;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .attach{display:flex;align-items:center;gap:5px;margin-bottom:6px;font-size:.75rem;color:var(--primary)}
-.act{display:inline-block;margin:0 0 8px;padding:6px 14px;border-radius:8px;background:var(--primary);color:#fff;font-size:.78rem;font-weight:600;text-decoration:none}
+.act{display:inline-block;margin:0 0 8px;padding:6px 14px;border-radius:8px;background:var(--primary);color:#fff;font-size:.78rem;font-weight:600;text-decoration:none;transition:transform .15s,filter .2s}
+.act:hover{filter:brightness(1.1)}
+.act:active{transform:scale(.95)}
 .time{display:flex;align-items:center;gap:5px;font-size:.72rem;color:#94a3b8}
 
 .empty{margin:0 20px;padding:40px 20px;text-align:center;background:#fff;border:1px solid var(--line);border-radius:16px;color:#94a3b8}
@@ -135,10 +141,43 @@ dialog::backdrop{background:rgba(15,23,42,.55)}
 .box h3{margin:0;font-size:1.05rem;line-height:1.4;word-break:break-word}
 .x{flex-shrink:0;display:grid;place-items:center;width:32px;height:32px;border:0;border-radius:50%;background:#f1f5f9;color:var(--mute);font-size:1rem;cursor:pointer}
 .scroll{overflow-y:auto;flex:1;font-size:.92rem;color:var(--mute);line-height:1.6;white-space:pre-wrap;word-break:break-word}
-.scroll img{display:block;max-width:100%;height:auto;margin-bottom:12px;border-radius:8px}
+.scroll img{display:block;max-width:100%;height:auto;margin-bottom:12px;border-radius:8px;opacity:0;transition:opacity .35s}
+.scroll img.on{opacity:1}
+.x .ic{transition:transform .25s}
+.x:hover .ic{transform:rotate(90deg)}
 .box footer{margin-top:12px;font-size:.78rem;color:#94a3b8;text-align:right}
 
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* ===== แอนิเมชัน ===== */
+/* เข้าฉาก: ใช้ fill-mode backwards เท่านั้น เพื่อให้ :hover/:active ทำงานต่อหลังจบแอนิเมชัน */
+.rise{animation:rise .55s cubic-bezier(.16,1,.3,1) backwards;animation-delay:calc(var(--i,0)*60ms)}
+@keyframes rise{from{opacity:0;transform:translateY(18px)}}
+
+/* ไอคอนการ์ดสำคัญ: เด้งเรียกความสนใจ 3 รอบแล้วหยุด (ไม่วนไม่รู้จบ) */
+.lv-danger .noti-ic,.lv-urgent .noti-ic{animation:glow 1.8s ease-out 1.1s 3}
+@keyframes glow{0%{box-shadow:0 0 0 0 var(--glow)}100%{box-shadow:0 0 0 13px transparent}}
+.lv-danger .noti-ic .ic{animation:wiggle .7s ease-in-out 1.1s 2}
+@keyframes wiggle{0%,100%{transform:rotate(0)}20%{transform:rotate(-12deg)}40%{transform:rotate(10deg)}60%{transform:rotate(-8deg)}80%{transform:rotate(5deg)}}
+
+/* กระดิ่งในเมนูล่างสั่นครั้งเดียว เมื่อมีรายการสำคัญ */
+.ring{transform-origin:50% 10%;animation:ringBell 1.1s ease-in-out 1s 1}
+@keyframes ringBell{0%,100%{transform:rotate(0)}15%{transform:rotate(16deg)}30%{transform:rotate(-14deg)}45%{transform:rotate(10deg)}60%{transform:rotate(-8deg)}75%{transform:rotate(4deg)}}
+
+/* หน้าไม่มีรายการ: ไอคอนแกว่งเบา ๆ */
+.empty .ic{transform-origin:50% 5%;animation:sway 2.6s ease-in-out .5s 3}
+@keyframes sway{0%,100%{transform:rotate(0)}30%{transform:rotate(8deg)}70%{transform:rotate(-8deg)}}
+
+/* หน้าต่างรายละเอียด: เปิด/ปิดแบบนุ่ม (JS เติมคลาส .closing ก่อนปิดจริง) */
+dialog[open]{animation:pop .3s cubic-bezier(.16,1,.3,1)}
+dialog[open]::backdrop{animation:fade .3s ease}
+dialog.closing{animation:popOut .18s ease forwards}
+dialog.closing::backdrop{animation:fadeOut .18s ease forwards}
+@keyframes pop{from{opacity:0;transform:translateY(24px) scale(.96)}}
+@keyframes popOut{to{opacity:0;transform:translateY(16px) scale(.97)}}
+@keyframes fade{from{opacity:0}}
+@keyframes fadeOut{to{opacity:0}}
+
+/* ผู้ใช้ที่ตั้งค่าลดการเคลื่อนไหว: ปิดทุกอย่าง (เนื้อหายังแสดงครบ) */
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
@@ -162,7 +201,7 @@ dialog::backdrop{background:rgba(15,23,42,.55)}
 
 <div class="app">
 
-  <header class="top">
+  <header class="top rise" style="--i:0">
     <div class="brand">
       <img class="logo" src="mtts_logo.jpg" onerror="this.onerror=null;this.src='https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg'" alt="" width="44" height="44">
       <div>
@@ -173,9 +212,9 @@ dialog::backdrop{background:rgba(15,23,42,.55)}
     <a class="back" href="main.php" aria-label="ย้อนกลับ"><svg class="ic"><use href="#i-back"/></svg></a>
   </header>
 
-  <div class="head">
+  <div class="head rise" style="--i:1">
     <h2>รายการแจ้งเตือนทั้งหมด</h2>
-    <span class="count"><?= (int)$counts['all'] ?> รายการ</span>
+    <span class="count"><span data-count="<?= (int)$counts['all'] ?>"><?= (int)$counts['all'] ?></span> รายการ</span>
   </div>
 
 <?php if ($error_message !== ''): ?>
@@ -183,15 +222,15 @@ dialog::backdrop{background:rgba(15,23,42,.55)}
 <?php endif; ?>
 
 <?php if ($counts['all'] > 0): ?>
-  <div class="chips" role="group" aria-label="กรองการแจ้งเตือน">
+  <div class="chips rise" style="--i:2" role="group" aria-label="กรองการแจ้งเตือน">
 <?php foreach ($filters as $key => $label): ?>
-    <button type="button" class="chip" data-filter="<?= e($key) ?>" aria-pressed="<?= $key === 'all' ? 'true' : 'false' ?>"><?= e($label) ?> <b><?= (int)$counts[$key] ?></b></button>
+    <button type="button" class="chip" data-filter="<?= e($key) ?>" aria-pressed="<?= $key === 'all' ? 'true' : 'false' ?>"><?= e($label) ?> <b data-count="<?= (int)$counts[$key] ?>"><?= (int)$counts[$key] ?></b></button>
 <?php endforeach; ?>
   </div>
 
   <div class="list" id="list">
-<?php foreach ($items as $it): ?>
-    <article class="noti lv-<?= e($it['level']) ?>" role="button" tabindex="0"
+<?php foreach ($items as $n => $it): ?>
+    <article class="noti rise lv-<?= e($it['level']) ?>" style="--i:<?= min($n, 9) + 3 ?>" role="button" tabindex="0"
              data-cat="<?= e($it['cat']) ?>" data-important="<?= $it['rank'] <= 2 ? '1' : '0' ?>"<?= $it['image'] !== '' ? ' data-image="' . e($it['image']) . '"' : '' ?>>
       <div class="noti-ic"><svg class="ic"><use href="#i-<?= e($it['icon']) ?>"/></svg></div>
       <div class="body">
@@ -209,13 +248,13 @@ dialog::backdrop{background:rgba(15,23,42,.55)}
 <?php endforeach; ?>
   </div>
 
-  <div class="empty" id="emptyFilter" hidden>
+  <div class="empty rise" id="emptyFilter" hidden>
     <svg class="ic"><use href="#i-bell-off"/></svg>
     <p>ไม่มีรายการในหมวดนี้</p>
   </div>
 
 <?php elseif ($error_message === ''): ?>
-  <div class="empty">
+  <div class="empty rise" style="--i:2">
     <svg class="ic"><use href="#i-bell-off"/></svg>
     <p>ไม่มีรายการแจ้งเตือนใหม่ในขณะนี้</p>
   </div>
@@ -223,7 +262,7 @@ dialog::backdrop{background:rgba(15,23,42,.55)}
 
   <nav class="nav" aria-label="เมนูหลัก">
     <a href="main.php"><svg class="ic"><use href="#i-home"/></svg><span>หน้าหลัก</span></a>
-    <a href="notification.php" aria-current="page"><svg class="ic"><use href="#i-bell"/></svg><span>แจ้งเตือน</span></a>
+    <a href="notification.php" aria-current="page"><svg class="ic<?= $counts['important'] > 0 ? ' ring' : '' ?>"><use href="#i-bell"/></svg><span>แจ้งเตือน</span></a>
   </nav>
 </div>
 
@@ -244,33 +283,83 @@ dialog::backdrop{background:rgba(15,23,42,.55)}
 <script>
 (function () {
   var $ = function (s, r) { return (r || document).querySelector(s); };
+  var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---- ตัวเลขนับขึ้นจาก 0 (ไม่ใช้ JS = เห็นตัวเลขจริงทันที) ---- */
+  if (!reduce) {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-count]'), function (el) {
+      var to = parseInt(el.dataset.count, 10);
+      if (!to) return;
+      el.textContent = '0';
+      setTimeout(function () {
+        var t0 = performance.now(), dur = 700;
+        (function tick(t) {
+          var p = Math.min(1, (t - t0) / dur);
+          el.textContent = Math.round(to * (1 - Math.pow(1 - p, 3)));
+          if (p < 1) requestAnimationFrame(tick);
+        })(t0);
+      }, 250);
+    });
+  }
+
   var cards = Array.prototype.slice.call(document.querySelectorAll('.noti'));
   if (!cards.length) return;
 
-  /* ---- กรองรายการ (ไม่โหลดหน้าใหม่) ---- */
+  /* ---- กรองรายการ: การ์ดที่เหลือไหลเข้ามาใหม่ทีละใบ ---- */
   var chips = Array.prototype.slice.call(document.querySelectorAll('.chip'));
   var emptyBox = $('#emptyFilter');
+  function replay(el, i) {
+    el.style.setProperty('--i', i);
+    el.style.animation = 'none';
+    void el.offsetWidth;            // บังคับ reflow เพื่อเริ่มแอนิเมชันใหม่
+    el.style.animation = '';
+  }
   chips.forEach(function (chip) {
     chip.addEventListener('click', function () {
       var f = chip.dataset.filter, shown = 0;
       chips.forEach(function (c) { c.setAttribute('aria-pressed', String(c === chip)); });
       cards.forEach(function (card) {
         var ok = f === 'all' || (f === 'important' ? card.dataset.important === '1' : card.dataset.cat === f);
-        card.hidden = !ok; if (ok) shown++;
+        card.hidden = !ok;
+        if (ok) replay(card, Math.min(shown++, 8));
       });
       emptyBox.hidden = shown > 0;
     });
   });
 
-  /* ---- หน้าต่างรายละเอียด (<dialog>) ---- */
+  /* ---- หน้าต่างรายละเอียด (<dialog>) พร้อมแอนิเมชันเปิด/ปิด ---- */
   var dlg = $('#detail'), img = $('#dImg');
   function openCard(card) {
     $('#dTitle').textContent = $('h4', card).textContent;
     $('#dText').textContent = $('.summary', card).textContent;   // ข้อความเต็ม (ในการ์ดแค่ตัดการแสดงผลด้วย CSS)
     $('#dTime').textContent = $('.time span', card).textContent;
     var src = card.dataset.image;
-    if (src) { img.src = src; img.hidden = false; } else { img.removeAttribute('src'); img.hidden = true; }
+    img.classList.remove('on');
+    if (src) {
+      img.hidden = false;
+      img.onload = function () { img.classList.add('on'); };
+      img.onerror = function () { img.hidden = true; };
+      img.src = src;
+    } else {
+      img.removeAttribute('src'); img.hidden = true;
+    }
     dlg.showModal();
+  }
+  function closeDlg() {
+    if (!dlg.open || dlg.classList.contains('closing')) return;
+    if (reduce) { dlg.close(); return; }
+    var finished = false;
+    function done() {
+      if (finished) return;
+      finished = true;
+      dlg.removeEventListener('animationend', onEnd);
+      dlg.classList.remove('closing');
+      dlg.close();
+    }
+    function onEnd(e) { if (e.target === dlg && e.animationName === 'popOut') done(); }
+    dlg.addEventListener('animationend', onEnd);
+    dlg.classList.add('closing');
+    setTimeout(done, 320);          // กันพลาดกรณี animationend ไม่ถูกยิง
   }
   cards.forEach(function (card) {
     card.addEventListener('click', function (e) { if (!e.target.closest('a')) openCard(card); });
@@ -278,9 +367,10 @@ dialog::backdrop{background:rgba(15,23,42,.55)}
       if (e.target === card && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openCard(card); }
     });
   });
-  $('#dClose').addEventListener('click', function () { dlg.close(); });
-  dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
-  dlg.addEventListener('close', function () { img.removeAttribute('src'); });
+  $('#dClose').addEventListener('click', closeDlg);
+  dlg.addEventListener('click', function (e) { if (e.target === dlg) closeDlg(); });
+  dlg.addEventListener('cancel', function (e) { e.preventDefault(); closeDlg(); });   // ปุ่ม Esc
+  dlg.addEventListener('close', function () { img.onload = img.onerror = null; img.removeAttribute('src'); img.classList.remove('on'); });
 })();
 </script>
 </body>
