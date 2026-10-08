@@ -410,7 +410,7 @@ dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
   <header class="top">
     <img class="logo" src="mtts_logo.jpg" onerror="this.onerror=null;this.src='https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg'" alt="" width="44" height="44">
     <div>
-      <h1>ระบบบริการสารสนเทศ กองพันนักเรียนที่ 1</h1>
+      <h1>กองพันนักเรียนที่ 1</h1>
       <p>โรงเรียนช่างฝีมือทหาร</p>
     </div>
   </header>
