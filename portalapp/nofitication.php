@@ -5,6 +5,7 @@ session_start();
 
 require_once 'db.php';            // ต้องมี $conn (mysqli)
 require_once 'notification_lib.php';
+require_once 'rich_content.php';
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
 $isPost = ($_SERVER['REQUEST_METHOD'] === 'POST');
@@ -141,8 +142,13 @@ dialog::backdrop{background:rgba(15,23,42,.55)}
 .box h3{margin:0;font-size:1.05rem;line-height:1.4;word-break:break-word}
 .x{flex-shrink:0;display:grid;place-items:center;width:32px;height:32px;border:0;border-radius:50%;background:#f1f5f9;color:var(--mute);font-size:1rem;cursor:pointer}
 .scroll{overflow-y:auto;flex:1;font-size:.92rem;color:var(--mute);line-height:1.6;white-space:pre-wrap;word-break:break-word}
-.scroll img{display:block;max-width:100%;height:auto;margin-bottom:12px;border-radius:8px;opacity:0;transition:opacity .35s}
-.scroll img.on{opacity:1}
+.scroll>img{display:block;max-width:100%;height:auto;margin-bottom:12px;border-radius:8px;opacity:0;transition:opacity .35s}
+.scroll>img.on{opacity:1}
+.rich{white-space:normal}
+.rich img{max-width:100%;height:auto;border-radius:8px;vertical-align:middle}
+.rich a{color:var(--primary);text-decoration:underline;word-break:break-word}
+.rich p{margin:0 0 8px}
+.rich ul,.rich ol{padding-left:20px;margin:0 0 8px}
 .x .ic{transition:transform .25s}
 .x:hover .ic{transform:rotate(90deg)}
 .box footer{margin-top:12px;font-size:.78rem;color:#94a3b8;text-align:right}
@@ -229,15 +235,21 @@ dialog.closing::backdrop{animation:fadeOut .18s ease forwards}
   </div>
 
   <div class="list" id="list">
-<?php foreach ($items as $n => $it): ?>
+<?php foreach ($items as $n => $it):
+    $rich    = rich_html((string)$it['summary']);
+    $hasRich = (stripos($rich, '<img') !== false || stripos($rich, '<a ') !== false);
+?>
     <article class="noti rise lv-<?= e($it['level']) ?>" style="--i:<?= min($n, 9) + 3 ?>" role="button" tabindex="0"
              data-cat="<?= e($it['cat']) ?>" data-important="<?= $it['rank'] <= 2 ? '1' : '0' ?>"<?= $it['image'] !== '' ? ' data-image="' . e($it['image']) . '"' : '' ?>>
       <div class="noti-ic"><svg class="ic"><use href="#i-<?= e($it['icon']) ?>"/></svg></div>
       <div class="body">
         <h4><?= e($it['title']) ?></h4>
-        <p class="summary"><?= e($it['summary']) ?></p>
+        <p class="summary"><?= e(rich_plain((string)$it['summary'])) ?></p>
+        <template class="full"><?= $rich ?></template>
 <?php if ($it['image'] !== ''): ?>
         <div class="attach"><svg class="ic"><use href="#i-image"/></svg>มีรูปภาพแนบ</div>
+<?php elseif ($hasRich): ?>
+        <div class="attach"><svg class="ic"><use href="#i-news"/></svg>มีลิงก์/รูปแนบ แตะเพื่อเปิดดู</div>
 <?php endif; ?>
 <?php if ($it['action']): ?>
         <a class="act" href="<?= e($it['action']['href']) ?>"><?= e($it['action']['label']) ?></a>
@@ -274,7 +286,7 @@ dialog.closing::backdrop{animation:fadeOut .18s ease forwards}
     </header>
     <div class="scroll">
       <img id="dImg" alt="ภาพประกอบ" hidden>
-      <div id="dText"></div>
+      <div id="dText" class="rich"></div>
     </div>
     <footer id="dTime"></footer>
   </div>
@@ -329,9 +341,24 @@ dialog.closing::backdrop{animation:fadeOut .18s ease forwards}
 
   /* ---- หน้าต่างรายละเอียด (<dialog>) พร้อมแอนิเมชันเปิด/ปิด ---- */
   var dlg = $('#detail'), img = $('#dImg');
+
+  /* ภาพย่อ Drive ที่โหลดไม่ได้ → ใช้ไอคอน Drive แทน, รูปอื่นที่เสีย → ซ่อน */
+  $('#dText').addEventListener('error', function (e) {
+    var im = e.target;
+    if (!im || im.tagName !== 'IMG') return;
+    if (!im.dataset.fb && im.src.indexOf('drive.google.com') > -1) {
+      im.dataset.fb = '1';
+      im.src = 'https://ssl.gstatic.com/docs/doclist/images/drive_favicon_2026_32dp.png';
+      im.style.objectFit = 'contain'; im.style.padding = '15%';
+    } else { im.style.display = 'none'; }
+  }, true);
+
   function openCard(card) {
     $('#dTitle').textContent = $('h4', card).textContent;
-    $('#dText').textContent = $('.summary', card).textContent;   // ข้อความเต็ม (ในการ์ดแค่ตัดการแสดงผลด้วย CSS)
+    var box = $('#dText'), tpl = $('template.full', card);   // เนื้อหาเต็มที่กรองแล้วจากเซิร์ฟเวอร์ (รูป/ลิงก์)
+    box.textContent = '';
+    if (tpl && tpl.content.childNodes.length) box.appendChild(tpl.content.cloneNode(true));
+    else box.textContent = $('.summary', card).textContent;
     $('#dTime').textContent = $('.time span', card).textContent;
     var src = card.dataset.image;
     img.classList.remove('on');
@@ -370,7 +397,10 @@ dialog.closing::backdrop{animation:fadeOut .18s ease forwards}
   $('#dClose').addEventListener('click', closeDlg);
   dlg.addEventListener('click', function (e) { if (e.target === dlg) closeDlg(); });
   dlg.addEventListener('cancel', function (e) { e.preventDefault(); closeDlg(); });   // ปุ่ม Esc
-  dlg.addEventListener('close', function () { img.onload = img.onerror = null; img.removeAttribute('src'); img.classList.remove('on'); });
+  dlg.addEventListener('close', function () {
+    img.onload = img.onerror = null; img.removeAttribute('src'); img.classList.remove('on');
+    $('#dText').textContent = '';
+  });
 })();
 </script>
 </body>
