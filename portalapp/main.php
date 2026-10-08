@@ -551,6 +551,33 @@ $profile = [
       position: absolute; top: 20px; right: 20px; width: 40px; height: 40px; border: none; border-radius: 50%;
       background: rgba(255,255,255,0.2); color: #fff; font-size: 1.5rem; cursor: pointer;
     }
+      /* ปุ่มเปิดลิงก์/ไฟล์แนบในข่าว */
+.news-btn-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 8px 14px;
+    background-color: #f1f5f9; /* สีเทาอ่อน */
+    color: #5a42a0; /* สีม่วงธีมเว็บ */
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    border: 1px solid #e2e8f0;
+}
+
+.news-btn-link:hover {
+    background-color: #e2e8f0;
+    color: #473282;
+    transform: translateY(-2px);
+}
+
+.news-btn-link i.fa-google-drive {
+    color: #16a34a; /* สีเขียวของ Drive ให้ดูโดดเด่น */
+    font-size: 1rem;
+}
   </style>
 </head>
 <body>
@@ -649,7 +676,33 @@ $profile = [
                 <div class="news-body">
                   <div class="news-date"><i class="far fa-clock"></i> <?= e($news['date']) ?></div>
                   <h4 class="news-title"><?= e($news['title']) ?></h4>
-                  <p class="news-desc"><?= e($news['content']) ?></p>
+                  
+                  <?php 
+                    // ตรวจหา URL ในเนื้อหาข่าว (ทั้ง http และ https)
+                    $raw_content = $news['content'];
+                    $attached_link = '';
+                    
+                    if (preg_match('/(https?:\/\/[^\s]+)/i', $raw_content, $matches)) {
+                        $attached_link = $matches[1];
+                        // ลบ URL ยึกยือออกจากเนื้อหาข้อความเพื่อความสวยงาม
+                        $raw_content = trim(str_replace($attached_link, '', $raw_content));
+                    }
+                  ?>
+                  
+                  <p class="news-desc"><?= e($raw_content) ?></p>
+                  
+                  <!-- หากพบลิงก์ ให้แสดงเป็นปุ่มกด -->
+                  <?php if ($attached_link): ?>
+                    <?php 
+                      // เช็คว่าเป็นลิงก์ Google Drive หรือไม่ เพื่อสลับไอคอนให้เหมาะสม
+                      $is_drive = strpos($attached_link, 'drive.google.com') !== false;
+                      $btn_icon = $is_drive ? 'fab fa-google-drive' : 'fas fa-external-link-alt';
+                    ?>
+                    <a href="<?= e($attached_link) ?>" target="_blank" class="news-btn-link">
+                      <i class="<?= $btn_icon ?>"></i> เปิดดูไฟล์แนบ
+                    </a>
+                  <?php endif; ?>
+
                 </div>
               </article>
             <?php endforeach; ?>
