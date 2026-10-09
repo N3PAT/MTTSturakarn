@@ -530,10 +530,6 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
         <i class="fas fa-calendar-alt"></i>
         <span>เวรของฉัน</span>
       </a>
-      <a href="logout.php" class="nav-link">
-        <i class="far fa-user"></i>
-        <span>ออกจากระบบ</span>
-      </a>
     </div>
 
   </div>
