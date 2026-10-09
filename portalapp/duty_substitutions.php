@@ -444,11 +444,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         <i class="fas fa-home"></i>
         <span>หน้าหลัก</span>
       </a>
-      
-      <a href="duty.php" class="nav-link">
-        <i class="fas fa-calendar-alt"></i>
-        <span>เวรของฉัน</span>
-      </a>
 
       <!-- กำหนดหน้าปัจจุบันเป็น active -->
       <a href="substitute.php" class="nav-link active">
