@@ -14,7 +14,7 @@ self.addEventListener('push', function (event) {
     body: data.body || '',
     icon: data.icon || 'icon-512x512.png',     // ปรับ path ให้ตรงกับไฟล์ไอคอนจริงของแอป
     badge: data.badge || 'icon-512x512.png',
-    data: { url: data.url || 'nofitication.php' }
+    data: { url: data.url || 'notification.php' }
   };
   if (data.tag) { opts.tag = data.tag; }
   // iOS/Safari บังคับให้ต้องเด้งแจ้งเตือนทุกครั้งที่ได้รับ push
