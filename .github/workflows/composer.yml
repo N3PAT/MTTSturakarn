@@ -23,8 +23,10 @@ jobs:
 
     - name: Install Dependencies
       run: |
-        # เพิ่มไลบรารีส่ง Web Push (อัปเดต composer.json/composer.lock เท่านั้น ยังไม่ติดตั้ง)
-        composer require minishlink/web-push --no-interaction --no-progress --no-install
+        # อนุญาตปลั๊กอิน php-http/discovery (ไม่งั้นโหมด --no-interaction จะบล็อกไว้)
+        composer config --no-plugins allow-plugins.php-http/discovery true
+        # เพิ่มไลบรารีส่ง Web Push + ตัวส่ง HTTP (PSR-18) ที่ไลบรารีต้องใช้ (อัปเดต composer.json/lock เท่านั้น ยังไม่ติดตั้ง)
+        composer require minishlink/web-push php-http/guzzle7-adapter --no-interaction --no-progress --no-install
         composer install --no-dev --optimize-autoloader --no-interaction
 
     - name: Commit and Push vendor folder
