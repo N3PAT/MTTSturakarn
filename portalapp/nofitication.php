@@ -1,6 +1,4 @@
 <?php
-
-//nofification.php
 ob_start();                       // กันช่องว่างจากไฟล์อื่นหลุดไปรบกวน JSON/Header
 ini_set('display_errors', 0);
 session_start();
@@ -8,6 +6,7 @@ session_start();
 require_once 'db.php';            // ต้องมี $conn (mysqli)
 require_once 'notification_lib.php';
 require_once 'rich_content.php';
+require_once 'push_config.php';   // ค่า VAPID (อ่านจาก Environment ของ Render)
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
 $isPost = ($_SERVER['REQUEST_METHOD'] === 'POST');
@@ -36,13 +35,19 @@ $items = [];
 $error_message = '';
 
 try {
+    $conn->set_charset('utf8mb4');
+
+    if (!fetch_all($conn, 'SELECT 1 FROM students WHERE student_code = ? LIMIT 1', 's', [$studentCode])) {
+        session_destroy();
+        header('Location: login.php');
+        exit();
+    }
     session_write_close();        // ปล่อย lock ของ session ก่อนดึงข้อมูลส่วนที่เหลือ
 
     $items = build_notification_items([
         'restriction' => safe_fetch(fn() => get_restriction($conn, $studentCode)),
         'discipline'  => safe_fetch(fn() => get_discipline_today($conn, $studentCode)),
         'voted'       => safe_fetch(fn() => has_voted_this_week($conn, $studentCode), true),
-        'system'      => safe_fetch(fn() => get_system_notifications($conn, $studentCode), []),
         'duties'      => safe_fetch(fn() => get_duties($conn, $studentCode), []),
         'news'        => safe_fetch(fn() => get_announcements($conn), []),
     ]);
@@ -58,6 +63,8 @@ foreach ($items as $it) {
     if ($it['cat'] === 'news')  { $counts['news']++; }
 }
 $filters = ['all' => 'ทั้งหมด', 'important' => 'สำคัญ', 'duty' => 'เวร', 'news' => 'ประกาศ'];
+
+$pushKey = defined('PUSH_VAPID_PUBLIC') ? (string)PUSH_VAPID_PUBLIC : '';
 
 if (ob_get_level()) { ob_end_flush(); }
 ?>
@@ -119,6 +126,11 @@ body{margin:0;font-family:'Prompt',system-ui,sans-serif;background:#e2e8f0;color
 .act:active{transform:scale(.95)}
 .time{display:flex;align-items:center;gap:5px;font-size:.72rem;color:#94a3b8}
 
+.push{display:flex;align-items:center;gap:10px;margin:0 20px 14px;padding:10px 14px;background:#fff;border:1px solid var(--line);border-radius:12px;font-size:.82rem;color:var(--mute)}
+.push span{flex:1;min-width:0}
+.push button{flex-shrink:0;border:0;border-radius:8px;padding:6px 12px;background:var(--primary);color:#fff;font:inherit;font-size:.78rem;font-weight:600;cursor:pointer}
+.push button:disabled{opacity:.6}
+.push.ok{color:#15803d;border-color:#bbf7d0;background:#f0fdf4}
 .empty{margin:0 20px;padding:40px 20px;text-align:center;background:#fff;border:1px solid var(--line);border-radius:16px;color:#94a3b8}
 .empty .ic{width:3rem;height:3rem;color:#cbd5e1;margin-bottom:10px}
 .empty p{margin:0;font-size:.9rem}
@@ -218,6 +230,12 @@ dialog.closing::backdrop{animation:fadeOut .18s ease forwards}
     <span class="count"><span data-count="<?= (int)$counts['all'] ?>"><?= (int)$counts['all'] ?></span> รายการ</span>
   </div>
 
+  <div class="push rise" id="pushBox" style="--i:1" hidden>
+    <svg class="ic"><use href="#i-bell"/></svg>
+    <span id="pushMsg">รับแจ้งเตือนประกาศใหม่ แม้ปิดแอป</span>
+    <button type="button" id="pushBtn">เปิดการแจ้งเตือน</button>
+  </div>
+
 <?php if ($error_message !== ''): ?>
   <div class="alert" role="alert"><?= e($error_message) ?></div>
 <?php endif; ?>
@@ -267,7 +285,7 @@ dialog.closing::backdrop{animation:fadeOut .18s ease forwards}
   </div>
 <?php endif; ?>
 
-
+ 
 </div>
 
 <dialog id="detail" aria-labelledby="dTitle">
@@ -393,6 +411,82 @@ dialog.closing::backdrop{animation:fadeOut .18s ease forwards}
     img.onload = img.onerror = null; img.removeAttribute('src'); img.classList.remove('on');
     $('#dText').textContent = '';
   });
+})();
+</script>
+<script>
+/* ---- เปิดการแจ้งเตือน (Web Push): ได้รับประกาศใหม่แม้ปิดแอป/ปิดหน้านี้ ---- */
+(function () {
+  var KEY = <?= json_encode($pushKey) ?>;
+  var box = document.getElementById('pushBox');
+  if (!box || KEY.length < 80) return;
+  var msg = document.getElementById('pushMsg'), btn = document.getElementById('pushBtn');
+  var isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  var standalone = navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+
+  function show(text, withBtn, ok) {
+    msg.textContent = text; btn.hidden = !withBtn; btn.disabled = false;
+    box.classList.toggle('ok', !!ok); box.hidden = false;
+  }
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+    if (isIos && !standalone) show('บน iPhone: กดปุ่มแชร์ แล้วเลือก "เพิ่มไปยังหน้าจอโฮม" จากนั้นเปิดแอปจากไอคอน จึงจะเปิดการแจ้งเตือนได้', false);
+    return;
+  }
+
+  function keyBytes() {
+    var raw = atob((KEY + '='.repeat((4 - KEY.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/'));
+    var out = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+  function sameKey(sub) {                       // subscription เดิมที่สร้างด้วยคีย์อื่นใช้ไม่ได้ ต้องสร้างใหม่
+    var k = sub.options && sub.options.applicationServerKey;
+    if (!k) return true;
+    var a = new Uint8Array(k), b = keyBytes();
+    if (a.length !== b.length) return false;
+    for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+    return true;
+  }
+  function getReg() {                           // ใช้ service worker เดิมของแอป ถ้ายังไม่มีให้ลงทะเบียน sw.js
+    return navigator.serviceWorker.getRegistration()
+      .then(function (r) { return r || navigator.serviceWorker.register('sw.js'); })
+      .then(function () { return navigator.serviceWorker.ready; });
+  }
+  function subscribe() {
+    return getReg().then(function (reg) {
+      return reg.pushManager.getSubscription().then(function (sub) {
+        if (sub && sameKey(sub)) return sub;
+        return (sub ? sub.unsubscribe() : Promise.resolve()).then(function () {
+          return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes() });
+        });
+      });
+    }).then(function (sub) {
+      var k = (sub.toJSON().keys) || {};
+      return fetch('notification.php', {
+        method: 'POST', credentials: 'same-origin',
+        body: new URLSearchParams({ endpoint: sub.endpoint, p256dh: k.p256dh || '', auth: k.auth || '' })
+      });
+    }).then(function (r) { return r.json(); }).then(function (res) {
+      if (!res || !res.success) throw new Error('save failed');
+    });
+  }
+  function enable() {
+    btn.disabled = true;
+    return subscribe()
+      .then(function () { show('เปิดการแจ้งเตือนแล้ว จะได้รับประกาศใหม่แม้ปิดแอป', false, true); })
+      .catch(function () { show('เปิดการแจ้งเตือนไม่สำเร็จ ลองใหม่อีกครั้ง', true); });
+  }
+
+  btn.addEventListener('click', function () {
+    btn.disabled = true;
+    Notification.requestPermission().then(function (p) {
+      if (p === 'granted') return enable();
+      show(p === 'denied' ? 'การแจ้งเตือนถูกบล็อก เปิดสิทธิ์ได้ที่ตั้งค่าของเบราว์เซอร์/แอป' : 'ยังไม่ได้อนุญาตการแจ้งเตือน', p !== 'denied');
+    });
+  });
+
+  if (Notification.permission === 'denied') show('การแจ้งเตือนถูกบล็อก เปิดสิทธิ์ได้ที่ตั้งค่าของเบราว์เซอร์/แอป', false);
+  else if (Notification.permission === 'granted') enable();   // อนุญาตแล้ว: ซิงก์ subscription ล่าสุดเข้าเซิร์ฟเวอร์เงียบ ๆ
+  else show('รับแจ้งเตือนประกาศใหม่ แม้ปิดแอป', true);
 })();
 </script>
 </body>
