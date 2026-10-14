@@ -51,7 +51,7 @@ $unit_parts = [];
 if (!empty($student_profile['battalion'])) $unit_parts[] = "พัน." . $student_profile['battalion'];
 if (!empty($student_profile['company']))   $unit_parts[] = "ร้อย." . $student_profile['company'];
 if (!empty($student_profile['platoon']))   $unit_parts[] = "หมวด " . $student_profile['platoon'];
-if (!empty($student_profile['section']))   $unit_parts[] = "ตอนเรียนที่ " . $student_profile['section'];
+if (!empty($student_profile['section']))   $unit_parts[] = "วิชาชีพช่าง " . $student_profile['section'];
 $student_unit = !empty($unit_parts) ? implode(" ", $unit_parts) : "นักเรียนทหาร";
 
 // ---------------- 4. ดึงรายชื่อนักเรียนทั้งหมดสำหรับคำนวณเวร (Algorithm) ----------------
