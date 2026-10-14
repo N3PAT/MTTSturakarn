@@ -19,16 +19,19 @@ jobs:
       uses: shivammathur/setup-php@v2
       with:
         php-version: '8.2'
-        extensions: gd
+        extensions: gd, mbstring, curl
 
     - name: Install Dependencies
-      run: composer install --no-dev --optimize-autoloader
+      run: |
+        # เพิ่มไลบรารีส่ง Web Push (อัปเดต composer.json/composer.lock เท่านั้น ยังไม่ติดตั้ง)
+        composer require minishlink/web-push --no-interaction --no-progress --no-install
+        composer install --no-dev --optimize-autoloader --no-interaction
 
     - name: Commit and Push vendor folder
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        git add -f vendor/
+        git add -f vendor/ composer.json composer.lock
         # เช็คว่ามีการเปลี่ยนแปลงหรือไม่ก่อน Commit และใส่ [skip ci]
         git diff-index --quiet HEAD || (git commit -m "auto: build vendor directory [skip ci]" && git push)
 
