@@ -5,7 +5,7 @@
  * โครงสร้างไฟล์
  *   1. Bootstrap   : session, header, auth
  *   2. Config      : ค่าคงที่
- *   3. Helpers     : ฟังก์ชันช่วย (DB / แปลงค่า / escape / รูปไอคอนเมนู)
+ *   3. Helpers     : ฟังก์ชันช่วย (DB / แปลงค่า / escape)
  *   4. Data layer  : ฟังก์ชันดึงข้อมูลจากฐานข้อมูล
  *   5. View model  : เตรียมข้อมูลที่หน้าเว็บต้องใช้ (แจ้งเตือน, เมนู, ข่าว)
  *   6. View        : HTML + CSS + JS
@@ -43,7 +43,6 @@ const DEFAULT_AVATAR_URL = 'https://taothetutor.wordpress.com/wp-content/uploads
 const VAPID_PUBLIC_KEY   = 'BDcVYH88lfTwHxM-yyzWmQzIc6_orJpWxXr156VsSppe-srH4z1gYGz0W6z9I67JHkBkcnnbrwqoLuBZLAzC7HA';
 const PROFILE_IMG_DIR    = 'uploads/profiles/';
 const NEWS_IMG_DIR       = 'uploads/news/';
-const MENU_ICON_DIR      = 'assets/icons/'; // โฟลเดอร์เก็บรูปไอคอนเมนู "บริการระบบ"
 const NEWS_LIMIT         = 10;
 const DISCIPLINE_RED_AT  = 3; // จำนวนบัตรที่ถือเป็นสถานะแดง
 
@@ -92,17 +91,6 @@ function resolve_news_attachment(?string $path): string
         return NEWS_IMG_DIR . $path;
     }
     return $path;
-}
-
-/**
- * รูปไอคอนของเมนู "บริการระบบ"
- * $img เป็นได้ทั้งชื่อไฟล์ในโฟลเดอร์ MENU_ICON_DIR (เช่น 'duty.png')
- * หรือ URL เต็ม (http/https) ก็ได้
- * เพิ่มเมนูใหม่: ใส่รูปในโฟลเดอร์ แล้วอ้างชื่อไฟล์ที่คีย์ 'img' ใน $menu_items
- */
-function resolve_menu_icon(string $img): string
-{
-    return is_url($img) ? $img : MENU_ICON_DIR . $img;
 }
 
 function build_student_name(array $s): string
@@ -249,13 +237,12 @@ function build_news_items(array $announcements): array
     return $items;
 }
 
-// เมนูบริการระบบ: 'img' = ชื่อไฟล์รูปใน MENU_ICON_DIR (หรือ URL เต็ม)
 $menu_items = [
-    ['href' => 'duty.php',               'img' => 'duty.png',       'color' => 'bg-purple', 'label' => 'เวรของฉัน'],
-    ['href' => 'fill.php',               'img' => 'vote.png',       'color' => 'bg-orange', 'label' => 'โหวตกลับบ้าน'],
-    ['href' => 'discipline_history.php', 'img' => 'discipline.png', 'color' => 'bg-blue',   'label' => 'บัตรวินัย'],
-    ['href' => 'duty_substitutions.php', 'img' => 'swap.png',       'color' => 'bg-green',  'label' => 'เปลี่ยนเวร'],
-    ['href' => 'commanders.php',         'img' => 'commander.png',  'color' => 'bg-green',  'label' => 'รายนามผู้บังคับบัญชา'],
+    ['href' => 'duty.php',               'icon' => 'fa-user-clock',   'color' => 'bg-purple', 'label' => 'เวรของฉัน'],
+    ['href' => 'fill.php',               'icon' => 'fa-vote-yea',     'color' => 'bg-orange', 'label' => 'โหวตกลับบ้าน'],
+    ['href' => 'discipline_history.php', 'icon' => 'fa-file-alt',     'color' => 'bg-blue',   'label' => 'บัตรวินัย'],
+    ['href' => 'duty_substitutions.php', 'icon' => 'fa-address-book', 'color' => 'bg-green',  'label' => 'เปลี่ยนเวร'],
+    ['href' => 'commanders.php', 'icon' => 'fa-solid fa-user-tie', 'color' => 'bg-green',  'label' => 'รายนามผู้บังคับบัญชา'],
 ];
 
 $nav_items = [
@@ -489,13 +476,8 @@ $profile = [
     }
     .menu-item:active { transform: scale(0.95); }
     .icon-box {
-      width: 45px; height: 45px; margin-bottom: 8px; border-radius: 12px;
+      width: 45px; height: 45px; margin-bottom: 8px; border-radius: 12px; font-size: 1.3rem;
       display: flex; align-items: center; justify-content: center;
-    }
-    /* รูปไอคอนเมนู: ปรับขนาดได้ที่ width/height (ถ้าอยากให้รูปเต็มกล่อง ใส่ 100%) */
-    .icon-box img {
-      width: 32px; height: 32px; display: block; object-fit: contain;
-      pointer-events: none; -webkit-user-drag: none;
     }
     .menu-text { font-size: 0.7rem; font-weight: 600; line-height: 1.2; }
     .bg-purple { background: #eef2ff; color: var(--primary); }
@@ -666,9 +648,7 @@ $profile = [
         <div class="menu-grid">
           <?php foreach ($menu_items as $menu): ?>
             <a href="<?= e($menu['href']) ?>" class="menu-item">
-              <div class="icon-box <?= e($menu['color']) ?>">
-                <img src="<?= e(resolve_menu_icon($menu['img'])) ?>" alt="" class="menu-img" width="32" height="32" loading="lazy" draggable="false">
-              </div>
+              <div class="icon-box <?= e($menu['color']) ?>"><i class="fas <?= e($menu['icon']) ?>"></i></div>
               <span class="menu-text"><?= e($menu['label']) ?></span>
             </a>
           <?php endforeach; ?>
