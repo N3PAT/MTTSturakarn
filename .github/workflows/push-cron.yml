@@ -1,0 +1,15 @@
+name: Push Cron
+
+# ตัวสำรองสำหรับส่ง push ประกาศใหม่ (GitHub รันได้ถี่สุดทุก 5 นาที และอาจล่าช้า)
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Send pending push notifications
+      # APP_URL เช่น https://ชื่อแอป.onrender.com (ไม่มี / ท้าย) — Render ฟรีอาจต้องรอปลุกเครื่อง จึงตั้ง timeout ไว้นาน
+      run: curl -fsS --max-time 120 --retry 2 "${{ secrets.APP_URL }}/push_cron.php?key=${{ secrets.PUSH_CRON_TOKEN }}"
