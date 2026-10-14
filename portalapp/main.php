@@ -104,7 +104,7 @@ function build_student_unit(array $s): string
     if (!empty($s['battalion'])) $parts[] = 'พัน นร.' . $s['battalion'];
     if (!empty($s['company']))   $parts[] = 'ร้อย.' . $s['company'];
     if (!empty($s['platoon']))   $parts[] = 'หมวด ' . $s['platoon'];
-    if (!empty($s['section']))   $parts[] = 'ตอนเรียน ' . $s['section'];
+    if (!empty($s['section']))   $parts[] = 'วิชาชีพช่าง ' . $s['section'];
     return $parts ? implode(' ', $parts) : 'ไม่มีข้อมูล';
 }
 
