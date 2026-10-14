@@ -9,7 +9,7 @@ require_once __DIR__ . '/push_lib.php';
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
 if (PHP_SAPI !== 'cli') {
-    if (!hash_equals(PUSH_CRON_TOKEN, (string)($_GET['key'] ?? ''))) {
+    if (PUSH_CRON_TOKEN === '' || !hash_equals(PUSH_CRON_TOKEN, (string)($_GET['key'] ?? ''))) {
         http_response_code(403);
         exit('Forbidden');
     }
