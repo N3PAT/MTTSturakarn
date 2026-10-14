@@ -267,10 +267,7 @@ dialog.closing::backdrop{animation:fadeOut .18s ease forwards}
   </div>
 <?php endif; ?>
 
-  <nav class="nav" aria-label="เมนูหลัก">
-    <a href="main.php"><svg class="ic"><use href="#i-home"/></svg><span>หน้าหลัก</span></a>
-    <a href="notification.php" aria-current="page"><svg class="ic<?= $counts['important'] > 0 ? ' ring' : '' ?>"><use href="#i-bell"/></svg><span>แจ้งเตือน</span></a>
-  </nav>
+
 </div>
 
 <dialog id="detail" aria-labelledby="dTitle">
