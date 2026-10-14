@@ -200,7 +200,6 @@ foreach ($tiers as $t) $total += count($t[2]);
 $nav_items = [
     ['href' => 'main.php',       'icon' => 'fa-home',    'label' => 'หน้าหลัก',       'active' => false],
     ['href' => 'commanders.php', 'icon' => 'fa-sitemap', 'label' => 'ผู้บังคับบัญชา', 'active' => true],
-    ['href' => 'profile.php',    'icon' => 'fa-user',    'label' => 'โปรไฟล์',        'active' => false],
 ];
 ?>
 <!DOCTYPE html>
