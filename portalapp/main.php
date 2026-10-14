@@ -5,7 +5,7 @@
  * โครงสร้างไฟล์
  *   1. Bootstrap   : session, header, auth
  *   2. Config      : ค่าคงที่
- *   3. Helpers     : ฟังก์ชันช่วย (DB / แปลงค่า / escape / ไอคอน SVG)
+ *   3. Helpers     : ฟังก์ชันช่วย (DB / แปลงค่า / escape / รูปไอคอนเมนู)
  *   4. Data layer  : ฟังก์ชันดึงข้อมูลจากฐานข้อมูล
  *   5. View model  : เตรียมข้อมูลที่หน้าเว็บต้องใช้ (แจ้งเตือน, เมนู, ข่าว)
  *   6. View        : HTML + CSS + JS
@@ -43,6 +43,7 @@ const DEFAULT_AVATAR_URL = 'https://taothetutor.wordpress.com/wp-content/uploads
 const VAPID_PUBLIC_KEY   = 'BDcVYH88lfTwHxM-yyzWmQzIc6_orJpWxXr156VsSppe-srH4z1gYGz0W6z9I67JHkBkcnnbrwqoLuBZLAzC7HA';
 const PROFILE_IMG_DIR    = 'uploads/profiles/';
 const NEWS_IMG_DIR       = 'uploads/news/';
+const MENU_ICON_DIR      = 'assets/icons/'; // โฟลเดอร์เก็บรูปไอคอนเมนู "บริการระบบ"
 const NEWS_LIMIT         = 10;
 const DISCIPLINE_RED_AT  = 3; // จำนวนบัตรที่ถือเป็นสถานะแดง
 
@@ -93,6 +94,17 @@ function resolve_news_attachment(?string $path): string
     return $path;
 }
 
+/**
+ * รูปไอคอนของเมนู "บริการระบบ"
+ * $img เป็นได้ทั้งชื่อไฟล์ในโฟลเดอร์ MENU_ICON_DIR (เช่น 'duty.png')
+ * หรือ URL เต็ม (http/https) ก็ได้
+ * เพิ่มเมนูใหม่: ใส่รูปในโฟลเดอร์ แล้วอ้างชื่อไฟล์ที่คีย์ 'img' ใน $menu_items
+ */
+function resolve_menu_icon(string $img): string
+{
+    return is_url($img) ? $img : MENU_ICON_DIR . $img;
+}
+
 function build_student_name(array $s): string
 {
     return trim(($s['prefix'] ?? '') . ($s['first_name'] ?? '') . ' ' . ($s['last_name'] ?? ''));
@@ -106,58 +118,6 @@ function build_student_unit(array $s): string
     if (!empty($s['platoon']))   $parts[] = 'หมวด ' . $s['platoon'];
     if (!empty($s['section']))   $parts[] = 'วิชาชีพช่าง ' . $s['section'];
     return $parts ? implode(' ', $parts) : 'ไม่มีข้อมูล';
-}
-
-/**
- * ไอคอน SVG ของเมนู "บริการระบบ"
- * ใช้ currentColor จึงได้สีตามคลาส .bg-purple / .bg-orange / .bg-blue / .bg-green
- * เพิ่มไอคอนใหม่: ใส่ชื่อใน $icons แล้วอ้างชื่อนั้นที่คีย์ 'svg' ใน $menu_items
- */
-function menu_svg(string $name): string
-{
-    static $icons = [
-
-        // เวรของฉัน : คน + นาฬิกา
-        'duty' =>
-            '<circle cx="10" cy="8" r="3.5" fill="currentColor" fill-opacity=".2"/>'
-          . '<path d="M3.5 20c0-3.6 2.9-6 6.5-6 1 0 1.9.2 2.8.5"/>'
-          . '<circle cx="17.5" cy="17" r="4.5" fill="currentColor" fill-opacity=".2"/>'
-          . '<path d="M17.5 14.8V17l1.6 1.1"/>',
-
-        // โหวตกลับบ้าน : หีบบัตร + บัตรลงคะแนน
-        'vote' =>
-            '<rect x="3" y="12" width="18" height="8.5" rx="2" fill="currentColor" fill-opacity=".2"/>'
-          . '<path d="M9 16.2h6"/>'
-          . '<path d="M7.5 12V5.5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1V12"/>'
-          . '<path d="M10 8.3l1.6 1.6 3-3.2"/>',
-
-        // บัตรวินัย : บัตรประจำตัว
-        'discipline' =>
-            '<rect x="3" y="5" width="18" height="14" rx="2.5" fill="currentColor" fill-opacity=".2"/>'
-          . '<circle cx="9" cy="10.8" r="2"/>'
-          . '<path d="M5.8 16.2c.4-1.5 1.7-2.4 3.2-2.4s2.8.9 3.2 2.4"/>'
-          . '<path d="M14.5 10H18M14.5 13.5H18"/>',
-
-        // เปลี่ยนเวร : ลูกศรสลับ
-        'swap' =>
-            '<circle cx="12" cy="12" r="9" fill="currentColor" fill-opacity=".12" stroke="none"/>'
-          . '<path d="M5 8.5h13"/>'
-          . '<path d="M14.5 5L18 8.5 14.5 12"/>'
-          . '<path d="M19 15.5H6"/>'
-          . '<path d="M9.5 12L6 15.5 9.5 19"/>',
-
-        // รายนามผู้บังคับบัญชา : คนผูกเน็คไท
-        'commander' =>
-            '<circle cx="12" cy="7.5" r="3.5" fill="currentColor" fill-opacity=".2"/>'
-          . '<path d="M5 20.5c0-3.9 3.1-6.5 7-6.5s7 2.6 7 6.5"/>'
-          . '<path d="M12 14.2l-1.4 1.7 1.4 3.9 1.4-3.9z" fill="currentColor"/>',
-    ];
-
-    $body = $icons[$name] ?? '';
-
-    return '<svg class="menu-svg" viewBox="0 0 24 24" width="26" height="26" fill="none" '
-         . 'stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" '
-         . 'aria-hidden="true" focusable="false">' . $body . '</svg>';
 }
 
 /* ========== 4. Data layer ========== */
@@ -289,13 +249,13 @@ function build_news_items(array $announcements): array
     return $items;
 }
 
-// เมนูบริการระบบ: 'svg' = ชื่อไอคอนใน menu_svg()
+// เมนูบริการระบบ: 'img' = ชื่อไฟล์รูปใน MENU_ICON_DIR (หรือ URL เต็ม)
 $menu_items = [
-    ['href' => 'duty.php',               'svg' => 'duty',       'color' => 'bg-purple', 'label' => 'เวรของฉัน'],
-    ['href' => 'fill.php',               'svg' => 'vote',       'color' => 'bg-orange', 'label' => 'โหวตกลับบ้าน'],
-    ['href' => 'discipline_history.php', 'svg' => 'discipline', 'color' => 'bg-blue',   'label' => 'บัตรวินัย'],
-    ['href' => 'duty_substitutions.php', 'svg' => 'swap',       'color' => 'bg-green',  'label' => 'เปลี่ยนเวร'],
-    ['href' => 'commanders.php',         'svg' => 'commander',  'color' => 'bg-green',  'label' => 'รายนามผู้บังคับบัญชา'],
+    ['href' => 'duty.php',               'img' => 'duty.png',       'color' => 'bg-purple', 'label' => 'เวรของฉัน'],
+    ['href' => 'fill.php',               'img' => 'vote.png',       'color' => 'bg-orange', 'label' => 'โหวตกลับบ้าน'],
+    ['href' => 'discipline_history.php', 'img' => 'discipline.png', 'color' => 'bg-blue',   'label' => 'บัตรวินัย'],
+    ['href' => 'duty_substitutions.php', 'img' => 'swap.png',       'color' => 'bg-green',  'label' => 'เปลี่ยนเวร'],
+    ['href' => 'commanders.php',         'img' => 'commander.png',  'color' => 'bg-green',  'label' => 'รายนามผู้บังคับบัญชา'],
 ];
 
 $nav_items = [
@@ -532,7 +492,11 @@ $profile = [
       width: 45px; height: 45px; margin-bottom: 8px; border-radius: 12px;
       display: flex; align-items: center; justify-content: center;
     }
-    .icon-box svg { width: 26px; height: 26px; display: block; }
+    /* รูปไอคอนเมนู: ปรับขนาดได้ที่ width/height (ถ้าอยากให้รูปเต็มกล่อง ใส่ 100%) */
+    .icon-box img {
+      width: 32px; height: 32px; display: block; object-fit: contain;
+      pointer-events: none; -webkit-user-drag: none;
+    }
     .menu-text { font-size: 0.7rem; font-weight: 600; line-height: 1.2; }
     .bg-purple { background: #eef2ff; color: var(--primary); }
     .bg-orange { background: #fff7ed; color: #ea580c; }
@@ -702,7 +666,9 @@ $profile = [
         <div class="menu-grid">
           <?php foreach ($menu_items as $menu): ?>
             <a href="<?= e($menu['href']) ?>" class="menu-item">
-              <div class="icon-box <?= e($menu['color']) ?>"><?= menu_svg($menu['svg']) ?></div>
+              <div class="icon-box <?= e($menu['color']) ?>">
+                <img src="<?= e(resolve_menu_icon($menu['img'])) ?>" alt="" class="menu-img" width="32" height="32" loading="lazy" draggable="false">
+              </div>
               <span class="menu-text"><?= e($menu['label']) ?></span>
             </a>
           <?php endforeach; ?>
