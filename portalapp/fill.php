@@ -25,6 +25,21 @@ function json_out(array $data, int $http = 200): void
     exit;
 }
 
+// ฟังก์ชันแปลงวันที่เป็นภาษาไทยแบบเต็ม
+function thai_date_full(string $date_str): string {
+    $timestamp = strtotime($date_str);
+    if (!$timestamp) return $date_str;
+    $days = ['วันอาทิตย์', 'วันจันทร์', 'วันอังคาร', 'วันพุธ', 'วันพฤหัสบดี', 'วันศุกร์', 'วันเสาร์'];
+    $months = ['', 'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+    
+    $dow = (int)date('w', $timestamp);
+    $day = (int)date('j', $timestamp);
+    $month = (int)date('n', $timestamp);
+    $year = (int)date('Y', $timestamp) + 543;
+    
+    return "{$days[$dow]}ที่ {$day} {$months[$month]} พ.ศ. {$year}";
+}
+
 function vote_window(): array
 {
     $dt  = new DateTime('now', new DateTimeZone('Asia/Bangkok'));
@@ -58,7 +73,7 @@ function student_total(mysqli $conn): int
     return $n;
 }
 
-// ข้อมูลนักเรียน 1 คน + สถานะบังคับ (กักบริเวณ/เวร) — ไม่โหลดรายชื่อทั้งตารางอีกต่อไป
+// ข้อมูลนักเรียน 1 คน + สถานะบังคับ (กักบริเวณ/เวร)
 function get_student_info(mysqli $conn, string $code, string $target_date): ?array
 {
     $stmt = $conn->prepare('SELECT id, prefix, first_name, last_name, section FROM students WHERE student_code = ? LIMIT 1');
@@ -81,7 +96,7 @@ function get_student_info(mysqli $conn, string $code, string $target_date): ?arr
     $restricted = $stmt->get_result()->num_rows > 0;
     $stmt->close();
 
-    // อยู่เวรหรือไม่: ลำดับของนักเรียน (เรียงตาม id) ต้องอยู่ในหน้าต่าง 16 คนที่หมุนไปตามวัน
+    // อยู่เวรหรือไม่
     $on_duty = false;
     $total   = student_total($conn);
     if ($total > 0) {
@@ -129,26 +144,28 @@ function process_vote(mysqli $conn, array $in, string $target_date, bool $is_ope
         return vote_fail('หมดเวลาทำรายการ ระบบเปิดให้ส่งข้อมูลเฉพาะวันเสาร์ถึงวันอังคารก่อนเวลา 16:00 น. เท่านั้น');
     }
 
-    $code    = trim((string)($in['student_code'] ?? ''));
-    $status  = trim((string)($in['status'] ?? ''));
-    $section = trim((string)($in['section'] ?? ''));
+    $code   = trim((string)($in['student_code'] ?? ''));
+    $status = trim((string)($in['status'] ?? ''));
 
     if (!preg_match('/^[A-Za-z0-9_-]{1,20}$/', $code)) {
         return vote_fail('รูปแบบรหัสประจำตัวไม่ถูกต้อง');
     }
-    if (!preg_match('/^\d{1,2}$/', $section) || (int)$section < 1 || (int)$section > 14) {
-        return vote_fail('ตอนเรียนต้องเป็นตัวเลข 1-14');
-    }
     if (!array_key_exists($status, STATUS_LABELS)) {
         return vote_fail('สถานะไม่ถูกต้องตามที่ระบบกำหนด (กรุณาเลือกสถานะให้ครบถ้วน)');
     }
-    $section = (string)(int)$section;
 
     try {
         $info = get_student_info($conn, $code, $target_date);
         if (!$info) {
             return vote_fail("ไม่พบรหัส $code ในระบบ");
         }
+        
+        // ดึงตอนเรียนจากฐานข้อมูลมาใช้อัตโนมัติ
+        $section = trim($info['section']);
+        if ($section === '') {
+            return vote_fail("รหัส $code ยังไม่มีข้อมูลตอนเรียนในระบบ กรุณาติดต่อธุรการ");
+        }
+
         if ($info['restricted'] && $status !== 'restrict') {
             return vote_fail("รหัส $code มีรายชื่อถูกกักบริเวณในสัปดาห์นี้ ต้องเลือกสถานะกักบริเวณเท่านั้น");
         }
@@ -161,14 +178,8 @@ function process_vote(mysqli $conn, array $in, string $target_date, bool $is_ope
 
         $conn->begin_transaction();
         try {
-            // UNIQUE (student_code, vote_date) ใน DB เป็นตัวกันโหวตซ้ำ แม้กดพร้อมกันหลายคำขอ
             $stmt = $conn->prepare('INSERT INTO weekly_votes (student_code, vote_date, status, created_at) VALUES (?, ?, ?, ?)');
             $stmt->bind_param('ssss', $code, $target_date, $status, $now);
-            $stmt->execute();
-            $stmt->close();
-
-            $stmt = $conn->prepare('UPDATE students SET section = ? WHERE student_code = ? AND (section IS NULL OR section <> ?)');
-            $stmt->bind_param('sss', $section, $code, $section);
             $stmt->execute();
             $stmt->close();
 
@@ -177,7 +188,6 @@ function process_vote(mysqli $conn, array $in, string $target_date, bool $is_ope
             $conn->rollback();
             if ((int)$e->getCode() !== 1062) { throw $e; }
 
-            // มีบันทึกอยู่แล้ว: ถ้าสถานะเหมือนเดิมถือว่าสำเร็จ (กดซ้ำ/ส่งซ้ำจากการลองใหม่) ถ้าต่างไปให้แจ้ง
             $stmt = $conn->prepare('SELECT status FROM weekly_votes WHERE student_code = ? AND vote_date = ? LIMIT 1');
             $stmt->bind_param('ss', $code, $target_date);
             $stmt->execute();
@@ -199,7 +209,7 @@ function process_vote(mysqli $conn, array $in, string $target_date, bool $is_ope
     }
 }
 
-/* ===================== API ค้นหานักเรียน (ไม่ใช้ session) ===================== */
+/* ===================== API ค้นหานักเรียน ===================== */
 if (($_GET['action'] ?? '') === 'get_student_name') {
     $code = trim((string)($_GET['code'] ?? ''));
     if (!preg_match('/^[A-Za-z0-9_-]{1,20}$/', $code)) {
@@ -232,7 +242,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (($_POST['ajax'] ?? '') === '1') {
         json_out($result['body'], $result['http']);
     }
-    $_SESSION['flash'] = $result['body'];            // กรณีไม่มี JS: redirect แล้วแสดงผล
+    $_SESSION['flash'] = $result['body'];
     header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
     exit;
 }
@@ -240,9 +250,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
 $csrf = $_SESSION['csrf_token'];
-session_write_close();                                // ปล่อย lock ของ session ก่อนสร้างหน้า
+session_write_close();
 
-$date_th = date('d/m/Y', strtotime($target_date));
+$date_th_full = thai_date_full($target_date);
 $tiles = [
     'home'     => ['๑', 'กลับภูมิลำเนา', 'home'],
     'stay'     => ['๒', 'ประสงค์อยู่ รร.ชท.', 'pin'],
@@ -278,13 +288,12 @@ body{margin:0;font-family:'Prompt',system-ui,sans-serif;background:#e2e8f0;color
 .top h1{margin:0;font-size:.95rem;font-weight:700;line-height:1.3}
 .top p{margin:0;font-size:.75rem;color:var(--mute)}
 
-/* ส่วนวันที่ — จุดเด่นของหน้า */
-.hero{background:var(--primary);color:#fff;padding:22px 20px 26px;border-radius:0 0 28px 28px;position:relative;overflow:hidden}
-.hero small{display:block;font-size:.8rem;opacity:.85}
-.hero strong{display:block;font-size:2.4rem;font-weight:700;line-height:1.15;letter-spacing:.5px;margin:2px 0 12px}
-.pill{display:inline-flex;align-items:center;gap:8px;font-size:.78rem;font-weight:600;padding:5px 12px;border-radius:999px;background:rgba(255,255,255,.16)}
-.dot{width:8px;height:8px;border-radius:50%;background:#4ade80}
-.pill.closed .dot{background:#f87171}
+/* ส่วนวันที่ — ปรับปรุงใหม่ให้ดูโดดเด่นและพรีเมียม */
+.hero{background:linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);color:#fff;padding:24px 20px 28px;border-radius:0 0 32px 32px;position:relative;overflow:hidden;box-shadow:0 8px 20px rgba(90,66,160,.15)}
+.hero-badge{display:inline-flex;align-items:center;gap:6px;font-size:.75rem;font-weight:600;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.2);margin-bottom:8px;backdrop-filter:blur(4px)}
+.hero small{display:block;font-size:.8rem;opacity:.9;text-transform:uppercase;letter-spacing:.5px}
+.hero strong{display:block;font-size:1.45rem;font-weight:700;line-height:1.3;margin:4px 0 6px}
+.hero-sub{font-size:.78rem;opacity:.85;margin-top:2px}
 
 /* แบบฟอร์ม */
 .card{background:#fff;border:1px solid var(--line);border-radius:18px;margin:20px 20px 0;padding:20px}
@@ -294,6 +303,7 @@ body{margin:0;font-family:'Prompt',system-ui,sans-serif;background:#e2e8f0;color
 .req{color:#ef4444}
 .input{width:100%;padding:12px 14px;border:1.5px solid var(--line);border-radius:10px;background:#f8fafc;font:inherit;font-size:1rem;color:var(--ink);outline:none;transition:border-color .15s,background .15s}
 .input:focus{border-color:var(--primary);background:#fff}
+.input[readonly]{background:#f1f5f9;color:var(--primary);font-weight:600;cursor:not-allowed}
 .hint{display:flex;gap:6px;margin:8px 0 0;font-size:.75rem;color:var(--mute);line-height:1.5}
 .hint .ic{color:var(--primary);margin-top:2px}
 
@@ -416,8 +426,12 @@ dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
   </header>
 
   <section class="hero" aria-label="วันที่ที่แจ้งความประสงค์">
-    <small>โหวตประสงค์กลับบ้านสำหรับวันศุกร์ที่</small>
-    <strong><?php echo htmlspecialchars($date_th); ?></strong>
+    <div class="hero-badge">
+      <svg class="ic"><use href="#i-clip"/></svg> แจ้งความประสงค์ประจำสัปดาห์
+    </div>
+    <small>กำหนดวันศุกร์ที่</small>
+    <strong><?php echo htmlspecialchars($date_th_full); ?></strong>
+    <div class="hero-sub">กรุณาตรวจสอบข้อมูลและเลือกสถานะให้ถูกต้อง</div>
   </section>
 
 <?php if ($is_voting_open): ?>
@@ -430,9 +444,10 @@ dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
       <div id="lookup" class="lookup" aria-live="polite" hidden></div>
     </div>
 
+    <!-- ช่องตอนเรียน ดึงข้อมูลอัตโนมัติจากระบบแบบ Readonly -->
     <div class="field">
-      <label for="section"><svg class="ic"><use href="#i-layers"/></svg>ตอนเรียนที่ (1-14) <span class="req">*</span></label>
-      <input class="input" type="number" id="section" name="section" required min="1" max="14" step="1" inputmode="numeric" placeholder="เช่น 1">
+      <label for="section"><svg class="ic"><use href="#i-layers"/></svg>ตอนเรียน (ดึงอัตโนมัติจากระบบ)</label>
+      <input class="input" type="text" id="section" name="section" readonly placeholder="กรอกรหัส นชท. เพื่อดึงข้อมูลอัตโนมัติ">
     </div>
 
     <fieldset class="field">
@@ -502,7 +517,7 @@ dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
     });
   }
 
-  /* ---- ตัวช่วยสร้าง DOM (ใช้ textContent เสมอ ไม่ใช้ innerHTML กับข้อมูลจากเซิร์ฟเวอร์) ---- */
+  /* ---- ตัวช่วยสร้าง DOM ---- */
   var NS = 'http://www.w3.org/2000/svg';
   function icon(id) {
     var s = document.createElementNS(NS, 'svg'), u = document.createElementNS(NS, 'use');
@@ -512,7 +527,7 @@ dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
     var n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n;
   }
 
-  /* ---- กล่องข้อความ (แทน SweetAlert2) ---- */
+  /* ---- กล่องข้อความ ---- */
   var dlg = $('#dlg');
   function showDialog(o) {
     return new Promise(function (resolve) {
@@ -563,7 +578,7 @@ dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
   var form = $('#voteForm');
   if (!form) return;
 
-  /* ---- ค้นหานักเรียน (หน่วง 350ms, ยกเลิกคำขอเก่า, จำผลไว้) ---- */
+  /* ---- ค้นหานักเรียนและดึงตอนเรียนอัตโนมัติ ---- */
   var codeIn = $('#student_code'), secIn = $('#section'), lookupBox = $('#lookup'), note = $('#forcedNote');
   var tiles = Array.prototype.slice.call(form.querySelectorAll('input[name=status]'));
   var cache = {}, ctl = null, timer = null, state = 'idle', auto = false, current = Promise.resolve();
@@ -593,12 +608,16 @@ dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
     }
   }
 
-  function reset() { state = 'idle'; setLookup(null); applyForced(null, true); }
+  function reset() { state = 'idle'; setLookup(null); applyForced(null, true); secIn.value = ''; }
 
   function apply(d) {
-    if (!d.found) { state = 'notfound'; setLookup('bad', 'ไม่พบรหัสนี้ในระบบ'); applyForced(null, true); return; }
+    if (!d.found) { state = 'notfound'; setLookup('bad', 'ไม่พบรหัสนี้ในระบบ'); applyForced(null, true); secIn.value = ''; return; }
     state = 'found'; setLookup('ok', d.name, d.section);
-    if (d.section) secIn.value = d.section;
+    if (d.section) {
+      secIn.value = 'ตอนที่ ' + d.section;
+    } else {
+      secIn.value = 'ไม่พบข้อมูลตอนเรียน';
+    }
     applyForced(d.forced, false);
   }
 
@@ -627,7 +646,7 @@ dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
     var c = codeIn.value.trim(); if (c && state === 'idle') { clearTimeout(timer); lookup(c); }
   });
 
-  /* ---- ส่งข้อมูล: ยืนยัน 10 วินาที แล้วส่งผ่าน fetch พร้อมลองใหม่อัตโนมัติ ---- */
+  /* ---- ส่งข้อมูล ---- */
   var btn = $('#submitBtn');
   function busy(on, text) { btn.disabled = on; $('.lbl', btn).textContent = on ? text : 'ส่งข้อมูล'; }
 
@@ -641,10 +660,10 @@ dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
       } catch (e) {
         if (i === 3) break;
         busy(true, 'เซิร์ฟเวอร์หนาแน่น ลองใหม่ครั้งที่ ' + (i + 2) + '...');
-        await sleep(700 * (i + 1) + Math.random() * 1000);   // หน่วงแบบสุ่ม ไม่ให้ทุกเครื่องยิงพร้อมกัน
+        await sleep(700 * (i + 1) + Math.random() * 1000);
       }
     }
-    return { ok: false, message: 'ส่งข้อมูลไม่สำเร็จ เซิร์ฟเวอร์หนาแน่นหรืออินเทอร์เน็ตมีปัญหา ข้อมูลอาจยังไม่ถูกบันทึก กรุณากดส่งอีกครั้ง' };
+    return { ok: false, message: 'ส่งข้อมูลไม่สำเร็จ เซิร์ฟเวอร์หนาแน่นหรืออินเทอร์เน็ตมีปัญหา กรุณากดส่งอีกครั้ง' };
   }
 
   form.addEventListener('submit', async function (e) {
