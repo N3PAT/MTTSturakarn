@@ -4,16 +4,12 @@ require_once 'db.php';
 require_once 'functions.php';
 
 session_start();
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+// ตรวจสอบสิทธิ์ Admin
+if (empty($_SESSION['admin_id'])) {
+    header("Location: admin_main.php");
+    exit();
 }
 
-// จัดการการบันทึกตั้งค่า
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $token = (string)($_POST['csrf_token'] ?? '');
-    if (!hash_equals($_SESSION['csrf_token'], $token)) {
-        die('CSRF Token Invalid');
-    }
 
     $target_date = trim((string)($_POST['target_date'] ?? ''));
     $is_open     = isset($_POST['is_open']) ? '1' : '0';
