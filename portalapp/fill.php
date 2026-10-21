@@ -1,213 +1,8 @@
 <?php
 date_default_timezone_set('Asia/Bangkok');
 
-require 'db.php';                                       // ต้องมี $conn (mysqli)
-mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
-
-/* ===================== ตั้งค่า ===================== */
-const START_DATE   = '2026-07-06';  // วันเริ่มต้นคำนวณเวรหลัก
-const DUTY_PER_DAY = 16;            // จำนวนผู้อยู่เวรต่อวัน
-const STATUS_LABELS = [
-    'home'     => 'กลับภูมิลำเนา',
-    'stay'     => 'ประสงค์อยู่ รร.ชท.',
-    'duty'     => 'เวรรักษาการณ์ (วันศุกร์)',
-    'restrict' => 'กักบริเวณ',
-];
-
-/* ===================== ฟังก์ชันช่วย ===================== */
-function json_out(array $data, int $http = 200): void
-{
-    while (ob_get_level()) { ob_end_clean(); }
-    http_response_code($http);
-    header('Content-Type: application/json; charset=utf-8');
-    header('Cache-Control: no-store');
-    echo json_encode($data, JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
-// ฟังก์ชันแปลงวันที่เป็นภาษาไทยแบบเต็ม
-function thai_date_full(string $date_str): string {
-    $timestamp = strtotime($date_str);
-    if (!$timestamp) return $date_str;
-    $days = ['วันอาทิตย์', 'วันจันทร์', 'วันอังคาร', 'วันพุธ', 'วันพฤหัสบดี', 'วันศุกร์', 'วันเสาร์'];
-    $months = ['', 'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
-    
-    $dow = (int)date('w', $timestamp);
-    $day = (int)date('j', $timestamp);
-    $month = (int)date('n', $timestamp);
-    $year = (int)date('Y', $timestamp) + 543;
-    
-    return "{$days[$dow]}ที่ {$day} {$months[$month]} พ.ศ. {$year}";
-}
-
-function vote_window(): array
-{
-    $dt  = new DateTime('now', new DateTimeZone('Asia/Bangkok'));
-    $dow = (int)$dt->format('N');
-
-    // คำนวณวันศุกร์เป้าหมาย (Day 5 of week)
-    $until = 5 - $dow;
-    if ($until < 0) {
-        $until += 7;
-    }
-
-    $target = clone $dt;
-    $target->modify("+$until days");
-
-    return [
-        'target_date' => $target->format('Y-m-d'),
-        'is_open'     => true, // กำหนดให้เปิดรับตลอดทุกวัน
-    ];
-}
-
-// จำนวนนักเรียนทั้งหมด (แคช 60 วินาทีถ้ามี APCu)
-function student_total(mysqli $conn): int
-{
-    $key = 'mtts_student_total';
-    if (function_exists('apcu_fetch')) {
-        $v = apcu_fetch($key, $hit);
-        if ($hit) { return (int)$v; }
-    }
-    $n = (int)$conn->query('SELECT COUNT(*) AS c FROM students')->fetch_assoc()['c'];
-    if (function_exists('apcu_store')) { apcu_store($key, $n, 60); }
-    return $n;
-}
-
-// ข้อมูลนักเรียน 1 คน + สถานะบังคับ (กักบริเวณ/เวร)
-function get_student_info(mysqli $conn, string $code, string $target_date): ?array
-{
-    $stmt = $conn->prepare('SELECT id, prefix, first_name, last_name, section FROM students WHERE student_code = ? LIMIT 1');
-    $stmt->bind_param('s', $code);
-    $stmt->execute();
-    $row = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-    if (!$row) { return null; }
-
-    $stmt = $conn->prepare(
-        "SELECT 1 FROM restrictions
-          WHERE student_code = ?
-            AND (restrict_type = 'restrict' OR restrict_type IS NULL OR restrict_type = '')
-            AND ? >= DATE(created_at)
-            AND ? <= DATE_ADD(DATE(created_at), INTERVAL weeks_count WEEK)
-          LIMIT 1"
-    );
-    $stmt->bind_param('sss', $code, $target_date, $target_date);
-    $stmt->execute();
-    $restricted = $stmt->get_result()->num_rows > 0;
-    $stmt->close();
-
-    // อยู่เวรหรือไม่
-    $on_duty = false;
-    $total   = student_total($conn);
-    if ($total > 0) {
-        $id = (int)$row['id'];
-        $stmt = $conn->prepare('SELECT COUNT(*) AS c FROM students WHERE id < ?');
-        $stmt->bind_param('i', $id);
-        $stmt->execute();
-        $pos = (int)$stmt->get_result()->fetch_assoc()['c'];
-        $stmt->close();
-
-        $diff  = max(0, (int)floor((strtotime($target_date) - strtotime(START_DATE)) / 86400));
-        $start = ($diff * DUTY_PER_DAY) % $total;
-        $on_duty = ((($pos - $start) % $total) + $total) % $total < DUTY_PER_DAY;
-    }
-
-    return [
-        'name'       => trim(($row['prefix'] ?? '') . ($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? '')),
-        'section'    => (string)($row['section'] ?? ''),
-        'restricted' => $restricted,
-        'on_duty'    => $on_duty,
-        'forced'     => $restricted ? 'restrict' : ($on_duty ? 'duty' : null),
-    ];
-}
-
-function vote_fail(string $msg): array
-{
-    return ['http' => 200, 'body' => ['ok' => false, 'message' => $msg]];
-}
-
-function vote_ok(string $msg, string $name, string $status, string $date): array
-{
-    return ['http' => 200, 'body' => [
-        'ok' => true, 'message' => $msg, 'name' => $name,
-        'status_label' => STATUS_LABELS[$status], 'date' => $date,
-    ]];
-}
-
-function process_vote(mysqli $conn, array $in, string $target_date, bool $is_open): array
-{
-    $token = (string)($in['csrf_token'] ?? '');
-    if ($token === '' || !hash_equals((string)($_SESSION['csrf_token'] ?? ''), $token)) {
-        return vote_fail('เซสชันไม่ถูกต้อง กรุณารีเฟรชหน้าเว็บแล้วทำรายการใหม่');
-    }
-    if (!$is_open) {
-        return vote_fail('หมดเวลาทำรายการ ระบบเปิดให้ส่งข้อมูลเฉพาะวันเสาร์ถึงวันอังคารก่อนเวลา 16:00 น. เท่านั้น');
-    }
-
-    $code   = trim((string)($in['student_code'] ?? ''));
-    $status = trim((string)($in['status'] ?? ''));
-
-    if (!preg_match('/^[A-Za-z0-9_-]{1,20}$/', $code)) {
-        return vote_fail('รูปแบบรหัสประจำตัวไม่ถูกต้อง');
-    }
-    if (!array_key_exists($status, STATUS_LABELS)) {
-        return vote_fail('สถานะไม่ถูกต้องตามที่ระบบกำหนด (กรุณาเลือกสถานะให้ครบถ้วน)');
-    }
-
-    try {
-        $info = get_student_info($conn, $code, $target_date);
-        if (!$info) {
-            return vote_fail("ไม่พบรหัส $code ในระบบ");
-        }
-        
-        // ดึงตอนเรียนจากฐานข้อมูลมาใช้อัตโนมัติ
-        $section = trim($info['section']);
-        if ($section === '') {
-            return vote_fail("รหัส $code ยังไม่มีข้อมูลตอนเรียนในระบบ กรุณาติดต่อธุรการ");
-        }
-
-        if ($info['restricted'] && $status !== 'restrict') {
-            return vote_fail("รหัส $code มีรายชื่อถูกกักบริเวณในสัปดาห์นี้ ต้องเลือกสถานะกักบริเวณเท่านั้น");
-        }
-        if ($status === 'duty' && !$info['on_duty']) {
-            return vote_fail("รหัส $code ไม่ได้มีรายชื่อปฏิบัติหน้าที่เวรรักษาการณ์ในสัปดาห์นี้ ไม่สามารถเลือกสถานะเวรได้");
-        }
-
-        $date_th = date('d/m/Y', strtotime($target_date));
-        $now     = date('Y-m-d H:i:s');
-
-        $conn->begin_transaction();
-        try {
-            $stmt = $conn->prepare('INSERT INTO weekly_votes (student_code, vote_date, status, created_at) VALUES (?, ?, ?, ?)');
-            $stmt->bind_param('ssss', $code, $target_date, $status, $now);
-            $stmt->execute();
-            $stmt->close();
-
-            $conn->commit();
-        } catch (mysqli_sql_exception $e) {
-            $conn->rollback();
-            if ((int)$e->getCode() !== 1062) { throw $e; }
-
-            $stmt = $conn->prepare('SELECT status FROM weekly_votes WHERE student_code = ? AND vote_date = ? LIMIT 1');
-            $stmt->bind_param('ss', $code, $target_date);
-            $stmt->execute();
-            $prev = (string)($stmt->get_result()->fetch_assoc()['status'] ?? '');
-            $stmt->close();
-
-            if ($prev === $status) {
-                return vote_ok("รหัส $code ได้บันทึกข้อมูลประจำวันศุกร์ที่ $date_th ไว้แล้ว", $info['name'], $status, $date_th);
-            }
-            $was = array_key_exists($prev, STATUS_LABELS) ? STATUS_LABELS[$prev] : $prev;
-            return vote_fail("รหัส $code ได้ทำการบันทึกข้อมูลของสัปดาห์นี้ไปแล้ว (สถานะ: $was) ไม่สามารถทำรายการซ้ำได้");
-        }
-
-        return vote_ok("บันทึกข้อมูลรหัส $code ประจำวันศุกร์ที่ $date_th เรียบร้อยแล้ว", $info['name'], $status, $date_th);
-
-    } catch (Throwable $e) {
-        error_log('fill submit: ' . $e->getMessage());
-        return ['http' => 503, 'body' => ['ok' => false, 'retry' => true, 'message' => 'ระบบกำลังหนาแน่น กรุณาลองใหม่อีกครั้ง']];
-    }
-}
+require_once 'db.php';
+require_once 'functions.php';
 
 /* ===================== API ค้นหานักเรียน ===================== */
 if (($_GET['action'] ?? '') === 'get_student_name') {
@@ -216,7 +11,8 @@ if (($_GET['action'] ?? '') === 'get_student_name') {
         json_out(['found' => false]);
     }
     try {
-        $info = get_student_info($conn, $code, vote_window()['target_date']);
+        $window = vote_window($conn);
+        $info = get_student_info($conn, $code, $window['target_date']);
         if (!$info) { json_out(['found' => false]); }
         json_out(['found' => true, 'name' => $info['name'], 'section' => $info['section'], 'forced' => $info['forced']]);
     } catch (Throwable $e) {
@@ -233,7 +29,7 @@ if (empty($_SESSION['csrf_token'])) {
 $show_loading = empty($_SESSION['has_seen_loading_fill']);
 $_SESSION['has_seen_loading_fill'] = true;
 
-$window         = vote_window();
+$window         = vote_window($conn);
 $target_date    = $window['target_date'];
 $is_voting_open = $window['is_open'];
 
@@ -288,7 +84,7 @@ body{margin:0;font-family:'Prompt',system-ui,sans-serif;background:#e2e8f0;color
 .top h1{margin:0;font-size:.95rem;font-weight:700;line-height:1.3}
 .top p{margin:0;font-size:.75rem;color:var(--mute)}
 
-/* ส่วนวันที่ — ปรับปรุงใหม่ให้ดูโดดเด่นและพรีเมียม */
+/* ส่วนวันที่ */
 .hero{background:linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);color:#fff;padding:24px 20px 28px;border-radius:0 0 32px 32px;position:relative;overflow:hidden;box-shadow:0 8px 20px rgba(90,66,160,.15)}
 .hero-badge{display:inline-flex;align-items:center;gap:6px;font-size:.75rem;font-weight:600;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.2);margin-bottom:8px;backdrop-filter:blur(4px)}
 .hero small{display:block;font-size:.8rem;opacity:.9;text-transform:uppercase;letter-spacing:.5px}
@@ -381,7 +177,6 @@ dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
 #page-loader img{width:76px;height:76px;border-radius:14px}
 #page-loader .ring{width:36px;height:36px;border:4px solid rgba(90,66,160,.2);border-top-color:var(--primary);border-radius:50%;animation:spin 1s linear infinite}
 
-/* ปรากฏทีเดียวตอนเปิดหน้า */
 .hero strong{animation:rise .5s cubic-bezier(.16,1,.3,1) both}
 @keyframes rise{from{opacity:0;transform:translateY(10px)}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
@@ -444,7 +239,6 @@ dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
       <div id="lookup" class="lookup" aria-live="polite" hidden></div>
     </div>
 
-    <!-- ช่องตอนเรียน ดึงข้อมูลอัตโนมัติจากระบบแบบ Readonly -->
     <div class="field">
       <label for="section"><svg class="ic"><use href="#i-layers"/></svg>ตอนเรียน (ดึงอัตโนมัติจากระบบ)</label>
       <input class="input" type="text" id="section" name="section" readonly placeholder="กรอกรหัส นชท. เพื่อดึงข้อมูลอัตโนมัติ">
@@ -480,8 +274,7 @@ dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
   <div class="card closed">
     <div class="big"><svg class="ic"><use href="#i-lock"/></svg></div>
     <h2>ระบบปิดรับข้อมูล</h2>
-    <p>ระบบเปิดให้ทำรายการเฉพาะช่วงเวลา</p>
-    <div class="when">วันเสาร์ - วันอังคาร (ก่อน 16:00 น.)</div><br>
+    <p>ขณะนี้ระบบยังไม่เปิดให้ทำรายการ หรือปิดรับลงโหวตแล้ว</p>
     <button type="button" class="btn" onclick="location.reload()"><svg class="ic"><use href="#i-refresh"/></svg>รีเฟรชหน้าเว็บ</button>
   </div>
 <?php endif; ?>
@@ -663,7 +456,7 @@ dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
         await sleep(700 * (i + 1) + Math.random() * 1000);
       }
     }
-    return { ok: false, message: 'ส่งข้อมูลไม่สำเร็จ เซิร์ฟเวอร์หนาแน่นหรืออินเทอร์เน็ตมีปัญหา กรุณากดส่งอีกครั้ง' };
+    return { ok: false, message: 'ส่งข้อมูลไม่สำเร็จ เซิร์ฟเวอร์หรืออินเทอร์เน็ตมีปัญหา กรุณากดส่งอีกครั้ง' };
   }
 
   form.addEventListener('submit', async function (e) {
