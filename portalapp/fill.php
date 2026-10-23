@@ -2,11 +2,10 @@
 date_default_timezone_set('Asia/Bangkok');
 
 require 'db.php';                                       // ต้องมี $conn (mysqli)
+require 'vote_lib.php';                                 // START_DATE, DUTY_PER_DAY, vote_window() ฯลฯ
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
 /* ===================== ตั้งค่า ===================== */
-const START_DATE   = '2026-07-06';  // วันเริ่มต้นคำนวณเวรหลัก
-const DUTY_PER_DAY = 16;            // จำนวนผู้อยู่เวรต่อวัน
 const STATUS_LABELS = [
     'home'     => 'กลับภูมิลำเนา',
     'stay'     => 'ประสงค์อยู่ รร.ชท.',
@@ -25,39 +24,14 @@ function json_out(array $data, int $http = 200): void
     exit;
 }
 
-// ฟังก์ชันแปลงวันที่เป็นภาษาไทยแบบเต็ม
-function thai_date_full(string $date_str): string {
-    $timestamp = strtotime($date_str);
-    if (!$timestamp) return $date_str;
-    $days = ['วันอาทิตย์', 'วันจันทร์', 'วันอังคาร', 'วันพุธ', 'วันพฤหัสบดี', 'วันศุกร์', 'วันเสาร์'];
-    $months = ['', 'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
-    
-    $dow = (int)date('w', $timestamp);
-    $day = (int)date('j', $timestamp);
-    $month = (int)date('n', $timestamp);
-    $year = (int)date('Y', $timestamp) + 543;
-    
-    return "{$days[$dow]}ที่ {$day} {$months[$month]} พ.ศ. {$year}";
-}
-
-function vote_window(): array
+// ป้ายสถานะ — ถ้าไม่ใช่วันศุกร์ ให้ป้ายเวรแสดงชื่อวันของวันที่กำหนดแทน
+function status_label(string $status, string $target_date): string
 {
-    $dt  = new DateTime('now', new DateTimeZone('Asia/Bangkok'));
-    $dow = (int)$dt->format('N');
-
-    // คำนวณวันศุกร์เป้าหมาย (Day 5 of week)
-    $until = 5 - $dow;
-    if ($until < 0) {
-        $until += 7;
+    $label = STATUS_LABELS[$status] ?? $status;
+    if ($status === 'duty' && date('N', strtotime($target_date)) !== '5') {
+        $label = 'เวรรักษาการณ์ (' . thai_day_name($target_date) . ')';
     }
-
-    $target = clone $dt;
-    $target->modify("+$until days");
-
-    return [
-        'target_date' => $target->format('Y-m-d'),
-        'is_open'     => true, // กำหนดให้เปิดรับตลอดทุกวัน
-    ];
+    return $label;
 }
 
 // จำนวนนักเรียนทั้งหมด (แคช 60 วินาทีถ้ามี APCu)
@@ -126,11 +100,11 @@ function vote_fail(string $msg): array
     return ['http' => 200, 'body' => ['ok' => false, 'message' => $msg]];
 }
 
-function vote_ok(string $msg, string $name, string $status, string $date): array
+function vote_ok(string $msg, string $name, string $status_label, string $date): array
 {
     return ['http' => 200, 'body' => [
         'ok' => true, 'message' => $msg, 'name' => $name,
-        'status_label' => STATUS_LABELS[$status], 'date' => $date,
+        'status_label' => $status_label, 'date' => $date,
     ]];
 }
 
@@ -173,8 +147,9 @@ function process_vote(mysqli $conn, array $in, string $target_date, bool $is_ope
             return vote_fail("รหัส $code ไม่ได้มีรายชื่อปฏิบัติหน้าที่เวรรักษาการณ์ในสัปดาห์นี้ ไม่สามารถเลือกสถานะเวรได้");
         }
 
-        $date_th = date('d/m/Y', strtotime($target_date));
-        $now     = date('Y-m-d H:i:s');
+        $date_th  = date('d/m/Y', strtotime($target_date));
+        $day_name = thai_day_name($target_date);
+        $now      = date('Y-m-d H:i:s');
 
         $conn->begin_transaction();
         try {
@@ -195,13 +170,13 @@ function process_vote(mysqli $conn, array $in, string $target_date, bool $is_ope
             $stmt->close();
 
             if ($prev === $status) {
-                return vote_ok("รหัส $code ได้บันทึกข้อมูลประจำวันศุกร์ที่ $date_th ไว้แล้ว", $info['name'], $status, $date_th);
+                return vote_ok("รหัส $code ได้บันทึกข้อมูลประจำ{$day_name}ที่ $date_th ไว้แล้ว", $info['name'], status_label($status, $target_date), $date_th);
             }
-            $was = array_key_exists($prev, STATUS_LABELS) ? STATUS_LABELS[$prev] : $prev;
+            $was = array_key_exists($prev, STATUS_LABELS) ? status_label($prev, $target_date) : $prev;
             return vote_fail("รหัส $code ได้ทำการบันทึกข้อมูลของสัปดาห์นี้ไปแล้ว (สถานะ: $was) ไม่สามารถทำรายการซ้ำได้");
         }
 
-        return vote_ok("บันทึกข้อมูลรหัส $code ประจำวันศุกร์ที่ $date_th เรียบร้อยแล้ว", $info['name'], $status, $date_th);
+        return vote_ok("บันทึกข้อมูลรหัส $code ประจำ{$day_name}ที่ $date_th เรียบร้อยแล้ว", $info['name'], status_label($status, $target_date), $date_th);
 
     } catch (Throwable $e) {
         error_log('fill submit: ' . $e->getMessage());
@@ -216,7 +191,7 @@ if (($_GET['action'] ?? '') === 'get_student_name') {
         json_out(['found' => false]);
     }
     try {
-        $info = get_student_info($conn, $code, vote_window()['target_date']);
+        $info = get_student_info($conn, $code, vote_window($conn)['target_date']);
         if (!$info) { json_out(['found' => false]); }
         json_out(['found' => true, 'name' => $info['name'], 'section' => $info['section'], 'forced' => $info['forced']]);
     } catch (Throwable $e) {
@@ -233,7 +208,7 @@ if (empty($_SESSION['csrf_token'])) {
 $show_loading = empty($_SESSION['has_seen_loading_fill']);
 $_SESSION['has_seen_loading_fill'] = true;
 
-$window         = vote_window();
+$window         = vote_window($conn);
 $target_date    = $window['target_date'];
 $is_voting_open = $window['is_open'];
 
@@ -256,7 +231,7 @@ $date_th_full = thai_date_full($target_date);
 $tiles = [
     'home'     => ['๑', 'กลับภูมิลำเนา', 'home'],
     'stay'     => ['๒', 'ประสงค์อยู่ รร.ชท.', 'pin'],
-    'duty'     => ['๓', 'เวรรักษาการณ์ (วันศุกร์)', 'shield'],
+    'duty'     => ['๓', status_label('duty', $target_date), 'shield'],
     'restrict' => ['๔', 'กักบริเวณ', 'lock'],
 ];
 header('Cache-Control: private, no-cache');
@@ -429,7 +404,7 @@ dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
     <div class="hero-badge">
       <svg class="ic"><use href="#i-clip"/></svg> แจ้งความประสงค์ประจำสัปดาห์
     </div>
-    <small>กำหนดวันศุกร์ที่</small>
+    <small><?php echo date('N', strtotime($target_date)) === '5' ? 'กำหนดวันศุกร์ที่' : 'กำหนดวันกลับ'; ?></small>
     <strong><?php echo htmlspecialchars($date_th_full); ?></strong>
     <div class="hero-sub">กรุณาตรวจสอบข้อมูลและเลือกสถานะให้ถูกต้อง</div>
   </section>
