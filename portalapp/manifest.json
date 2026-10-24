@@ -5,7 +5,7 @@
   "start_url": "./login.php",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#73049e",
+  "background_color": "#FFFFFF",
   "theme_color": "#503896",
   "orientation": "portrait",
   "icons": [
