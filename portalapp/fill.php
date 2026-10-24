@@ -243,6 +243,7 @@ header('Cache-Control: private, no-cache');
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
 <meta name="theme-color" content="#5a42a0">
 <title>แจ้งความประสงค์ - MTTS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -250,7 +251,7 @@ header('Cache-Control: private, no-cache');
 <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
 <noscript><style>#page-loader{display:none}</style></noscript>
 <style>
-/* fill.php — native-app look. วางแทนเนื้อหาทั้งหมดระหว่าง <style> ... </style> */
+
 :root{
   --primary:#5a42a0;--primary-dark:#473282;--ink:#1c1b29;--mute:#6b7280;--paper:#f2f3f8;--line:#e3e6ee;--nav:64px;
   --ok:#15803d;--ok-bg:#f0fdf4;--bad:#b91c1c;--bad-bg:#fef2f2;--warn:#b45309;--warn-bg:#fffbeb;
