@@ -294,13 +294,14 @@ $profile = [
 <html lang="th">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#503896">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
   <title>หน้าหลัก - MTTS</title>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
   <style>
 
 
@@ -652,8 +653,7 @@ body{font-family:'Prompt',sans-serif;background:#d9dce6;margin:0;display:flex;ju
     </main>
   </div>
 
-
-<div id="imageModal" class="image-modal">
+  <div id="imageModal" class="image-modal">
     <button type="button" class="modal-close-btn" aria-label="ปิด">&times;</button>
     <img id="modalImage" class="modal-content-img" src="" alt="Zoom">
   </div>
@@ -666,6 +666,7 @@ body{font-family:'Prompt',sans-serif;background:#d9dce6;margin:0;display:flex;ju
       </a>
     <?php endforeach; ?>
   </nav>
+
 
   <script>
   (() => {
