@@ -240,7 +240,9 @@ header('Cache-Control: private, no-cache');
 <html lang="th">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#5a42a0">
 <title>แจ้งความประสงค์ - MTTS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -248,41 +250,49 @@ header('Cache-Control: private, no-cache');
 <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
 <noscript><style>#page-loader{display:none}</style></noscript>
 <style>
+/* fill.php — native-app look. วางแทนเนื้อหาทั้งหมดระหว่าง <style> ... </style> */
 :root{
-  --primary:#5a42a0; --primary-dark:#473282; --ink:#1e293b; --mute:#64748b; --paper:#f6f8fc; --line:#dbe1ea;
-  --ok:#15803d; --ok-bg:#f0fdf4; --bad:#b91c1c; --bad-bg:#fef2f2; --warn:#b45309; --warn-bg:#fffbeb;
+  --primary:#5a42a0;--primary-dark:#473282;--ink:#1c1b29;--mute:#6b7280;--paper:#f2f3f8;--line:#e3e6ee;--nav:64px;
+  --ok:#15803d;--ok-bg:#f0fdf4;--bad:#b91c1c;--bad-bg:#fef2f2;--warn:#b45309;--warn-bg:#fffbeb;
+  --safe-t:env(safe-area-inset-top,0px);--safe-b:env(safe-area-inset-bottom,0px);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{margin:0;font-family:'Prompt',system-ui,sans-serif;background:#e2e8f0;color:var(--ink);display:flex;justify-content:center;min-height:100vh}
-.app{width:100%;max-width:430px;background:var(--paper);min-height:100vh;padding-bottom:96px;box-shadow:0 0 24px rgba(15,23,42,.08)}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;font-family:'Prompt',system-ui,sans-serif;background:#d9dce6;color:var(--ink);display:flex;justify-content:center;min-height:100vh;min-height:100dvh;overscroll-behavior-y:none;-webkit-user-select:none;user-select:none;touch-action:manipulation}
+input{-webkit-user-select:text;user-select:text}
+.app{width:100%;max-width:430px;background:var(--paper);min-height:100vh;min-height:100dvh;padding-bottom:calc(var(--nav) + var(--safe-b) + 12px)}
+@media(min-width:431px){.app{box-shadow:0 0 40px rgba(15,23,42,.14)}}
 .ic{width:1.15em;height:1.15em;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;vertical-align:-.2em}
 
-/* หัวหน้า */
-.top{display:flex;align-items:center;gap:12px;padding:16px 20px}
-.logo{width:44px;height:44px;border-radius:10px;object-fit:contain;background:#fff}
-.top h1{margin:0;font-size:.95rem;font-weight:700;line-height:1.3}
-.top p{margin:0;font-size:.75rem;color:var(--mute)}
+/* แถบหัวแอป (ติดบนเสมอ กลืนกับแถบสถานะ) */
+.top{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:12px;padding:calc(10px + var(--safe-t)) 16px 10px;background:var(--primary);color:#fff}
+.logo{width:38px;height:38px;border-radius:50%;object-fit:contain;background:#fff;padding:2px}
+.top h1{margin:0;font-size:.95rem;font-weight:600;line-height:1.25}
+.top p{margin:0;font-size:.72rem;opacity:.8}
 
-/* ส่วนวันที่ — ปรับปรุงใหม่ให้ดูโดดเด่นและพรีเมียม */
-.hero{background:linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);color:#fff;padding:24px 20px 28px;border-radius:0 0 32px 32px;position:relative;overflow:hidden;box-shadow:0 8px 20px rgba(90,66,160,.15)}
-.hero-badge{display:inline-flex;align-items:center;gap:6px;font-size:.75rem;font-weight:600;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.2);margin-bottom:8px;backdrop-filter:blur(4px)}
-.hero small{display:block;font-size:.8rem;opacity:.9;text-transform:uppercase;letter-spacing:.5px}
-.hero strong{display:block;font-size:1.45rem;font-weight:700;line-height:1.3;margin:4px 0 6px}
-.hero-sub{font-size:.78rem;opacity:.85;margin-top:2px}
+/* ส่วนวันที่ — ต่อเนื่องจากแถบหัวแอป */
+.hero{background:var(--primary);color:#fff;padding:6px 20px 46px;border-radius:0 0 28px 28px}
+.hero-badge{display:inline-flex;align-items:center;gap:6px;font-size:.72rem;font-weight:500;padding:5px 11px;border-radius:999px;background:rgba(255,255,255,.16);margin-bottom:12px}
+.hero small{display:block;font-size:.8rem;opacity:.8}
+.hero strong{display:block;font-size:1.5rem;font-weight:700;line-height:1.3;margin:2px 0 6px}
+.hero-sub{font-size:.78rem;opacity:.8}
 
-/* แบบฟอร์ม */
-.card{background:#fff;border:1px solid var(--line);border-radius:18px;margin:20px 20px 0;padding:20px}
-.field{margin:0 0 20px;padding:0;border:0;min-width:0}
-.field>label,.field>legend{display:flex;align-items:center;gap:6px;font-size:.85rem;font-weight:600;margin:0 0 8px;padding:0}
+/* การ์ดแบบ iOS/Material: แต่ละส่วนเป็นการ์ดลอยทับหัว */
+.card,#voteForm .field{background:#fff;border:0;border-radius:20px;margin:12px 16px 0;padding:16px;min-width:0;box-shadow:0 1px 2px rgba(20,20,43,.05),0 4px 14px rgba(20,20,43,.05)}
+#voteForm.card{background:none;margin:0;padding:0;box-shadow:none;border-radius:0}
+#voteForm>input+.field,.hero+.card{margin-top:-26px;position:relative}
+.field>label,.field>legend{display:flex;align-items:center;gap:6px;font-size:.82rem;font-weight:600;color:var(--mute);margin:0 0 10px;padding:0}
 .field>label .ic,.field>legend .ic{color:var(--primary)}
 .req{color:#ef4444}
-.input{width:100%;padding:12px 14px;border:1.5px solid var(--line);border-radius:10px;background:#f8fafc;font:inherit;font-size:1rem;color:var(--ink);outline:none;transition:border-color .15s,background .15s}
+.input{width:100%;height:52px;padding:0 16px;border:2px solid transparent;border-radius:14px;background:#eef0f6;font:inherit;font-size:1.05rem;color:var(--ink);outline:none;transition:border-color .15s,background .15s}
+#student_code{font-size:1.4rem;font-weight:600;letter-spacing:.12em}
+#student_code::placeholder{font-size:1rem;font-weight:400;letter-spacing:0}
 .input:focus{border-color:var(--primary);background:#fff}
-.input[readonly]{background:#f1f5f9;color:var(--primary);font-weight:600;cursor:not-allowed}
-.hint{display:flex;gap:6px;margin:8px 0 0;font-size:.75rem;color:var(--mute);line-height:1.5}
+.input[readonly]{background:#f6f7fb;color:var(--primary);font-weight:600;font-size:1rem;letter-spacing:0;cursor:default}
+.hint{display:flex;gap:6px;margin:12px 0 0;font-size:.75rem;color:var(--mute);line-height:1.5}
 .hint .ic{color:var(--primary);margin-top:2px}
 
-.lookup{display:flex;align-items:center;gap:8px;margin-top:8px;padding:9px 12px;border-radius:10px;font-size:.85rem;font-weight:500}
+.lookup{display:flex;align-items:center;gap:8px;margin-top:10px;padding:10px 12px;border-radius:12px;font-size:.85rem;font-weight:500}
 .lookup[hidden]{display:none}
 .lk-ok{background:var(--ok-bg);color:var(--ok)}
 .lk-bad{background:var(--bad-bg);color:var(--bad)}
@@ -290,34 +300,41 @@ body{margin:0;font-family:'Prompt',system-ui,sans-serif;background:#e2e8f0;color
 .lookup b{font-weight:600}
 .lookup span.sec{margin-left:auto;font-size:.78rem;opacity:.85;white-space:nowrap}
 
-.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+/* ตัวเลือกสถานะ — ไอคอนสีเหมือนไอคอนแอป, วงกลมมุมขวาเป็นตัวบอกว่าเลือกอยู่ */
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .tile{position:relative;display:block}
-.tile input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer}
-.tile-body{display:flex;flex-direction:column;gap:6px;height:100%;padding:12px;border:1.5px solid var(--line);border-radius:14px;background:#fff;transition:border-color .15s,background .15s}
-.tile-top{display:flex;align-items:center;justify-content:space-between}
-.tile-ic{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:var(--bg);color:var(--c);font-size:1.05rem}
-.tile-num{font-size:.8rem;font-weight:600;color:var(--mute)}
-.tile-text{font-size:.85rem;font-weight:600;line-height:1.35}
-.t-home{--c:#2563eb;--bg:#dbeafe}.t-stay{--c:#6d28d9;--bg:#ede9fe}.t-duty{--c:#b45309;--bg:#fef3c7}.t-restrict{--c:#b91c1c;--bg:#fee2e2}
+.tile input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer;z-index:1}
+.tile-body{display:flex;flex-direction:column;justify-content:space-between;gap:14px;height:100%;min-height:112px;padding:14px;border:2px solid transparent;border-radius:18px;background:#f4f5fa;transition:transform .12s,border-color .15s,background .15s}
+.tile input:active + .tile-body{transform:scale(.96)}
+.tile-top{display:flex;align-items:flex-start;justify-content:space-between}
+.tile-ic{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:var(--c);color:#fff;font-size:1.25rem}
+.tile-num{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;border:2px solid #cfd4e0;background:#fff;font-size:.68rem;font-weight:600;color:var(--mute);transition:background .15s,border-color .15s}
+.tile-text{font-size:.86rem;font-weight:600;line-height:1.35}
+.t-home{--c:#2563eb;--bg:#e3edff}.t-stay{--c:#6d28d9;--bg:#ece6ff}.t-duty{--c:#d97706;--bg:#fff1d6}.t-restrict{--c:#dc2626;--bg:#ffe3e3}
 .tile input:checked + .tile-body{border-color:var(--c);background:var(--bg)}
+.tile input:checked + .tile-body .tile-num{background:var(--c);border-color:var(--c);font-size:0}
+.tile input:checked + .tile-body .tile-num::after{content:'✓';font-size:.85rem;color:#fff}
 .tile input:focus-visible + .tile-body{outline:3px solid #c4b5fd;outline-offset:2px}
 .tile input:disabled{cursor:not-allowed}
 .tile input:disabled + .tile-body{opacity:.4}
 .tile input:disabled:checked + .tile-body{opacity:1}
 
-.notice{display:flex;gap:10px;margin:0 0 20px;padding:12px;border-radius:12px;background:var(--warn-bg);color:var(--warn);font-size:.8rem;line-height:1.5;border:1px solid #fde68a}
+.notice,.help{display:flex;gap:10px;margin:12px 16px 0;padding:12px 14px;border-radius:16px;font-size:.8rem;line-height:1.5}
+.notice{background:var(--warn-bg);color:var(--warn);border:1px solid #fde68a}
 .notice[hidden]{display:none}
+.help{background:#fff;color:var(--mute);box-shadow:0 1px 2px rgba(20,20,43,.05)}
+.help .ic{font-size:1.25rem;margin-top:2px;color:var(--primary)}
+.help strong{color:var(--ink)}
 
-.help{display:flex;gap:12px;margin:0 0 20px;padding:12px;border-radius:12px;background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;font-size:.8rem;line-height:1.5}
-.help .ic{font-size:1.2rem;margin-top:2px}
-
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:12px;padding:13px 18px;font:inherit;font-size:1rem;font-weight:600;cursor:pointer;transition:transform .1s,background .15s}
-.btn:active{transform:scale(.98)}
+/* ปุ่ม — ปุ่มส่งลอยค้างเหนือแถบเมนูล่าง */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:16px;height:52px;padding:0 18px;font:inherit;font-size:1rem;font-weight:600;cursor:pointer;transition:transform .1s,background .15s}
+.btn:active{transform:scale(.97)}
 .btn:focus-visible,.input:focus-visible,.nav a:focus-visible{outline:3px solid #c4b5fd;outline-offset:2px}
 .btn-primary{background:var(--primary);color:#fff;width:100%}
 .btn-primary:hover{background:var(--primary-dark)}
 .btn-primary:disabled{opacity:.55;cursor:not-allowed}
-.btn-ghost{background:#f1f5f9;color:var(--mute)}
+.btn-ghost{background:#eef0f6;color:var(--mute)}
+#submitBtn{position:sticky;bottom:calc(var(--nav) + var(--safe-b) + 12px);z-index:30;display:flex;width:calc(100% - 32px);margin:16px 16px 0;box-shadow:0 8px 20px rgba(90,66,160,.35)}
 .spinner{width:1.1em;height:1.1em;border:2.5px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}
 .lk-loading .spinner{border-color:#cbd5e1;border-top-color:var(--primary)}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -326,40 +343,43 @@ body{margin:0;font-family:'Prompt',system-ui,sans-serif;background:#e2e8f0;color
 .closed .big{display:grid;place-items:center;width:64px;height:64px;margin:0 auto 14px;border-radius:50%;background:#fee2e2;color:#ef4444;font-size:1.8rem}
 .closed h2{margin:0 0 6px;font-size:1.15rem;color:#991b1b}
 .closed p{margin:0 0 14px;font-size:.85rem;color:var(--mute)}
-.closed .when{display:inline-block;padding:8px 14px;border-radius:10px;background:#f8fafc;border:1px solid var(--line);font-size:.85rem;font-weight:600;color:#b91c1c}
-.closed .btn{margin-top:16px;background:none;color:var(--primary);padding:8px}
+.closed .when{display:inline-block;padding:8px 14px;border-radius:12px;background:#f4f5fa;font-size:.85rem;font-weight:600;color:#b91c1c}
+.closed .btn{margin-top:16px;background:none;color:var(--primary);height:auto;padding:8px}
 
-/* เมนูล่าง */
-.nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;height:68px;background:#fff;border-radius:22px 22px 0 0;box-shadow:0 -4px 18px rgba(15,23,42,.06);display:flex;justify-content:space-around;align-items:center;z-index:50}
-.nav a{display:flex;flex-direction:column;align-items:center;gap:3px;width:30%;text-decoration:none;color:#94a3b8;font-size:.7rem;font-weight:600}
-.nav a .ic{font-size:1.35rem}
-.nav a.on{color:var(--primary)}
+/* แถบเมนูล่างแบบ tab bar (เบลอพื้นหลัง รองรับขอบล่างของมือถือ) */
+.nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;height:calc(var(--nav) + var(--safe-b));padding-bottom:var(--safe-b);background:rgba(255,255,255,.92);-webkit-backdrop-filter:saturate(1.8) blur(14px);backdrop-filter:saturate(1.8) blur(14px);border-top:1px solid var(--line);display:flex;align-items:center;z-index:50}
+.nav a{display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;padding:8px 0;text-decoration:none;color:#9aa3b2;font-size:.68rem;font-weight:500}
+.nav a .ic{font-size:1.4rem}
+.nav a:active,.nav a.on{color:var(--primary)}
 
-/* กล่องข้อความ */
-dialog{border:0;border-radius:20px;padding:24px 20px 18px;width:calc(100% - 40px);max-width:340px;text-align:center;color:var(--ink);font-family:inherit;box-shadow:0 20px 50px rgba(15,23,42,.3)}
-dialog::backdrop{background:rgba(15,23,42,.55)}
+/* กล่องข้อความ — เด้งขึ้นจากด้านล่าง (bottom sheet) */
+dialog{border:0;padding:10px 20px calc(18px + var(--safe-b));width:100%;max-width:430px;margin:auto auto 0;border-radius:26px 26px 0 0;background:#fff;text-align:center;color:var(--ink);font-family:inherit;box-shadow:0 -10px 40px rgba(15,23,42,.25)}
+dialog::before{content:'';display:block;width:40px;height:5px;margin:0 auto 16px;border-radius:3px;background:#d4d8e2}
+dialog[open]{animation:sheet .28s cubic-bezier(.16,1,.3,1)}
+dialog::backdrop{background:rgba(15,23,42,.5)}
+@keyframes sheet{from{transform:translateY(100%)}}
 .dlg-icon{display:grid;place-items:center;width:56px;height:56px;margin:0 auto 12px;border-radius:50%;font-size:1.7rem}
 .dlg-icon.success{background:#dcfce7;color:#16a34a}.dlg-icon.error{background:#fee2e2;color:#dc2626}.dlg-icon.warning{background:#fef3c7;color:#d97706}
 dialog h3{margin:0 0 8px;font-size:1.1rem}
 dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
-.sum{margin:0 0 12px;padding:10px 12px;border-radius:12px;background:#f8fafc;text-align:left;font-size:.85rem}
-.sum div{display:flex;justify-content:space-between;gap:12px;padding:3px 0}
+.sum{margin:0 0 12px;padding:10px 14px;border-radius:14px;background:#f4f5fa;text-align:left;font-size:.85rem}
+.sum div{display:flex;justify-content:space-between;gap:12px;padding:4px 0}
 .sum dt{color:var(--mute)}.sum dd{margin:0;font-weight:600;text-align:right}
-.warnbox{margin:0 0 12px;padding:10px 12px;border-radius:12px;background:var(--bad-bg);border:1px solid #fecaca;color:var(--bad);font-size:.8rem;font-weight:600;text-align:left;line-height:1.5}
+.warnbox{margin:0 0 12px;padding:10px 12px;border-radius:14px;background:var(--bad-bg);border:1px solid #fecaca;color:var(--bad);font-size:.8rem;font-weight:600;text-align:left;line-height:1.5}
 .dlg-actions{display:flex;gap:10px;margin-top:6px}
-.dlg-actions .btn{flex:1;padding:11px}
+.dlg-actions .btn{flex:1;height:48px}
 .dlg-actions .btn-primary{width:auto}
 
-/* หน้า loading ครั้งแรก */
-#page-loader{position:fixed;inset:0;z-index:9999;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity .4s,visibility .4s}
+/* หน้า splash ครั้งแรก */
+#page-loader{position:fixed;inset:0;z-index:9999;background:linear-gradient(160deg,var(--primary),var(--primary-dark));display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;transition:opacity .4s,visibility .4s}
 #page-loader.hidden{opacity:0;visibility:hidden}
-#page-loader img{width:76px;height:76px;border-radius:14px}
-#page-loader .ring{width:36px;height:36px;border:4px solid rgba(90,66,160,.2);border-top-color:var(--primary);border-radius:50%;animation:spin 1s linear infinite}
+#page-loader img{width:88px;height:88px;padding:6px;border-radius:22px;background:#fff}
+#page-loader .ring{width:32px;height:32px;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite}
 
-/* ปรากฏทีเดียวตอนเปิดหน้า */
 .hero strong{animation:rise .5s cubic-bezier(.16,1,.3,1) both}
 @keyframes rise{from{opacity:0;transform:translateY(10px)}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
 </style>
 </head>
 <body>
