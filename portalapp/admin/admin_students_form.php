@@ -29,39 +29,48 @@ if ($is_edit) {
 
 // จัดการเมื่อกดปุ่มบันทึก (Submit Form)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $student_code = $_POST['student_code'];
-    $id_card = $_POST['id_card'];
-    $prefix = $_POST['prefix'];
-    $first_name = $_POST['first_name'];
-    $last_name = $_POST['last_name'];
-    $battalion = $_POST['battalion'];
-    $company = $_POST['company'];
-    $platoon = $_POST['platoon'];
-    $section = $_POST['section'];
-    $password = $_POST['password']; // หากใช้ระบบจริง ควรครอบด้วย password_hash()
+    $student_code = trim($_POST['student_code']);
+    $id_card      = trim($_POST['id_card']);
+    $prefix       = trim($_POST['prefix']);
+    $first_name   = trim($_POST['first_name']);
+    $last_name    = trim($_POST['last_name']);
+    $battalion    = trim($_POST['battalion']);
+    $company      = trim($_POST['company']);
+    $platoon      = trim($_POST['platoon']);
+    $section      = trim($_POST['section']);
+    $password     = $_POST['password']; 
 
     if ($is_edit) {
         // อัปเดตข้อมูล (เช็คว่ามีการเปลี่ยนรหัสผ่านหรือไม่)
         if (!empty($password)) {
+            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
             $stmt = $conn->prepare("UPDATE students SET student_code=?, id_card=?, prefix=?, first_name=?, last_name=?, battalion=?, company=?, platoon=?, section=?, password=? WHERE id=?");
-            $stmt->bind_param("ssssssssssi", $student_code, $id_card, $prefix, $first_name, $last_name, $battalion, $company, $platoon, $section, $password, $id);
+            $stmt->bind_param("ssssssssssi", $student_code, $id_card, $prefix, $first_name, $last_name, $battalion, $company, $platoon, $section, $hashed_password, $id);
         } else {
             $stmt = $conn->prepare("UPDATE students SET student_code=?, id_card=?, prefix=?, first_name=?, last_name=?, battalion=?, company=?, platoon=?, section=? WHERE id=?");
             $stmt->bind_param("sssssssssi", $student_code, $id_card, $prefix, $first_name, $last_name, $battalion, $company, $platoon, $section, $id);
         }
     } else {
-        // เพิ่มข้อมูลใหม่
-        $stmt = $conn->prepare("INSERT INTO students (student_code, id_card, prefix, first_name, last_name, battalion, company, platoon, section, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("ssssssssss", $student_code, $id_card, $prefix, $first_name, $last_name, $battalion, $company, $platoon, $section, $password);
+        // เพิ่มข้อมูลใหม่ (ต้องมีรหัสผ่านเสมอ)
+        if (empty($password)) {
+            $error = "กรุณากรอกรหัสผ่านสำหรับนักเรียนใหม่";
+        } else {
+            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+            $stmt = $conn->prepare("INSERT INTO students (student_code, id_card, prefix, first_name, last_name, battalion, company, platoon, section, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->bind_param("ssssssssss", $student_code, $id_card, $prefix, $first_name, $last_name, $battalion, $company, $platoon, $section, $hashed_password);
+        }
     }
     
-    if ($stmt->execute()) {
-        header("Location: admin_students.php");
-        exit();
-    } else {
-        $error = "เกิดข้อผิดพลาด: " . $conn->error;
+    // ดำเนินการคำสั่ง SQL เฉพาะเมื่อไม่มี Error ด้านบน
+    if (!isset($error)) {
+        if ($stmt->execute()) {
+            header("Location: admin_students.php");
+            exit();
+        } else {
+            $error = "เกิดข้อผิดพลาดในการบันทึก: " . $conn->error;
+        }
+        $stmt->close();
     }
-    $stmt->close();
 }
 ?>
 <!DOCTYPE html>
