@@ -58,7 +58,8 @@ $student_unit = !empty($unit_parts) ? implode(" ", $unit_parts) : "นักเ�
 $all_students = [];
 $start_date = "2026-07-06"; // วันเริ่มต้นคำนวณเวรหลักการหมุนเวียน
 try {
-    $res = $conn->query("SELECT student_code, prefix, first_name, last_name, section FROM students ORDER BY id ASC");
+    // ดึงทุกคนรวมคนลาออก (ห้ามลบแถว) เพื่อให้ลำดับเดิมคงอยู่ แล้วใช้ status ตัดสินว่าข้ามหรือไม่
+    $res = $conn->query("SELECT student_code, prefix, first_name, last_name, section, status FROM students ORDER BY id ASC");
     if($res && $res->num_rows > 0) {
         while($row = $res->fetch_assoc()) {
             $all_students[] = $row;
@@ -79,6 +80,45 @@ $thai_months = [
     "09" => "กันยายน", "10" => "ตุลาคม", "11" => "พฤศจิกายน", "12" => "ธันวาคม"
 ];
 $thai_days_short = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
+
+// ---------------- 4.1 สร้างตารางเวรโดยข้ามคนที่ status = 'resigned' ----------------
+// ก่อนวันที่นี้ใช้ลำดับเดิมทั้งหมด (เวรย้อนหลังไม่เปลี่ยน) ตั้งแต่วันนี้เป็นต้นไปข้ามคนลาออก
+$skip_resigned_from = "2026-10-31";
+
+function buildDutySchedule(array $students, string $start_date, string $end_date, string $skip_from, int $per_day = 16): array {
+    $schedule = [];
+    $total = count($students);
+    if ($total === 0) return $schedule;
+
+    $p = 0; // ตัวชี้ลำดับในรายชื่อเต็ม (รวมคนลาออก)
+    $end_ts = strtotime($end_date);
+    for ($ts = strtotime($start_date); $ts <= $end_ts; $ts += 86400) {
+        $date = date('Y-m-d', $ts);
+        $slots = [];
+        for ($i = 0; $i < $per_day; $i++) {
+            $tries = 0;
+            while ($tries < $total) {
+                $s = $students[$p];
+                $p = ($p + 1) % $total;
+                $tries++;
+                $is_resigned = (($s['status'] ?? 'studying') === 'resigned');
+                // ข้ามเฉพาะคนลาออก และเฉพาะวันที่ตั้งแต่ $skip_from เป็นต้นไป
+                if ($is_resigned && $date >= $skip_from) continue;
+                $slots[$i] = $s['student_code'];
+                break;
+            }
+        }
+        $schedule[$date] = $slots;
+    }
+    return $schedule;
+}
+
+$sel_month_tmp = (isset($_GET['month']) && preg_match('/^\d{4}-\d{2}$/', $_GET['month'])) ? $_GET['month'] : date('Y-m');
+$end_calc = max(
+    date('Y-m-d', strtotime('+3 days')),
+    date('Y-m-t', strtotime($sel_month_tmp . '-01'))
+);
+$duty_schedule = buildDutySchedule($all_students, $start_date, $end_calc, $skip_resigned_from);
 
 // ---------------- 5. คำนวณแจ้งเตือนเวรล่วงหน้า 3 วัน (Badge & Modal Alert) ----------------
 $duty_notifications_count = 0;
@@ -124,11 +164,8 @@ try {
             $check_date = date('Y-m-d', $check_ts);
             $diff_days = floor(($check_ts - $start_timestamp) / 86400);
             
-            if ($diff_days >= 0) {
-                $start_index = ($diff_days * 16) % $total_students;
-                for ($i = 0; $i < 16; $i++) {
-                    $idx = ($start_index + $i) % $total_students;
-                    $orig_code = $all_students[$idx]['student_code'];
+            if ($diff_days >= 0 && isset($duty_schedule[$check_date])) {
+                foreach ($duty_schedule[$check_date] as $i => $orig_code) {
                     
                     $swap_key = $check_date . '_' . $orig_code;
                     $has_swap = isset($swaps_upcoming[$swap_key]);
@@ -229,13 +266,9 @@ if ($total_students > 0) {
         $eval_timestamp = strtotime($eval_date);
         $diff_days = floor((($eval_timestamp - $start_timestamp) / 86400));
         
-        if ($diff_days < 0) continue;
+        if ($diff_days < 0 || !isset($duty_schedule[$eval_date])) continue;
         
-        $start_index = ($diff_days * 16) % $total_students;
-        
-        for ($i = 0; $i < 16; $i++) {
-            $idx = ($start_index + $i) % $total_students;
-            $orig_code = $all_students[$idx]['student_code'];
+        foreach ($duty_schedule[$eval_date] as $i => $orig_code) {
             
             $shift_idx = floor($i / $locations_count);
             $loc_idx = $i % $locations_count;
