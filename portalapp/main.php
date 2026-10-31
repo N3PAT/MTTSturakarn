@@ -452,7 +452,7 @@ $profile = [
     </header>
 
     <section class="hero" aria-label="ยินดีต้อนรับ">
-      <div class="hero-badge"><i class="fas fa-shield-alt"></i> ระบบนักเรียน MTTS</div>
+      
       <small>ยินดีต้อนรับ</small>
       <strong>หน้าหลัก</strong>
       <div class="hero-sub">ตรวจสอบสถานะและบริการของคุณได้ที่นี่</div>
