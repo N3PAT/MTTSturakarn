@@ -336,118 +336,121 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#f6f8fc" />
+  <meta name="theme-color" content="#503896" />
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>เวรของฉัน - MTTS</title>
-  
+
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
-  
+
   <style>
-    :root {
-      --primary: #5a42a0;
-      --primary-light: #7a60d8;
-      --secondary: #f43f5e;
-      --bg-color: #f6f8fc;
-      --card-bg: #ffffff;
-      --text-dark: #1e293b;
-      --text-gray: #64748b;
-      --border-light: #e2e8f0;
-      --safe-area-bottom: env(safe-area-inset-bottom, 20px);
-    }
+    :root{--primary:#503896;--bar:#503896;--bg:#f2f3f8;--ink:#1c1b29;--mute:#6b7280;--danger:#ef4444;--g:16px;--nav:64px;--st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px);--shadow:0 1px 2px rgba(20,20,43,.04),0 2px 8px rgba(20,20,43,.04)}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
+    html{-webkit-text-size-adjust:100%}
+    body{font-family:'Prompt',sans-serif;background:#d9dce6;color:var(--ink);display:flex;justify-content:center;min-height:100dvh;-webkit-user-select:none;user-select:none;overscroll-behavior-y:none;touch-action:manipulation;-webkit-font-smoothing:antialiased}
+    ::-webkit-scrollbar{display:none}
+    .app-container{width:100%;max-width:430px;min-height:100dvh;background:var(--bg);padding-bottom:calc(var(--nav) + var(--sb) + 16px)}
+    @media(min-width:431px){.app-container{box-shadow:0 0 40px rgba(15,23,42,.14)}}
 
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
-    body { font-family: 'Prompt', sans-serif; background-color: #e2e8f0; display: flex; justify-content: center; user-select: none; -webkit-font-smoothing: antialiased; }
-    ::-webkit-scrollbar { display: none; }
+    /* animation */
+    .fade-in-up{opacity:0;transform:translateY(14px);animation:fadeInUp .45s cubic-bezier(.16,1,.3,1) forwards}
+    .delay-2{animation-delay:.08s}.delay-3{animation-delay:.16s}.delay-4{animation-delay:.24s}
+    @keyframes fadeInUp{to{opacity:1;transform:none}}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @keyframes pulse{50%{transform:scale(1.05)}}
+    @keyframes ring{0%,100%{transform:rotate(0)}10%,30%,50%{transform:rotate(-15deg)}20%,40%{transform:rotate(15deg)}}
+    @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.fade-in-up,.duty-row{opacity:1;transform:none}}
 
-    #page-loader { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #ffffff; z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 0.5s ease, visibility 0.5s ease; }
-    #page-loader.hidden { opacity: 0; visibility: hidden; }
-    .loader-logo { width: 80px; height: 80px; border-radius: 15px; animation: pulse 1.5s infinite ease-in-out; }
-    .loader-spinner { margin-top: 20px; width: 40px; height: 40px; border: 4px solid rgba(90, 66, 160, 0.2); border-top: 4px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
-    .loader-text { margin-top: 15px; color: var(--primary); font-weight: 600; font-size: 0.9rem; letter-spacing: 1px; animation: flash 1.5s infinite; }
+    /* splash */
+    #page-loader{position:fixed;inset:0;z-index:9999;background:linear-gradient(160deg,#503896,#3d2b78);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;transition:opacity .5s,visibility .5s}
+    #page-loader.hidden{opacity:0;visibility:hidden}
+    .loader-logo{width:88px;height:88px;padding:6px;border-radius:22px;background:#fff;animation:pulse 1.5s infinite ease-in-out}
+    .loader-spinner{width:34px;height:34px;border-radius:50%;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}
+    .loader-text{color:rgba(255,255,255,.85);font-size:.85rem;font-weight:500}
 
-    @keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(90, 66, 160, 0.4); } 50% { transform: scale(1.05); box-shadow: 0 0 20px 0 rgba(90, 66, 160, 0); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(90, 66, 160, 0); } }
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    @keyframes flash { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    /* app bar */
+    .top-header{position:sticky;top:0;z-index:40;display:flex;align-items:center;justify-content:space-between;padding:calc(10px + var(--st)) var(--g) 10px;background:rgba(80,56,150,.94);-webkit-backdrop-filter:saturate(180%) blur(14px);backdrop-filter:saturate(180%) blur(14px);color:#fff}
+    .header-left{display:flex;align-items:center;gap:12px;min-width:0}
+    .school-logo{width:40px;height:40px;flex:none;border-radius:50%;object-fit:contain;background:#fff;padding:2px}
+    .school-name{min-width:0}
+    .school-name h1{font-size:.95rem;font-weight:600;line-height:1.25}
+    .school-name p{font-size:.72rem;opacity:.8}
+    .noti-btn{position:relative;flex:none;display:flex;align-items:center;justify-content:center;width:40px;height:40px;border:0;border-radius:50%;background:rgba(255,255,255,.16);color:#fff;font-size:1.15rem;cursor:pointer;transition:transform .12s}
+    .noti-btn:active{transform:scale(.92)}
+    .noti-badge{position:absolute;top:-2px;right:-2px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:var(--danger);color:#fff;font-size:.65rem;font-weight:700;border:2px solid var(--bar);display:flex;align-items:center;justify-content:center}
 
-    .fade-in-up { opacity: 0; transform: translateY(20px); animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-    @keyframes fadeInUp { to { opacity: 1; transform: translateY(0); } }
-    .delay-1 { animation-delay: 0.1s; } .delay-2 { animation-delay: 0.2s; } .delay-3 { animation-delay: 0.3s; } .delay-4 { animation-delay: 0.4s; }
+    /* student row */
+    .student-card{display:flex;align-items:center;gap:14px;margin:16px var(--g) 14px;padding:16px;border-radius:20px;background:#fff;box-shadow:var(--shadow);color:inherit;text-decoration:none;transition:transform .12s}
+    .student-card:active{transform:scale(.98)}
+    .student-info{flex:1;min-width:0}
+    .student-info h2{font-size:1.05rem;font-weight:600;line-height:1.3}
+    .student-info p{margin:2px 0 8px;font-size:.8rem;color:var(--mute)}
+    .badges{display:flex;flex-wrap:wrap;gap:6px}
+    .badge-item{padding:3px 10px;border-radius:20px;font-size:.7rem;font-weight:500;background:#efeaf9;color:var(--primary)}
+    .student-chevron{flex:none;color:#c3c7d4;font-size:.9rem}
 
-    .app-container { width: 100%; max-width: 430px; background-color: var(--bg-color); min-height: 100vh; position: relative; padding-bottom: calc(90px + var(--safe-area-bottom)); box-shadow: 0 0 20px rgba(0,0,0,0.1); overflow-x: hidden; overflow-y: auto; }
-    .top-header { display: flex; align-items: center; justify-content: space-between; padding: 15px 20px; background: var(--bg-color); }
-    .header-left { display: flex; align-items: center; gap: 12px; }
-    .school-logo { width: 45px; height: 45px; object-fit: contain; border-radius: 10px; }
-    .school-name h1 { font-size: 1rem; font-weight: 700; color: var(--text-dark); margin: 0 0 2px 0; }
-    .school-name p { font-size: 0.75rem; color: var(--text-gray); margin: 0; }
-    .noti-btn { position: relative; background: none; border: none; font-size: 1.4rem; color: #94a3b8; cursor: pointer; }
-    .noti-badge { position: absolute; top: -2px; right: -2px; background: #ef4444; color: white; font-size: 0.65rem; font-weight: 700; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid var(--bg-color); }
+    /* month navigator */
+    .month-navigator{display:flex;align-items:center;justify-content:space-between;margin:0 var(--g) 20px;padding:6px;border-radius:18px;background:#fff;box-shadow:var(--shadow)}
+    .nav-btn{display:flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:12px;background:var(--bg);color:var(--ink);text-decoration:none;transition:transform .12s}
+    .nav-btn:active{transform:scale(.9)}
+    .month-info{position:relative;flex:1;text-align:center}
+    .month-info h3{font-size:.95rem;font-weight:700}
+    .duty-count{display:inline-block;margin-bottom:2px;padding:2px 10px;border-radius:10px;background:#efeaf9;color:var(--primary);font-size:.7rem;font-weight:600}
+    .hidden-month-input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
 
-    .student-card { background: var(--primary); border-radius: 16px; padding: 20px; margin: 5px 20px 20px; color: white; box-shadow: 0 10px 20px rgba(90, 66, 160, 0.2); }
-    .badges { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
-    .badge-item { background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.4); padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 500; backdrop-filter: blur(4px); }
-    .student-card h2 { font-size: 1.3rem; font-weight: 600; margin: 0 0 4px 0; }
-    .student-card p { font-size: 0.85rem; margin: 0; opacity: 0.9; }
+    /* section title */
+    .section-title{margin:0 calc(var(--g) + 4px) 8px}
+    .section-title h2{font-size:.8rem;font-weight:600;letter-spacing:.02em;color:var(--mute)}
 
-    .month-navigator { display: flex; align-items: center; justify-content: space-between; background: var(--card-bg); margin: 0 20px 20px; padding: 8px; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
-    .nav-btn { width: 42px; height: 42px; border-radius: 12px; background: var(--bg-color); display: flex; align-items: center; justify-content: center; color: var(--text-dark); text-decoration: none; transition: all 0.2s; }
-    .nav-btn:active { transform: scale(0.9); background: #e2e8f0; }
-    .month-info { text-align: center; flex: 1; position: relative; }
-    .month-info h3 { font-size: 0.95rem; color: var(--text-dark); font-weight: 700; }
-    .duty-count { font-size: 0.7rem; color: var(--primary); background: #f3e8ff; padding: 2px 10px; border-radius: 10px; display: inline-block; margin-bottom: 4px; font-weight: 600; }
-    .hidden-month-input { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+    /* duty list: grouped list */
+    .duty-container{margin:0 var(--g);border-radius:20px;background:#fff;box-shadow:var(--shadow);overflow:hidden}
+    .duty-row{display:flex;align-items:center;gap:14px;padding:14px;opacity:0;transform:translateY(12px);animation:fadeInUp .45s cubic-bezier(.16,1,.3,1) forwards}
+    .duty-row+.duty-row{border-top:1px solid #eef0f5}
+    .duty-date-box{flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;width:56px;padding:9px 0;border-radius:14px;background:#efeaf9;color:var(--primary);text-align:center}
+    .duty-date-box .day-num{font-size:1.25rem;font-weight:700;line-height:1}
+    .duty-date-box .day-name{margin-top:4px;font-size:.62rem;font-weight:600}
+    .duty-details{flex:1;min-width:0}
+    .tags{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:6px}
+    .tag{padding:2px 10px;border-radius:8px;font-size:.68rem;font-weight:600}
+    .tag.shift{background:#ecfdf5;color:#059669}
+    .tag.normal{background:#e0f2fe;color:#0284c7}
+    .tag.substitute{background:#fef3c7;color:#b45309}
+    .tag.replaced{background:#f1f5f9;color:var(--mute);text-decoration:line-through}
+    .location-name{display:flex;align-items:center;gap:6px;font-size:.92rem;font-weight:600}
+    .location-name i{color:var(--danger);font-size:.85rem}
+    .duty-note{margin-top:3px;font-size:.74rem;color:var(--mute)}
+    .full-date-text{margin-top:2px;font-size:.72rem;color:var(--mute)}
 
-    .section-title { display: flex; align-items: center; justify-content: space-between; margin: 0 20px 15px; }
-    .title-left { display: flex; align-items: center; gap: 10px; }
-    .section-pill { width: 5px; height: 24px; background: var(--primary); border-radius: 4px; }
-    .section-title h3 { font-size: 1.1rem; font-weight: 700; color: var(--text-dark); margin: 0; }
+    .empty-state{display:flex;flex-direction:column;align-items:center;padding:44px 20px;text-align:center}
+    .empty-icon{display:grid;place-items:center;width:64px;height:64px;margin-bottom:12px;border-radius:50%;background:#f1f2f8}
+    .empty-icon i{font-size:1.6rem;color:#c3c7d4}
+    .empty-state h4{margin-bottom:4px;font-size:.95rem}
+    .empty-state p{font-size:.78rem;color:var(--mute)}
 
-    .duty-container { padding: 0 20px; display: flex; flex-direction: column; gap: 12px; }
-    .duty-item-card { background: var(--card-bg); border-radius: 16px; padding: 14px; display: flex; align-items: center; gap: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.03); position: relative; overflow: hidden; animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; transform: translateY(20px); }
-    .duty-item-card::before { content: ''; position: absolute; left: 0; top: 0; height: 100%; width: 4px; background: var(--primary); }
-    @keyframes slideUp { to { opacity: 1; transform: translateY(0); } }
-    .duty-date-box { background: #f3e8ff; color: var(--primary); border-radius: 12px; padding: 10px; text-align: center; min-width: 60px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-    .duty-date-box .day-num { font-size: 1.3rem; font-weight: 700; line-height: 1; }
-    .duty-date-box .day-name { font-size: 0.65rem; font-weight: 600; margin-top: 4px; text-transform: uppercase; }
-    .duty-details { flex-grow: 1; }
-    .shift-badge { display: inline-block; background: #ecfdf5; color: #10b981; padding: 3px 10px; border-radius: 8px; font-size: 0.7rem; font-weight: 600; margin-bottom: 6px; }
-    
-    .type-badge { display: inline-block; padding: 3px 10px; border-radius: 8px; font-size: 0.7rem; font-weight: 600; margin-bottom: 6px; }
-    .type-badge.normal { background: #e0f2fe; color: #0284c7; }
-    .type-badge.substitute { background: #fef3c7; color: #d97706; }
-    .type-badge.replaced { background: #f1f5f9; color: #64748b; text-decoration: line-through; }
-    
-    .location-name { font-weight: 600; color: var(--text-dark); font-size: 0.95rem; display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
-    .location-name i { color: var(--secondary); font-size: 0.9rem; }
-    .full-date-text { color: var(--text-gray); font-size: 0.75rem; }
+    /* bottom nav สีม่วง */
+    .bottom-nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);z-index:1000;width:100%;max-width:430px;height:calc(var(--nav) + var(--sb));padding-bottom:var(--sb);display:flex;align-items:center;background:var(--bar);box-shadow:0 -4px 18px rgba(20,20,43,.18)}
+    .nav-link{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;color:rgba(255,255,255,.6);font-size:.7rem;font-weight:500;text-decoration:none}
+    .nav-link i{display:grid;place-items:center;width:56px;height:30px;border-radius:15px;font-size:1.2rem;transition:background .2s}
+    .nav-link.active{color:#fff;font-weight:600}
+    .nav-link.active i{background:rgba(255,255,255,.2)}
+    .nav-link:active{color:#fff}
 
-    .empty-state { background: transparent; padding: 40px 20px; text-align: center; display: flex; flex-direction: column; align-items: center; }
-    .empty-icon { width: 70px; height: 70px; background: var(--card-bg); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-    .empty-icon i { font-size: 1.8rem; color: #cbd5e1; }
-    .empty-state h4 { font-size: 1rem; color: var(--text-dark); margin-bottom: 5px; }
-    .empty-state p { font-size: 0.8rem; color: var(--text-gray); }
-
-    .bottom-nav { position: fixed; bottom: 0; width: 100%; max-width: 430px; left: 50%; transform: translateX(-50%); height: 70px; background: white; border-top-left-radius: 25px; border-top-right-radius: 25px; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 -5px 20px rgba(0,0,0,0.03); padding: 0 10px; z-index: 1000; }
-    .nav-link { display: flex; flex-direction: column; align-items: center; text-decoration: none; color: #94a3b8; font-size: 0.7rem; font-weight: 600; width: 30%; gap: 4px; }
-    .nav-link.active { color: var(--primary); }
-    .nav-link i { font-size: 1.3rem; }
-
-    .alert-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(3px); z-index: 10000; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: all 0.3s ease; }
-    .alert-overlay.show { opacity: 1; visibility: visible; }
-    .alert-modal { background: white; width: 85%; max-width: 350px; border-radius: 20px; padding: 25px 20px; text-align: center; box-shadow: 0 15px 30px rgba(0,0,0,0.2); transform: scale(0.8); transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-    .alert-overlay.show .alert-modal { transform: scale(1); }
-    .alert-icon-container { width: 60px; height: 60px; background: #ffe4e6; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; }
-    .alert-icon-container i { font-size: 1.8rem; color: var(--secondary); animation: ring 2s infinite ease-in-out; }
-    @keyframes ring { 0%, 100% { transform: rotate(0); } 10%, 30%, 50% { transform: rotate(-15deg); } 20%, 40% { transform: rotate(15deg); } }
-    .alert-title { font-size: 1.2rem; font-weight: 700; color: var(--text-dark); margin-bottom: 15px; }
-    .alert-content { text-align: left; background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 20px; max-height: 200px; overflow-y: auto; }
-    .alert-item { padding: 8px 0; border-bottom: 1px dashed #cbd5e1; }
-    .alert-item:last-child { border-bottom: none; }
-    .alert-time { color: var(--secondary); font-weight: 700; font-size: 0.95rem; }
-    .alert-detail { font-size: 0.85rem; color: var(--text-dark); margin-top: 4px; }
-    .alert-btn { background: var(--primary); color: white; border: none; width: 100%; padding: 12px; border-radius: 12px; font-size: 1rem; font-weight: 600; font-family: inherit; cursor: pointer; box-shadow: 0 4px 10px rgba(90, 66, 160, 0.3); }
-    .alert-btn:active { transform: scale(0.98); }
+    /* duty alert modal */
+    .alert-overlay{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);opacity:0;visibility:hidden;transition:all .3s ease}
+    .alert-overlay.show{opacity:1;visibility:visible}
+    .alert-modal{width:85%;max-width:350px;padding:24px 20px 20px;border-radius:24px;background:#fff;text-align:center;box-shadow:0 15px 30px rgba(0,0,0,.2);transform:scale(.85);transition:transform .3s cubic-bezier(.175,.885,.32,1.275)}
+    .alert-overlay.show .alert-modal{transform:scale(1)}
+    .alert-icon-container{display:grid;place-items:center;width:56px;height:56px;margin:0 auto 12px;border-radius:50%;background:#fee2e2}
+    .alert-icon-container i{font-size:1.6rem;color:var(--danger);animation:ring 2s infinite ease-in-out}
+    .alert-title{margin-bottom:14px;font-size:1.1rem;font-weight:700}
+    .alert-content{max-height:200px;margin-bottom:18px;padding:4px 14px;border-radius:14px;background:#f6f7fb;text-align:left;overflow-y:auto}
+    .alert-item{padding:10px 0;border-bottom:1px solid #e8eaf2}
+    .alert-item:last-child{border-bottom:0}
+    .alert-time{font-size:.92rem;font-weight:700;color:var(--danger)}
+    .alert-detail{margin-top:4px;font-size:.82rem}
+    .alert-btn{width:100%;padding:12px;border:0;border-radius:14px;background:var(--primary);color:#fff;font-family:inherit;font-size:1rem;font-weight:600;cursor:pointer;transition:transform .12s}
+    .alert-btn:active{transform:scale(.97)}
   </style>
 </head>
 <body>
@@ -461,111 +464,105 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
   <?php endif; ?>
 
   <div class="app-container">
-    <div class="top-header fade-in-up delay-1">
+
+    <header class="top-header">
       <div class="header-left">
         <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg" alt="Logo" class="school-logo">
         <div class="school-name">
-          <h1>ระบบบริการสารสนเทศ กองพันนักเรียนที่ 1</h1>
+          <h1>กองพันนักเรียนที่ 1</h1>
           <p>โรงเรียนช่างฝีมือทหาร</p>
         </div>
       </div>
-      <button class="noti-btn">
+      <button class="noti-btn" type="button" aria-label="การแจ้งเตือน">
         <i class="far fa-bell"></i>
         <?php if ($noti_count > 0): ?>
-          <span class="noti-badge"><?= $noti_count ?></span>
+          <span class="noti-badge"><?= (int)$noti_count ?></span>
         <?php endif; ?>
       </button>
-    </div>
+    </header>
 
-    <div class="student-card fade-in-up delay-2">
-      <div class="badges">
-        <div class="badge-item">ปีการศึกษา 2569</div>
-        <div class="badge-item"><?= htmlspecialchars($student_unit) ?></div>
-      </div>
-      <h2><?= htmlspecialchars($name) ?></h2>
-      <p><?= htmlspecialchars($student_code_display) ?></p>
-    </div>
-
-    <div class="month-navigator fade-in-up delay-3">
-      <a href="?month=<?= htmlspecialchars($prev_month); ?>" class="nav-btn">
-        <i class="fas fa-chevron-left"></i>
-      </a>
-      
-      <div class="month-info">
-        <div class="duty-count">รวมเวร <?= count($my_monthly_duties); ?> วัน</div>
-        <h3><?= $month_display_text; ?> <i class="fas fa-caret-down" style="font-size:0.8rem; margin-left:4px; opacity:0.5;"></i></h3>
-        
-        <form action="" method="GET">
-          <input type="month" name="month" class="hidden-month-input" value="<?= htmlspecialchars($selected_month) ?>" onchange="this.form.submit()">
-        </form>
-      </div>
-
-      <a href="?month=<?= htmlspecialchars($next_month); ?>" class="nav-btn">
-        <i class="fas fa-chevron-right"></i>
-      </a>
-    </div>
-
-    <div class="section-title fade-in-up delay-4">
-      <div class="title-left">
-        <div class="section-pill"></div>
-        <h3>ตารางปฏิบัติหน้าที่</h3>
-      </div>
-      <i class="fas fa-sliders-h" style="font-size: 0.9rem; color: #94a3b8;"></i>
-    </div>
-
-    <div class="duty-container fade-in-up delay-4">
-      <?php if (!empty($my_monthly_duties)): ?>
-        <?php foreach ($my_monthly_duties as $index =>$duty): ?>
-          <div class="duty-item-card" style="animation-delay: <?= 0.4 + ($index * 0.08) ?>s;">
-            <div class="duty-date-box">
-              <div class="day-num"><?= sprintf("%02d", $duty['day_num']); ?></div>
-              <div class="day-name"><?= $duty['day_name']; ?></div>
-            </div>
-            <div class="duty-details">
-              <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
-                <span class="type-badge <?= htmlspecialchars($duty['duty_type']); ?>">
-                  <?= htmlspecialchars($duty['duty_type_label']); ?>
-                </span>
-                <span class="shift-badge"><?= htmlspecialchars($duty['shift']); ?></span>
-              </div>
-              <div class="location-name">
-                <i class="fas fa-map-marker-alt"></i> 
-                <?= htmlspecialchars($duty['location']); ?>
-              </div>
-              <?php if (!empty($duty['note'])): ?>
-                <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 4px;">
-                  <i class="fas fa-user-friends"></i> <?= htmlspecialchars($duty['note']); ?>
-                </div>
-              <?php endif; ?>
-              <div class="full-date-text">
-                วันที่ <?= $duty['day_num']; ?> <?=$month_display_text; ?>
-              </div>
-            </div>
+    <main>
+      <a href="profile.php" class="student-card fade-in-up delay-2" aria-label="โปรไฟล์ของฉัน">
+        <div class="student-info">
+          <h2><?= htmlspecialchars($name) ?></h2>
+          <p><?= htmlspecialchars($student_code_display) ?></p>
+          <div class="badges">
+            <div class="badge-item"><?= htmlspecialchars($student_unit) ?></div>
+            <div class="badge-item">ปีการศึกษา 2569</div>
           </div>
-        <?php endforeach; ?>
-      <?php else: ?>
-        <div class="empty-state">
-          <div class="empty-icon">
-            <i class="fas fa-calendar-check"></i>
-          </div>
-          <h4>ไม่มีรายการเข้าเวร</h4>
-          <p>คุณไม่มีรายชื่อปฏิบัติหน้าที่ในเดือน <?= $month_display_text; ?></p>
         </div>
-      <?php endif; ?>
-    </div>
+        <i class="fas fa-chevron-right student-chevron" aria-hidden="true"></i>
+      </a>
 
-    <div class="bottom-nav">
-      <a href="main.php" class="nav-link">
-        <i class="fas fa-home"></i>
-        <span>หน้าหลัก</span>
-      </a>
-      <a href="duty.php" class="nav-link active">
-        <i class="fas fa-calendar-alt"></i>
-        <span>เวรของฉัน</span>
-      </a>
-    </div>
+      <div class="month-navigator fade-in-up delay-3">
+        <a href="?month=<?= htmlspecialchars($prev_month); ?>" class="nav-btn" aria-label="เดือนก่อนหน้า">
+          <i class="fas fa-chevron-left"></i>
+        </a>
+
+        <div class="month-info">
+          <div class="duty-count">รวมเวร <?= count($my_monthly_duties); ?> วัน</div>
+          <h3><?= $month_display_text; ?> <i class="fas fa-caret-down" style="font-size:.8rem;margin-left:4px;opacity:.5;"></i></h3>
+
+          <form action="" method="GET">
+            <input type="month" name="month" class="hidden-month-input" value="<?= htmlspecialchars($selected_month) ?>" onchange="this.form.submit()">
+          </form>
+        </div>
+
+        <a href="?month=<?= htmlspecialchars($next_month); ?>" class="nav-btn" aria-label="เดือนถัดไป">
+          <i class="fas fa-chevron-right"></i>
+        </a>
+      </div>
+
+      <section class="fade-in-up delay-4">
+        <div class="section-title"><h2>ตารางปฏิบัติหน้าที่</h2></div>
+
+        <div class="duty-container">
+          <?php if (!empty($my_monthly_duties)): ?>
+            <?php foreach ($my_monthly_duties as $index => $duty): ?>
+              <div class="duty-row" style="animation-delay: <?= min(0.25 + ($index * 0.05), 0.8) ?>s;">
+                <div class="duty-date-box">
+                  <div class="day-num"><?= sprintf("%02d", $duty['day_num']); ?></div>
+                  <div class="day-name"><?= htmlspecialchars($duty['day_name']); ?></div>
+                </div>
+                <div class="duty-details">
+                  <div class="tags">
+                    <span class="tag <?= htmlspecialchars($duty['duty_type']); ?>"><?= htmlspecialchars($duty['duty_type_label']); ?></span>
+                    <span class="tag shift"><?= htmlspecialchars($duty['shift']); ?></span>
+                  </div>
+                  <div class="location-name">
+                    <i class="fas fa-map-marker-alt"></i>
+                    <?= htmlspecialchars($duty['location']); ?>
+                  </div>
+                  <?php if (!empty($duty['note'])): ?>
+                    <div class="duty-note"><i class="fas fa-user-friends"></i> <?= htmlspecialchars($duty['note']); ?></div>
+                  <?php endif; ?>
+                  <div class="full-date-text">วันที่ <?= $duty['day_num']; ?> <?= $month_display_text; ?></div>
+                </div>
+              </div>
+            <?php endforeach; ?>
+          <?php else: ?>
+            <div class="empty-state">
+              <div class="empty-icon"><i class="fas fa-calendar-check"></i></div>
+              <h4>ไม่มีรายการเข้าเวร</h4>
+              <p>คุณไม่มีรายชื่อปฏิบัติหน้าที่ในเดือน <?= $month_display_text; ?></p>
+            </div>
+          <?php endif; ?>
+        </div>
+      </section>
+    </main>
 
   </div>
+
+  <nav class="bottom-nav" aria-label="เมนูหลัก">
+    <a href="main.php" class="nav-link">
+      <i class="fas fa-home"></i>
+      <span>หน้าหลัก</span>
+    </a>
+    <a href="duty.php" class="nav-link active">
+      <i class="fas fa-calendar-alt"></i>
+      <span>เวรของฉัน</span>
+    </a>
+  </nav>
 
   <div id="dutyAlertOverlay" class="alert-overlay">
     <div class="alert-modal">
@@ -583,7 +580,7 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
 
     document.addEventListener("DOMContentLoaded", function() {
       const loader = document.getElementById('page-loader');
-      
+
       function checkAndShowAlert() {
         if (upcomingAlerts && upcomingAlerts.length > 0 && !sessionStorage.getItem('duty_alert_shown')) {
           let contentHtml = '';
@@ -600,7 +597,7 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
           });
 
           document.getElementById('alertContentBox').innerHTML = contentHtml;
-          
+
           setTimeout(() => {
             document.getElementById('dutyAlertOverlay').classList.add('show');
           }, 500);
@@ -617,6 +614,13 @@ $next_month = date('Y-m', strtotime($first_day_of_month . ' +1 month'));
         }, 1200);
       } else {
         checkAndShowAlert();
+      }
+
+      // สั่นเบาๆ ตอนแตะ (Android)
+      if (navigator.vibrate) {
+        document.addEventListener('click', function(ev) {
+          if (ev.target.closest('a, button')) navigator.vibrate(8);
+        });
       }
     });
 
