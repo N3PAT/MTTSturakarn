@@ -276,7 +276,10 @@ try {
     die('เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง');
 }
 
-$alerts     = build_alerts($today_disc, $has_voted, $duties);
+$alerts     = array_values(array_filter(
+    build_alerts($today_disc, $has_voted, $duties),
+    fn($a) => $a['type'] !== 'success' // ซ่อนรายการ 'ปกติ' แสดงเฉพาะที่ต้องทำ
+));
 $news_items = build_news_items($announcements);
 
 $noti_count = count($duties)
@@ -302,13 +305,13 @@ $profile = [
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    :root{--primary:#503896;--bar:#503896;--bg:#f2f3f8;--ink:#1c1b29;--mute:#6b7280;--faint:#94a3b8;--danger:#ef4444;--warning:#f59e0b;--success:#10b981;--g:16px;--nav:64px;--st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px);--shadow:0 1px 2px rgba(20,20,43,.05),0 4px 14px rgba(20,20,43,.05)}
+    :root{--primary:#503896;--bar:#503896;--bg:#f2f3f8;--ink:#1c1b29;--mute:#6b7280;--faint:#94a3b8;--danger:#ef4444;--warning:#f59e0b;--success:#10b981;--g:16px;--nav:64px;--st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px);--shadow:0 1px 2px rgba(20,20,43,.04),0 2px 8px rgba(20,20,43,.04)}
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html{-webkit-text-size-adjust:100%}
     body{margin:0;font-family:'Prompt',sans-serif;background:#d9dce6;color:var(--ink);display:flex;justify-content:center;min-height:100dvh;-webkit-user-select:none;user-select:none;overscroll-behavior-y:none;touch-action:manipulation}
     .app-container{width:100%;max-width:430px;min-height:100dvh;background:var(--bg);padding-bottom:calc(var(--nav) + var(--sb) + 16px)}
     @media(min-width:431px){.app-container{box-shadow:0 0 40px rgba(15,23,42,.14)}}
-    .section{margin-bottom:22px}
+    .section{margin-bottom:20px}
     .section-title{margin:0 var(--g) 12px}
     .section-title h2{margin:0;font-size:1rem;font-weight:700}
 
@@ -326,7 +329,7 @@ $profile = [
     .loader-logo{width:88px;height:88px;padding:6px;border-radius:22px;background:#fff;animation:pulse 1.5s infinite ease-in-out}
     .loader-spinner{width:34px;height:34px;border-radius:50%;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}
 
-    /* app bar + hero */
+    /* app bar */
     .top-header{position:sticky;top:0;z-index:40;display:flex;align-items:center;justify-content:space-between;padding:calc(10px + var(--st)) var(--g) 10px;background:var(--bar);color:#fff}
     .header-left{display:flex;align-items:center;gap:12px}
     .school-logo{width:40px;height:40px;border-radius:50%;object-fit:contain;background:#fff;padding:2px}
@@ -335,36 +338,19 @@ $profile = [
     .noti-btn{position:relative;display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.16);color:#fff;font-size:1.15rem;text-decoration:none;transition:transform .12s}
     .noti-btn:active{transform:scale(.92)}
     .noti-badge{position:absolute;top:-2px;right:-2px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:var(--danger);color:#fff;font-size:.65rem;font-weight:700;border:2px solid var(--bar);display:flex;align-items:center;justify-content:center}
-    .hero{background:var(--bar);color:#fff;padding:4px 20px 58px;border-radius:0 0 28px 28px}
-    .hero-badge{display:inline-flex;align-items:center;gap:6px;margin-bottom:12px;padding:5px 11px;border-radius:999px;background:rgba(255,255,255,.16);font-size:.72rem;font-weight:500}
-    .hero small{display:block;font-size:.8rem;opacity:.8}
-    .hero strong{display:block;margin:2px 0 6px;font-size:1.5rem;font-weight:700;line-height:1.3}
-    .hero-sub{font-size:.78rem;opacity:.8}
-
-    /* student card (พื้นหลังเคลื่อนไหวเดิม) */
-    .student-card{position:relative;overflow:hidden;display:flex;align-items:center;gap:15px;margin:-38px var(--g) 22px;padding:20px;border-radius:24px;color:#fff;border:1px solid rgba(255,255,255,.18);background:#503896;box-shadow:0 12px 28px rgba(80,56,150,.3)}
-    .card-bg{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden;background:linear-gradient(120deg,#503896,#6366f1,#7c5dfa,#4f46e5,#503896);background-size:300% 300%;animation:cardGradient 10s ease-in-out infinite}
-    .card-bg span{position:absolute;border-radius:50%;will-change:transform;background:radial-gradient(circle,rgba(255,255,255,.28),rgba(255,255,255,0) 70%)}
-    .card-bg span:nth-child(1){width:130px;height:130px;top:-45px;right:-25px;animation:orbA 7s ease-in-out infinite}
-    .card-bg span:nth-child(2){width:100px;height:100px;bottom:-40px;left:32%;animation:orbB 9s ease-in-out infinite}
-    .card-bg span:nth-child(3){width:70px;height:70px;top:25%;left:-20px;animation:orbC 11s ease-in-out infinite}
-    .student-card::after{content:'';position:absolute;inset:0;z-index:0;pointer-events:none;background:linear-gradient(115deg,transparent 35%,rgba(255,255,255,.18) 50%,transparent 65%);transform:translateX(-120%);animation:shine 6s ease-in-out infinite}
-    @keyframes cardGradient{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
-    @keyframes orbA{50%{transform:translate(-25px,22px) scale(1.15)}}
-    @keyframes orbB{50%{transform:translate(30px,-18px) scale(.9)}}
-    @keyframes orbC{50%{transform:translate(22px,14px) scale(1.2)}}
-    @keyframes shine{0%,55%{transform:translateX(-120%)}100%{transform:translateX(120%)}}
-    .profile-img{z-index:1;width:70px;height:70px;border-radius:50%;object-fit:cover;background:#fff;border:3px solid rgba(255,255,255,.4)}
-    .student-info{z-index:1;flex:1;min-width:0}
-    .student-info h2{margin:0 0 4px;font-size:1.15rem;font-weight:600;line-height:1.25}
-    .student-info p{margin:0 0 8px;font-size:.85rem;opacity:.9}
+    /* student card: การ์ดขาวเรียบ */
+    .student-card{display:flex;align-items:center;gap:14px;margin:16px var(--g) 20px;padding:16px;border-radius:20px;background:#fff;box-shadow:var(--shadow)}
+    .profile-img{width:64px;height:64px;flex:none;border-radius:50%;object-fit:cover;background:#eef0f6;border:2px solid #e5e7f0}
+    .student-info{flex:1;min-width:0}
+    .student-info h2{margin:0 0 2px;font-size:1.05rem;font-weight:600;line-height:1.3}
+    .student-info p{margin:0 0 8px;font-size:.8rem;color:var(--mute)}
     .badges{display:flex;flex-wrap:wrap;gap:6px}
-    .badge-item{padding:3px 10px;border-radius:20px;font-size:.7rem;font-weight:500;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3)}
-    .badge-item.badge-danger{background:var(--danger);border-color:#f87171}
+    .badge-item{padding:3px 10px;border-radius:20px;font-size:.7rem;font-weight:500;background:#efeaf9;color:var(--primary)}
+    .badge-item.badge-danger{background:#fee2e2;color:var(--danger)}
 
     /* alerts */
-    .alert-list{display:flex;flex-direction:column;gap:12px;margin:0 var(--g)}
-    .alert-card{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;padding:16px;border-radius:18px;background:#fff;box-shadow:var(--shadow);transition:transform .12s}
+    .alert-list{display:flex;flex-direction:column;gap:10px;margin:0 var(--g)}
+    .alert-card{position:relative;overflow:hidden;display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:16px;background:#fff;box-shadow:var(--shadow);transition:transform .12s}
     .alert-card:active{transform:scale(.98)}
     .alert-card::before{content:'';position:absolute;left:0;top:0;width:5px;height:100%}
     .urgent::before{background:var(--danger)}.warning::before{background:var(--warning)}.success::before{background:var(--success)}
@@ -379,7 +365,7 @@ $profile = [
     /* บริการระบบ: การ์ดขาว + ไอคอนแอปแบบภาพ SVG (จับคู่ตามลิงก์) */
     .menu-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px 4px;margin:0 var(--g);padding:18px 8px;background:#fff;border-radius:20px;box-shadow:var(--shadow)}
     .menu-item{display:flex;flex-direction:column;align-items:center;text-align:center;color:var(--ink);text-decoration:none}
-    .icon-box{width:58px;height:58px;margin-bottom:8px;border-radius:18px;background:#e2e8f0 center/cover no-repeat;box-shadow:0 4px 10px rgba(20,20,43,.12);transition:transform .12s}
+    .icon-box{width:58px;height:58px;margin-bottom:8px;border-radius:18px;background:#e2e8f0 center/cover no-repeat;box-shadow:0 2px 6px rgba(20,20,43,.1);transition:transform .12s}
     .menu-item:active .icon-box{transform:scale(.9)}
     .icon-box i{display:none}
     .menu-text{font-size:.72rem;font-weight:600;line-height:1.3}
@@ -451,16 +437,8 @@ $profile = [
       </a>
     </header>
 
-    <section class="hero" aria-label="ยินดีต้อนรับ">
-      
-      <small>ยินดีต้อนรับ</small>
-      <strong>หน้าหลัก</strong>
-      <div class="hero-sub">ตรวจสอบสถานะและบริการของคุณได้ที่นี่</div>
-    </section>
-
     <main>
       <section class="student-card fade-in-up delay-2" aria-label="ข้อมูลนักเรียน">
-        <div class="card-bg" aria-hidden="true"><span></span><span></span><span></span></div>
         <img src="<?= e($profile['image']) ?>" alt="Profile" class="profile-img">
         <div class="student-info">
           <h2><?= e($profile['name']) ?></h2>
@@ -474,6 +452,7 @@ $profile = [
         </div>
       </section>
 
+      <?php if ($alerts): ?>
       <section class="section fade-in-up delay-3">
         <div class="section-title"><h2>การแจ้งเตือนของฉัน</h2></div>
         <div class="alert-list">
@@ -491,6 +470,7 @@ $profile = [
           <?php endforeach; ?>
         </div>
       </section>
+      <?php endif; ?>
 
       <section class="section fade-in-up delay-4">
         <div class="section-title"><h2>บริการระบบ</h2></div>
