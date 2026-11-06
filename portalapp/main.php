@@ -312,8 +312,8 @@ $profile = [
     .app-container{width:100%;max-width:430px;min-height:100dvh;background:var(--bg);padding-bottom:calc(var(--nav) + var(--sb) + 16px)}
     @media(min-width:431px){.app-container{box-shadow:0 0 40px rgba(15,23,42,.14)}}
     .section{margin-bottom:20px}
-    .section-title{margin:0 var(--g) 12px}
-    .section-title h2{margin:0;font-size:1rem;font-weight:700}
+    .section-title{margin:0 calc(var(--g) + 4px) 8px}
+    .section-title h2{margin:0;font-size:.8rem;font-weight:600;letter-spacing:.02em;color:var(--mute)}
 
     /* animation */
     .fade-in-up{opacity:0;transform:translateY(16px);animation:fadeInUp .5s cubic-bezier(.16,1,.3,1) forwards}
@@ -330,7 +330,7 @@ $profile = [
     .loader-spinner{width:34px;height:34px;border-radius:50%;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}
 
     /* app bar */
-    .top-header{position:sticky;top:0;z-index:40;display:flex;align-items:center;justify-content:space-between;padding:calc(10px + var(--st)) var(--g) 10px;background:var(--bar);color:#fff}
+    .top-header{position:sticky;top:0;z-index:40;display:flex;align-items:center;justify-content:space-between;padding:calc(10px + var(--st)) var(--g) 10px;background:rgba(80,56,150,.94);-webkit-backdrop-filter:saturate(180%) blur(14px);backdrop-filter:saturate(180%) blur(14px);color:#fff}
     .header-left{display:flex;align-items:center;gap:12px}
     .school-logo{width:40px;height:40px;border-radius:50%;object-fit:contain;background:#fff;padding:2px}
     .school-name h1{margin:0;font-size:.95rem;font-weight:600;line-height:1.25}
@@ -347,19 +347,21 @@ $profile = [
     .badges{display:flex;flex-wrap:wrap;gap:6px}
     .badge-item{padding:3px 10px;border-radius:20px;font-size:.7rem;font-weight:500;background:#efeaf9;color:var(--primary)}
     .badge-item.badge-danger{background:#fee2e2;color:var(--danger)}
+    a.student-card{color:inherit;text-decoration:none;transition:transform .12s}
+    .student-chevron{flex:none;color:#c3c7d4;font-size:.9rem}
 
-    /* alerts */
-    .alert-list{display:flex;flex-direction:column;gap:10px;margin:0 var(--g)}
-    .alert-card{position:relative;overflow:hidden;display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:16px;background:#fff;box-shadow:var(--shadow);transition:transform .12s}
-    .alert-card:active{transform:scale(.98)}
-    .alert-card::before{content:'';position:absolute;left:0;top:0;width:5px;height:100%}
-    .urgent::before{background:var(--danger)}.warning::before{background:var(--warning)}.success::before{background:var(--success)}
-    .alert-icon{font-size:1.4rem}
-    .urgent .alert-icon{color:var(--danger)}.warning .alert-icon{color:var(--warning)}.success .alert-icon{color:var(--success)}
-    .alert-info{flex:1}
-    .alert-info h4{margin:0 0 3px;font-size:.9rem;font-weight:700}
-    .alert-info p{margin:0;font-size:.8rem;color:var(--mute)}
-    .btn-action{padding:7px 14px;border-radius:999px;font-size:.75rem;font-weight:600;text-decoration:none;white-space:nowrap}
+    /* alerts: รายการแบบ grouped list */
+    .alert-list{margin:0 var(--g);background:#fff;border-radius:20px;box-shadow:var(--shadow);overflow:hidden}
+    .alert-card{display:flex;align-items:center;gap:12px;padding:13px 14px}
+    .alert-card+.alert-card{border-top:1px solid #eef0f5}
+    .alert-icon{flex:none;display:grid;place-items:center;width:40px;height:40px;border-radius:12px;font-size:1.05rem}
+    .urgent .alert-icon{background:#fee2e2;color:var(--danger)}
+    .warning .alert-icon{background:#fef3c7;color:#b45309}
+    .alert-info{flex:1;min-width:0}
+    .alert-info h4{margin:0 0 2px;font-size:.88rem;font-weight:600}
+    .alert-info p{margin:0;font-size:.76rem;color:var(--mute)}
+    .btn-action{padding:7px 14px;border-radius:999px;font-size:.75rem;font-weight:600;text-decoration:none;white-space:nowrap;transition:transform .12s}
+    .btn-action:active{transform:scale(.94)}
     .btn-action.urgent{background:#fee2e2;color:var(--danger)}.btn-action.warning{background:#fef3c7;color:#b45309}
 
     /* บริการระบบ: การ์ดขาว + ไอคอนแอปแบบภาพ SVG (จับคู่ตามลิงก์) */
@@ -392,6 +394,8 @@ $profile = [
     .news-desc{margin:0;font-size:.8rem;color:var(--mute);line-height:1.5}
     .news-btn-link{display:inline-flex;align-items:center;gap:8px;align-self:flex-start;margin-top:12px;padding:8px 14px;border-radius:999px;background:#f1f5f9;border:1px solid #e2e8f0;color:var(--primary);font-size:.85rem;font-weight:600;text-decoration:none;transition:transform .12s}
     .news-btn-link:active{transform:scale(.96)}
+    .news-card{transition:transform .12s}.news-card:active{transform:scale(.98)}
+    a.student-card:active{transform:scale(.98)}
     .news-btn-link i.fa-google-drive{color:#16a34a}
     .carousel-dots{display:flex;justify-content:center;gap:6px;margin:6px 0 20px}
     .carousel-dots .dot{width:8px;height:8px;border-radius:50%;background:#cbd5e1;cursor:pointer;transition:all .3s cubic-bezier(.4,0,.2,1)}
@@ -438,7 +442,7 @@ $profile = [
     </header>
 
     <main>
-      <section class="student-card fade-in-up delay-2" aria-label="ข้อมูลนักเรียน">
+      <a href="profile.php" class="student-card fade-in-up delay-2" aria-label="โปรไฟล์ของฉัน">
         <img src="<?= e($profile['image']) ?>" alt="Profile" class="profile-img">
         <div class="student-info">
           <h2><?= e($profile['name']) ?></h2>
@@ -450,7 +454,8 @@ $profile = [
             <?php endif; ?>
           </div>
         </div>
-      </section>
+        <i class="fas fa-chevron-right student-chevron" aria-hidden="true"></i>
+      </a>
 
       <?php if ($alerts): ?>
       <section class="section fade-in-up delay-3">
@@ -680,12 +685,21 @@ $profile = [
       );
     }
 
+    /* ---------- 6. Haptic feedback ---------- */
+    function initHaptic() {
+      if (!navigator.vibrate) return;
+      document.addEventListener('click', (ev) => {
+        if (ev.target.closest('a, .news-media')) navigator.vibrate(8);
+      });
+    }
+
     /* ---------- Init ---------- */
     initLoader();
     initPush();
     document.addEventListener('DOMContentLoaded', () => {
       initImageModal();
       initNewsCarousel();
+      initHaptic();
     });
     showConsoleWarning();
   })();
