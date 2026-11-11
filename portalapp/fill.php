@@ -244,7 +244,7 @@ header('Cache-Control: private, no-cache');
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-<meta name="theme-color" content="#5a42a0">
+<meta name="theme-color" content="#503896">
 <title>แจ้งความประสงค์ - MTTS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -253,8 +253,9 @@ header('Cache-Control: private, no-cache');
 <style>
 
 :root{
-  --primary:#5a42a0;--primary-dark:#473282;--ink:#1c1b29;--mute:#6b7280;--paper:#f2f3f8;--line:#e3e6ee;--nav:64px;
+  --primary:#503896;--primary-dark:#3d2b78;--ink:#1c1b29;--mute:#6b7280;--paper:#f2f3f8;--line:#e8eaf2;--nav:64px;
   --ok:#15803d;--ok-bg:#f0fdf4;--bad:#b91c1c;--bad-bg:#fef2f2;--warn:#b45309;--warn-bg:#fffbeb;
+  --g:16px;--shadow:0 1px 2px rgba(20,20,43,.04),0 2px 8px rgba(20,20,43,.04);
   --safe-t:env(safe-area-inset-top,0px);--safe-b:env(safe-area-inset-bottom,0px);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -265,25 +266,27 @@ input{-webkit-user-select:text;user-select:text}
 @media(min-width:431px){.app{box-shadow:0 0 40px rgba(15,23,42,.14)}}
 .ic{width:1.15em;height:1.15em;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;vertical-align:-.2em}
 
-/* แถบหัวแอป (ติดบนเสมอ กลืนกับแถบสถานะ) */
-.top{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:12px;padding:calc(10px + var(--safe-t)) 16px 10px;background:var(--primary);color:#fff}
-.logo{width:38px;height:38px;border-radius:50%;object-fit:contain;background:#fff;padding:2px}
+/* แถบหัวแอป */
+.top{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:12px;padding:calc(10px + var(--safe-t)) var(--g) 10px;background:rgba(80,56,150,.94);-webkit-backdrop-filter:saturate(180%) blur(14px);backdrop-filter:saturate(180%) blur(14px);color:#fff}
+.logo{width:40px;height:40px;border-radius:50%;object-fit:contain;background:#fff;padding:2px}
 .top h1{margin:0;font-size:.95rem;font-weight:600;line-height:1.25}
 .top p{margin:0;font-size:.72rem;opacity:.8}
 
-/* ส่วนวันที่ — ต่อเนื่องจากแถบหัวแอป */
-.hero{background:var(--primary);color:#fff;padding:6px 20px 46px;border-radius:0 0 28px 28px}
-.hero-badge{display:inline-flex;align-items:center;gap:6px;font-size:.72rem;font-weight:500;padding:5px 11px;border-radius:999px;background:rgba(255,255,255,.16);margin-bottom:12px}
-.hero small{display:block;font-size:.8rem;opacity:.8}
-.hero strong{display:block;font-size:1.5rem;font-weight:700;line-height:1.3;margin:2px 0 6px}
-.hero-sub{font-size:.78rem;opacity:.8}
+/* การ์ดวันที่ (แทน hero) */
+.date-card{display:flex;align-items:center;gap:14px;margin:16px var(--g) 0;padding:16px;border-radius:20px;background:#fff;box-shadow:var(--shadow)}
+.date-ic{display:grid;place-items:center;flex:none;width:48px;height:48px;border-radius:14px;background:#efeaf9;color:var(--primary);font-size:1.4rem}
+.date-card small{display:block;font-size:.75rem;color:var(--mute)}
+.date-card strong{display:block;margin:1px 0 2px;font-size:1.1rem;font-weight:600;line-height:1.3}
+.date-card .sub{font-size:.75rem;color:var(--mute)}
 
-/* การ์ดแบบ iOS/Material: แต่ละส่วนเป็นการ์ดลอยทับหัว */
-.card,#voteForm .field{background:#fff;border:0;border-radius:20px;margin:12px 16px 0;padding:16px;min-width:0;box-shadow:0 1px 2px rgba(20,20,43,.05),0 4px 14px rgba(20,20,43,.05)}
-#voteForm.card{background:none;margin:0;padding:0;box-shadow:none;border-radius:0}
-#voteForm>input+.field,.hero+.card{margin-top:-26px;position:relative}
-.field>label,.field>legend{display:flex;align-items:center;gap:6px;font-size:.82rem;font-weight:600;color:var(--mute);margin:0 0 10px;padding:0}
-.field>label .ic,.field>legend .ic{color:var(--primary)}
+/* กลุ่มฟอร์ม: การ์ดขาวเรียบ */
+.group,.field-card{margin:12px var(--g) 0;border-radius:20px;background:#fff;box-shadow:var(--shadow);min-width:0}
+.group{overflow:hidden}
+.group .field+.field{border-top:1px solid var(--line)}
+.field{padding:16px;margin:0;min-width:0;border:0}
+.field-card{padding:16px;border:0}
+.field>label,.field-card>legend{display:flex;align-items:center;gap:6px;margin:0 0 10px;padding:0;font-size:.8rem;font-weight:600;color:var(--mute)}
+.field>label .ic,.field-card>legend .ic{color:var(--primary)}
 .req{color:#ef4444}
 .input{width:100%;height:52px;padding:0 16px;border:2px solid transparent;border-radius:14px;background:#eef0f6;font:inherit;font-size:1.05rem;color:var(--ink);outline:none;transition:border-color .15s,background .15s}
 #student_code{font-size:1.4rem;font-weight:600;letter-spacing:.12em}
@@ -301,11 +304,11 @@ input{-webkit-user-select:text;user-select:text}
 .lookup b{font-weight:600}
 .lookup span.sec{margin-left:auto;font-size:.78rem;opacity:.85;white-space:nowrap}
 
-/* ตัวเลือกสถานะ — ไอคอนสีเหมือนไอคอนแอป, วงกลมมุมขวาเป็นตัวบอกว่าเลือกอยู่ */
-.tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+/* ตัวเลือกสถานะ */
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .tile{position:relative;display:block}
 .tile input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer;z-index:1}
-.tile-body{display:flex;flex-direction:column;justify-content:space-between;gap:14px;height:100%;min-height:112px;padding:14px;border:2px solid transparent;border-radius:18px;background:#f4f5fa;transition:transform .12s,border-color .15s,background .15s}
+.tile-body{display:flex;flex-direction:column;justify-content:space-between;gap:14px;height:100%;min-height:108px;padding:14px;border:2px solid transparent;border-radius:18px;background:#f4f5fa;transition:transform .12s,border-color .15s,background .15s}
 .tile input:active + .tile-body{transform:scale(.96)}
 .tile-top{display:flex;align-items:flex-start;justify-content:space-between}
 .tile-ic{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:var(--c);color:#fff;font-size:1.25rem}
@@ -320,14 +323,14 @@ input{-webkit-user-select:text;user-select:text}
 .tile input:disabled + .tile-body{opacity:.4}
 .tile input:disabled:checked + .tile-body{opacity:1}
 
-.notice,.help{display:flex;gap:10px;margin:12px 16px 0;padding:12px 14px;border-radius:16px;font-size:.8rem;line-height:1.5}
+.notice,.help{display:flex;gap:10px;margin:12px var(--g) 0;padding:12px 14px;border-radius:16px;font-size:.8rem;line-height:1.5}
 .notice{background:var(--warn-bg);color:var(--warn);border:1px solid #fde68a}
 .notice[hidden]{display:none}
-.help{background:#fff;color:var(--mute);box-shadow:0 1px 2px rgba(20,20,43,.05)}
-.help .ic{font-size:1.25rem;margin-top:2px;color:var(--primary)}
+.help{background:transparent;color:var(--mute);padding:4px 6px}
+.help .ic{font-size:1.15rem;margin-top:2px;color:var(--primary)}
 .help strong{color:var(--ink)}
 
-/* ปุ่ม — ปุ่มส่งลอยค้างเหนือแถบเมนูล่าง */
+/* ปุ่ม */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:16px;height:52px;padding:0 18px;font:inherit;font-size:1rem;font-weight:600;cursor:pointer;transition:transform .1s,background .15s}
 .btn:active{transform:scale(.97)}
 .btn:focus-visible,.input:focus-visible,.nav a:focus-visible{outline:3px solid #c4b5fd;outline-offset:2px}
@@ -335,23 +338,24 @@ input{-webkit-user-select:text;user-select:text}
 .btn-primary:hover{background:var(--primary-dark)}
 .btn-primary:disabled{opacity:.55;cursor:not-allowed}
 .btn-ghost{background:#eef0f6;color:var(--mute)}
-#submitBtn{position:sticky;bottom:calc(var(--nav) + var(--safe-b) + 12px);z-index:30;display:flex;width:calc(100% - 32px);margin:16px 16px 0;box-shadow:0 8px 20px rgba(90,66,160,.35)}
+#submitBtn{position:sticky;bottom:calc(var(--nav) + var(--safe-b) + 12px);z-index:30;display:flex;width:calc(100% - 32px);margin:16px 16px 0;box-shadow:0 6px 16px rgba(80,56,150,.3)}
 .spinner{width:1.1em;height:1.1em;border:2.5px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}
 .lk-loading .spinner{border-color:#cbd5e1;border-top-color:var(--primary)}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-.closed{text-align:center}
+.closed{padding:28px 20px;text-align:center}
 .closed .big{display:grid;place-items:center;width:64px;height:64px;margin:0 auto 14px;border-radius:50%;background:#fee2e2;color:#ef4444;font-size:1.8rem}
-.closed h2{margin:0 0 6px;font-size:1.15rem;color:#991b1b}
+.closed h2{margin:0 0 6px;font-size:1.1rem;color:#991b1b}
 .closed p{margin:0 0 14px;font-size:.85rem;color:var(--mute)}
 .closed .when{display:inline-block;padding:8px 14px;border-radius:12px;background:#f4f5fa;font-size:.85rem;font-weight:600;color:#b91c1c}
 .closed .btn{margin-top:16px;background:none;color:var(--primary);height:auto;padding:8px}
 
-/* แถบเมนูล่างแบบ tab bar (เบลอพื้นหลัง รองรับขอบล่างของมือถือ) */
-.nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;height:calc(var(--nav) + var(--safe-b));padding-bottom:var(--safe-b);background:rgba(255,255,255,.92);-webkit-backdrop-filter:saturate(1.8) blur(14px);backdrop-filter:saturate(1.8) blur(14px);border-top:1px solid var(--line);display:flex;align-items:center;z-index:50}
-.nav a{display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;padding:8px 0;text-decoration:none;color:#9aa3b2;font-size:.68rem;font-weight:500}
-.nav a .ic{font-size:1.4rem}
-.nav a:active,.nav a.on{color:var(--primary)}
+/* แถบเมนูล่างสีม่วง */
+.nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);z-index:50;width:100%;max-width:430px;height:calc(var(--nav) + var(--safe-b));padding-bottom:var(--safe-b);display:flex;align-items:center;background:var(--primary);box-shadow:0 -4px 18px rgba(20,20,43,.18)}
+.nav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;color:rgba(255,255,255,.65);font-size:.7rem;font-weight:500;text-decoration:none}
+.nav a .pill{display:grid;place-items:center;width:56px;height:30px;border-radius:15px;font-size:1.2rem;transition:background .2s}
+.nav a:active{color:#fff}
+.nav a:active .pill{background:rgba(255,255,255,.2)}
 
 /* กล่องข้อความ — เด้งขึ้นจากด้านล่าง (bottom sheet) */
 dialog{border:0;padding:10px 20px calc(18px + var(--safe-b));width:100%;max-width:430px;margin:auto auto 0;border-radius:26px 26px 0 0;background:#fff;text-align:center;color:var(--ink);font-family:inherit;box-shadow:0 -10px 40px rgba(15,23,42,.25)}
@@ -377,8 +381,6 @@ dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
 #page-loader img{width:88px;height:88px;padding:6px;border-radius:22px;background:#fff}
 #page-loader .ring{width:32px;height:32px;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite}
 
-.hero strong{animation:rise .5s cubic-bezier(.16,1,.3,1) both}
-@keyframes rise{from{opacity:0;transform:translateY(10px)}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
 </style>
@@ -421,32 +423,34 @@ dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
     </div>
   </header>
 
-  <section class="hero" aria-label="วันที่ที่แจ้งความประสงค์">
-    <div class="hero-badge">
-      <svg class="ic"><use href="#i-clip"/></svg> แจ้งความประสงค์ประจำสัปดาห์
+  <section class="date-card" aria-label="วันที่ที่แจ้งความประสงค์">
+    <div class="date-ic"><svg class="ic"><use href="#i-clip"/></svg></div>
+    <div>
+      <small><?php echo date('N', strtotime($target_date)) === '5' ? 'แจ้งความประสงค์ · กำหนดวันศุกร์ที่' : 'แจ้งความประสงค์ · กำหนดวันกลับ'; ?></small>
+      <strong><?php echo htmlspecialchars($date_th_full); ?></strong>
+      <div class="sub">กรุณาตรวจสอบข้อมูลและเลือกสถานะให้ถูกต้อง</div>
     </div>
-    <small><?php echo date('N', strtotime($target_date)) === '5' ? 'กำหนดวันศุกร์ที่' : 'กำหนดวันกลับ'; ?></small>
-    <strong><?php echo htmlspecialchars($date_th_full); ?></strong>
-    <div class="hero-sub">กรุณาตรวจสอบข้อมูลและเลือกสถานะให้ถูกต้อง</div>
   </section>
 
 <?php if ($is_voting_open): ?>
-  <form id="voteForm" class="card" method="post" action="">
+  <form id="voteForm" method="post" action="">
     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf); ?>">
 
-    <div class="field">
-      <label for="student_code"><svg class="ic"><use href="#i-card"/></svg>รหัสประจำตัว (นชท.) <span class="req">*</span></label>
-      <input class="input" type="text" id="student_code" name="student_code" required maxlength="10" inputmode="numeric" autocomplete="off" placeholder="เช่น 151xx">
-      <div id="lookup" class="lookup" aria-live="polite" hidden></div>
+    <div class="group">
+      <div class="field">
+        <label for="student_code"><svg class="ic"><use href="#i-card"/></svg>รหัสประจำตัว (นชท.) <span class="req">*</span></label>
+        <input class="input" type="text" id="student_code" name="student_code" required maxlength="10" inputmode="numeric" autocomplete="off" placeholder="เช่น 151xx">
+        <div id="lookup" class="lookup" aria-live="polite" hidden></div>
+      </div>
+
+      <!-- ช่องตอนเรียน ดึงข้อมูลอัตโนมัติจากระบบแบบ Readonly -->
+      <div class="field">
+        <label for="section"><svg class="ic"><use href="#i-layers"/></svg>ตอนเรียน (ดึงอัตโนมัติจากระบบ)</label>
+        <input class="input" type="text" id="section" name="section" readonly placeholder="กรอกรหัส นชท. เพื่อดึงข้อมูลอัตโนมัติ">
+      </div>
     </div>
 
-    <!-- ช่องตอนเรียน ดึงข้อมูลอัตโนมัติจากระบบแบบ Readonly -->
-    <div class="field">
-      <label for="section"><svg class="ic"><use href="#i-layers"/></svg>ตอนเรียน (ดึงอัตโนมัติจากระบบ)</label>
-      <input class="input" type="text" id="section" name="section" readonly placeholder="กรอกรหัส นชท. เพื่อดึงข้อมูลอัตโนมัติ">
-    </div>
-
-    <fieldset class="field">
+    <fieldset class="field-card">
       <legend><svg class="ic"><use href="#i-clip"/></svg>เลือกสถานะ <span class="req">*</span></legend>
       <div class="tiles">
 <?php $first = true; foreach ($tiles as $val => [$num, $label, $icon]): ?>
@@ -473,7 +477,7 @@ dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
   </form>
 
 <?php else: ?>
-  <div class="card closed">
+  <div class="group closed">
     <div class="big"><svg class="ic"><use href="#i-lock"/></svg></div>
     <h2>ระบบปิดรับข้อมูล</h2>
     <p>ระบบเปิดให้ทำรายการเฉพาะช่วงเวลา</p>
@@ -483,8 +487,8 @@ dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
 <?php endif; ?>
 
   <nav class="nav" aria-label="เมนูหลัก">
-    <a href="main.php"><svg class="ic"><use href="#i-home"/></svg><span>หน้าหลัก</span></a>
-    <a href="logout.php"><svg class="ic"><use href="#i-logout"/></svg><span>ออกจากระบบ</span></a>
+    <a href="main.php"><span class="pill"><svg class="ic"><use href="#i-home"/></svg></span><span>หน้าหลัก</span></a>
+    <a href="logout.php"><span class="pill"><svg class="ic"><use href="#i-logout"/></svg></span><span>ออกจากระบบ</span></a>
   </nav>
 </div>
 
