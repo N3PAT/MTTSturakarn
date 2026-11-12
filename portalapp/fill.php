@@ -614,7 +614,7 @@ dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
     if (!d.found) { state = 'notfound'; setLookup('bad', 'ไม่พบรหัสนี้ในระบบ'); applyForced(null, true); secIn.value = ''; return; }
     state = 'found'; setLookup('ok', d.name, d.section);
     if (d.section) {
-      secIn.value = 'ตอนที่ ' + d.section;
+      secIn.value = 'วิชาชีพช่าง ' + d.section;
     } else {
       secIn.value = 'ไม่พบข้อมูลตอนเรียน';
     }
