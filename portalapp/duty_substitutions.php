@@ -171,162 +171,91 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 <html lang="th">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#503896" />
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>แจ้งขอแทนเวร - MTTS</title>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   
   <style>
-    :root {
-      --primary: #5a42a0;
-      --bg-color: #f6f8fc;
-      --text-dark: #1e293b;
-      --text-gray: #64748b;
-    }
+    :root{--primary:#503896;--primary-dark:#3d2b78;--bar:#503896;--bg:#f2f3f8;--ink:#1c1b29;--mute:#6b7280;--line:#eef0f5;--g:16px;--nav:64px;--st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px);--shadow:0 1px 2px rgba(20,20,43,.04),0 2px 8px rgba(20,20,43,.04)}
 
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    
-    body {
-      font-family: 'Prompt', sans-serif;
-      background-color: #e2e8f0;
-      margin: 0;
-      display: flex;
-      justify-content: center;
-      min-height: 100vh;
-    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
+    html{-webkit-text-size-adjust:100%}
+    body{font-family:'Prompt',sans-serif;background:#d9dce6;color:var(--ink);display:flex;justify-content:center;min-height:100vh;min-height:100dvh;overscroll-behavior-y:none;touch-action:manipulation;-webkit-font-smoothing:antialiased}
+    input,textarea{-webkit-user-select:text;user-select:text}
+    ::-webkit-scrollbar{display:none}
 
-    /* Animations */
-    .fade-in-up {
-      opacity: 0;
-      transform: translateY(20px);
-      animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    }
-    @keyframes fadeInUp { to { opacity: 1; transform: translateY(0); } }
-    .delay-1 { animation-delay: 0.1s; }
-    .delay-2 { animation-delay: 0.2s; }
-    .delay-3 { animation-delay: 0.3s; }
+    .fade-in-up{opacity:0;transform:translateY(14px);animation:fadeInUp .45s cubic-bezier(.16,1,.3,1) forwards}
+    @keyframes fadeInUp{to{opacity:1;transform:none}}
+    .delay-1{animation-delay:.05s}.delay-2{animation-delay:.12s}.delay-3{animation-delay:.2s}
+    @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.fade-in-up{opacity:1;transform:none}}
 
-    /* Layout */
-    .app-container {
-      width: 100%;
-      max-width: 430px;
-      background-color: var(--bg-color);
-      min-height: 100vh;
-      position: relative;
-      padding-bottom: 90px;
-      box-shadow: 0 0 20px rgba(0,0,0,0.1);
-    }
+    .app-container{width:100%;max-width:430px;min-height:100vh;min-height:100dvh;background:var(--bg);padding-bottom:calc(var(--nav) + var(--sb) + 16px)}
+    @media(min-width:431px){.app-container{box-shadow:0 0 40px rgba(15,23,42,.14)}}
 
-    .top-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 15px 20px;
-      background: var(--bg-color);
-    }
-    .header-left {
-      display: flex;
-      align-items: center;
-      gap: 15px;
-    }
-    .btn-back {
-      color: var(--text-dark);
-      font-size: 1.2rem;
-      text-decoration: none;
-    }
-    .header-title h1 {
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: var(--text-dark);
-      margin: 0;
-    }
+    /* app bar */
+    .top-header{position:sticky;top:0;z-index:40;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:calc(10px + var(--st)) var(--g) 10px;background:rgba(80,56,150,.94);-webkit-backdrop-filter:saturate(180%) blur(14px);backdrop-filter:saturate(180%) blur(14px);color:#fff}
+    .header-left{display:flex;align-items:center;gap:12px;min-width:0}
+    .btn-back{display:flex;align-items:center;justify-content:center;flex:none;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.16);color:#fff;font-size:1.05rem;text-decoration:none;transition:transform .12s}
+    .btn-back:active{transform:scale(.92)}
+    .header-title h1{font-size:1.05rem;font-weight:600}
+    .status-badge{display:flex;align-items:center;gap:6px;flex:none;padding:4px 11px;border-radius:20px;font-size:.72rem;font-weight:600}
+    .status-badge.open{background:#dcfce7;color:#166534}
+    .status-badge.closed{background:#fee2e2;color:#991b1b}
 
-    .section-title {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin: 10px 20px 15px;
-    }
-    .title-left {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .section-pill {
-      width: 5px;
-      height: 24px;
-      background: var(--primary);
-      border-radius: 4px;
-    }
-    .section-title h3 {
-      font-size: 1.05rem;
-      font-weight: 600;
-      color: var(--text-dark);
-      margin: 0;
-    }
+    /* section label */
+    .section-title{margin:18px calc(var(--g) + 4px) 8px;font-size:.8rem;font-weight:600;letter-spacing:.02em;color:var(--mute)}
+    .section-title+.card,.alert-success+.section-title{margin-top:0}
 
-    .status-badge { font-size: 0.75rem; font-weight: 600; padding: 4px 10px; border-radius: 20px; display: flex; align-items: center; gap: 5px; }
-    .status-badge.open { background-color: #dcfce7; color: #166534; }
-    .status-badge.closed { background-color: #fee2e2; color: #991b1b; }
+    /* cards */
+    .req-form{padding:0}
+    .card{margin:0 var(--g) 14px;border-radius:20px;background:#fff;box-shadow:var(--shadow);overflow:hidden}
+    .card .form-group{margin:0;padding:14px 16px}
+    .card .form-group+.form-group{border-top:1px solid var(--line)}
+    .card .form-group.sub{padding-top:0;border-top:0}
+    .form-group label{display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:.8rem;font-weight:600;color:var(--mute)}
+    .text-danger{color:#ef4444}
+    .icon-label{color:var(--primary)}
 
-    /* Form Fields */
-    .req-form {
-      padding: 0 20px 20px;
-    }
-    .form-group { margin-bottom: 15px; }
-    .form-group label { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; font-weight: 600; margin-bottom: 8px; color: var(--text-dark); }
-    .text-danger { color: #ef4444; }
-    .icon-label { color: var(--primary); }
-    .form-control { width: 100%; padding: 12px 16px; border-radius: 12px; border: 1px solid #cbd5e1; background: white; font-family: 'Prompt', sans-serif; font-size: 0.95rem; outline: none; transition: all 0.2s ease; }
-    .form-control:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(90, 66, 160, 0.1); }
-    .input-readonly { background: #f1f5f9; color: #64748b; border-style: dashed; }
-    .input-success { background: #f0fdf4; border-color: #22c55e; color: #15803d; }
-    .input-error { background: #fef2f2; border-color: #ef4444; color: #b91c1c; }
-    textarea.form-control { resize: none; height: 80px; }
-    
-    .divider { height: 1px; background: #e2e8f0; margin: 20px 0; }
+    .form-control{width:100%;height:50px;padding:0 16px;border:2px solid transparent;border-radius:14px;background:#eef0f6;font-family:inherit;font-size:1rem;color:var(--ink);outline:none;transition:border-color .15s,background .15s}
+    .form-control:focus{border-color:var(--primary);background:#fff}
+    .input-readonly{background:#f6f7fb;color:var(--mute);font-size:.92rem}
+    .input-success{background:#f0fdf4;border-color:#bbf7d0;color:#15803d;font-weight:500;font-size:.92rem}
+    .input-error{background:#fef2f2;border-color:#fecaca;color:#b91c1c;font-size:.92rem}
+    textarea.form-control{height:84px;padding:12px 16px;resize:none;line-height:1.5}
+    input[type=date].form-control{min-height:50px}
 
-    /* Remark Box */
-    .remark-box {
-      background-color: #fff7ed;
-      border: 1px solid #ffedd5;
-      border-left: 4px solid #f97316;
-      border-radius: 10px;
-      padding: 15px;
-      margin-bottom: 20px;
-      display: flex;
-      gap: 12px;
-      align-items: flex-start;
-    }
-    .remark-box i { color: #ea580c; font-size: 1.2rem; margin-top: 2px; }
-    .remark-box p { margin: 0; font-size: 0.85rem; color: #9a3412; line-height: 1.5; font-weight: 500; }
+    /* remark */
+    .remark-box{display:flex;align-items:flex-start;gap:10px;margin:0 var(--g);padding:12px 14px;border-radius:16px;background:#fffbeb;border:1px solid #fde68a}
+    .remark-box i{margin-top:2px;font-size:1.05rem;color:#d97706}
+    .remark-box p{font-size:.8rem;line-height:1.5;font-weight:500;color:#92400e}
 
-    /* Submit Button */
-    .btn-submit {
-      width: 100%; background-color: var(--primary); color: white; border: none; padding: 14px; border-radius: 12px; font-size: 1rem; font-weight: 600; font-family: 'Prompt', sans-serif; cursor: pointer; box-shadow: 0 4px 15px rgba(90, 66, 160, 0.25); transition: background-color 0.2s; display: flex; justify-content: center; align-items: center; gap: 8px;
-    }
-    .btn-submit:active { background-color: #4a3585; transform: scale(0.98); }
+    /* submit: ลอยค้างเหนือแถบเมนู */
+    .btn-submit{position:sticky;bottom:calc(var(--nav) + var(--sb) + 12px);z-index:30;display:flex;align-items:center;justify-content:center;gap:8px;width:calc(100% - 32px);height:52px;margin:16px var(--g) 0;border:0;border-radius:16px;background:var(--primary);color:#fff;font-family:inherit;font-size:1rem;font-weight:600;cursor:pointer;box-shadow:0 6px 16px rgba(80,56,150,.3);transition:transform .1s,background .15s}
+    .btn-submit:active{transform:scale(.97);background:var(--primary-dark)}
 
-    /* Alerts */
-    .alert-success { background-color: #dcfce7; color: #166534; padding: 15px; border-radius: 12px; margin: 0 20px 20px; font-size: 0.9rem; font-weight: 500; display: flex; align-items: center; gap: 10px; }
-    .alert-error { background-color: #fee2e2; color: #991b1b; padding: 15px; border-radius: 12px; margin: 0 20px 20px; font-size: 0.9rem; font-weight: 500; display: flex; align-items: center; gap: 10px; }
+    /* alerts */
+    .alert-success,.alert-error{display:flex;align-items:center;gap:10px;margin:16px var(--g) 0;padding:14px;border-radius:16px;font-size:.88rem;font-weight:500;line-height:1.45}
+    .alert-success{background:#dcfce7;color:#166534}
+    .alert-error{background:#fee2e2;color:#991b1b}
 
-    /* Closed Box */
-    .closed-box { text-align: center; padding: 30px 20px; background: white; border-radius: 16px; margin: 0 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
-    .closed-icon { font-size: 3rem; color: #ef4444; margin-bottom: 12px; }
-    .closed-title { font-size: 1.1rem; font-weight: 600; color: #1e293b; margin-bottom: 8px; }
-    .closed-desc { font-size: 0.875rem; color: #64748b; margin: 0; }
+    /* closed */
+    .closed-box{margin:0 var(--g);padding:32px 20px;border-radius:20px;background:#fff;box-shadow:var(--shadow);text-align:center}
+    .closed-icon{margin-bottom:12px;font-size:2.6rem;color:#ef4444}
+    .closed-title{margin-bottom:6px;font-size:1.05rem;font-weight:600}
+    .closed-desc{font-size:.84rem;line-height:1.5;color:var(--mute)}
 
-    /* Bottom Nav */
-    .bottom-nav {
-      position: fixed; bottom: 0; width: 100%; max-width: 430px; left: 50%; transform: translateX(-50%); 
-      height: calc(70px + env(safe-area-inset-bottom, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px); background: white; border-top-left-radius: 25px; border-top-right-radius: 25px; 
-      display: flex; justify-content: space-around; align-items: center; box-shadow: 0 -5px 20px rgba(0,0,0,0.03); padding-left: 10px; padding-right: 10px; z-index: 1000; 
-    }
-    .nav-link { display: flex; flex-direction: column; align-items: center; text-decoration: none; color: #94a3b8; font-size: 0.7rem; font-weight: 600; width: 30%; gap: 4px; }
-    .nav-link.active { color: var(--primary); }
-    .nav-link i { font-size: 1.3rem; }
+    /* bottom nav สีม่วง */
+    .bottom-nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);z-index:1000;width:100%;max-width:430px;height:calc(var(--nav) + var(--sb));padding-bottom:var(--sb);display:flex;align-items:center;background:var(--bar);box-shadow:0 -4px 18px rgba(20,20,43,.18)}
+    .nav-link{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;color:rgba(255,255,255,.6);font-size:.7rem;font-weight:500;text-decoration:none}
+    .nav-link i{display:grid;place-items:center;width:56px;height:30px;border-radius:15px;font-size:1.2rem;transition:background .2s}
+    .nav-link.active{color:#fff;font-weight:600}
+    .nav-link.active i{background:rgba(255,255,255,.2)}
+    .nav-link:active{color:#fff}
   </style>
 </head>
 <body>
@@ -334,15 +263,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
   <div class="app-container">
     
     <!-- Header -->
-    <div class="top-header fade-in-up delay-1">
+    <header class="top-header">
       <div class="header-left">
-        <a href="main.php" class="btn-back"><i class="fas fa-arrow-left"></i></a>
+        <a href="main.php" class="btn-back" aria-label="กลับหน้าหลัก"><i class="fas fa-chevron-left"></i></a>
         <div class="header-title">
           <h1>แจ้งขอแทนเวร</h1>
         </div>
       </div>
-    </div>
+      <?php if ($is_system_open): ?>
+        <div class="status-badge open">
+          <i class="fas fa-circle" style="font-size:.45rem;"></i> เปิดระบบ
+        </div>
+      <?php else: ?>
+        <div class="status-badge closed">
+          <i class="fas fa-lock"></i> ปิดระบบ
+        </div>
+      <?php endif; ?>
+    </header>
 
+    <main>
     <!-- Success / Error Messages -->
     <?php if ($success_msg): ?>
     <div class="alert-success fade-in-up delay-1">
@@ -358,65 +297,54 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     </div>
     <?php endif; ?>
 
-    <div class="section-title fade-in-up delay-2">
-      <div class="title-left">
-        <div class="section-pill"></div>
-        <h3>แบบฟอร์มขอแทนเวร</h3>
-      </div>
-      <?php if ($is_system_open): ?>
-        <div class="status-badge open">
-          <i class="fas fa-circle text-[8px]"></i> เปิดระบบ
-        </div>
-      <?php else: ?>
-        <div class="status-badge closed">
-          <i class="fas fa-lock"></i> ปิดระบบ
-        </div>
-      <?php endif; ?>
-    </div>
-    
     <?php if ($is_system_open): ?>
       <!-- Form -->
-      <form id="substituteForm" method="POST" action="" class="req-form fade-in-up delay-3">
+      <form id="substituteForm" method="POST" action="" class="req-form fade-in-up delay-2">
         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
-        
-        <div class="form-group">
-          <label for="requester_code"><i class="fas fa-user-check icon-label"></i> รหัสประจำตัว (ผู้ทำหน้าที่แทน) <span class="text-danger">*</span></label>
-          <input type="text" id="requester_code" name="requester_code" required maxlength="10" inputmode="numeric" class="form-control" placeholder="เช่น 151xx">
-        </div>
-        <div class="form-group">
-          <input type="text" id="requester_name" readonly tabindex="-1" class="form-control input-readonly" placeholder="ระบบจะแสดงชื่ออัตโนมัติ">
-        </div>
 
-        <div class="divider"></div>
-
-        <div class="form-group">
-          <label for="target_code"><i class="fas fa-user-clock icon-label"></i> รหัสประจำตัว (ผู้ที่ถูกแทนเวร) <span class="text-danger">*</span></label>
-          <input type="text" id="target_code" name="target_code" required maxlength="10" inputmode="numeric" class="form-control" placeholder="รหัสของเพื่อนที่คุณจะเข้าเวรแทน">
-        </div>
-        <div class="form-group">
-          <input type="text" id="target_name" readonly tabindex="-1" class="form-control input-readonly" placeholder="ระบบจะแสดงชื่อเพื่อนอัตโนมัติ">
+        <div class="section-title">ผู้ทำหน้าที่แทน</div>
+        <div class="card">
+          <div class="form-group">
+            <label for="requester_code"><i class="fas fa-user-check icon-label"></i> รหัสประจำตัว (ผู้ทำหน้าที่แทน) <span class="text-danger">*</span></label>
+            <input type="text" id="requester_code" name="requester_code" required maxlength="10" inputmode="numeric" class="form-control" placeholder="เช่น 151xx">
+          </div>
+          <div class="form-group sub">
+            <input type="text" id="requester_name" readonly tabindex="-1" class="form-control input-readonly" placeholder="ระบบจะแสดงชื่ออัตโนมัติ">
+          </div>
         </div>
 
-        <div class="form-group">
-          <label for="duty_date"><i class="far fa-calendar-alt icon-label"></i> วันที่ต้องเข้าเวร <span class="text-danger">*</span></label>
-          <input type="date" id="duty_date" name="duty_date" required class="form-control">
+        <div class="section-title">เวรที่ขอแทน</div>
+        <div class="card">
+          <div class="form-group">
+            <label for="target_code"><i class="fas fa-user-clock icon-label"></i> รหัสประจำตัว (ผู้ที่ถูกแทนเวร) <span class="text-danger">*</span></label>
+            <input type="text" id="target_code" name="target_code" required maxlength="10" inputmode="numeric" class="form-control" placeholder="รหัสของเพื่อนที่คุณจะเข้าเวรแทน">
+          </div>
+          <div class="form-group sub">
+            <input type="text" id="target_name" readonly tabindex="-1" class="form-control input-readonly" placeholder="ระบบจะแสดงชื่อเพื่อนอัตโนมัติ">
+          </div>
+
+          <div class="form-group">
+            <label for="duty_date"><i class="far fa-calendar-alt icon-label"></i> วันที่ต้องเข้าเวร <span class="text-danger">*</span></label>
+            <input type="date" id="duty_date" name="duty_date" required class="form-control">
+          </div>
+
+          <div class="form-group">
+            <label><i class="fas fa-shield-alt icon-label"></i> ผลัดที่ / จุดรักษาการณ์ (ของเจ้าของเวรเดิม)</label>
+            <input type="text" id="target_duty_info" readonly tabindex="-1" class="form-control input-readonly" placeholder="ระบบจะคำนวณผลัดและจุดรักษาการณ์อัตโนมัติ">
+          </div>
         </div>
 
-        <div class="form-group">
-          <label><i class="fas fa-shield-alt icon-label"></i> ผลัดที่ / จุดรักษาการณ์ (ของเจ้าของเวรเดิม)</label>
-          <input type="text" id="target_duty_info" readonly tabindex="-1" class="form-control input-readonly" placeholder="ระบบจะคำนวณผลัดและจุดรักษาการณ์อัตโนมัติ">
-        </div>
+        <div class="section-title">รายละเอียด</div>
+        <div class="card">
+          <div class="form-group">
+            <label for="duty_name"><i class="fas fa-clipboard-list icon-label"></i> ชื่อเวร / หน้าที่ <span class="text-danger">*</span></label>
+            <input type="text" id="duty_name" name="duty_name" required class="form-control" placeholder="เช่น ผลัดที่ 1 (จุดที่ 4 อาคารยานยนต์)">
+          </div>
 
-        <div class="divider"></div>
-
-        <div class="form-group">
-          <label for="duty_name"><i class="fas fa-clipboard-list icon-label"></i> ชื่อเวร / หน้าที่ <span class="text-danger">*</span></label>
-          <input type="text" id="duty_name" name="duty_name" required class="form-control" placeholder="เช่น ผลัดที่ 1 (จุดที่ 4 อาคารยานยนต์)">
-        </div>
-
-        <div class="form-group">
-          <label for="reason"><i class="fas fa-comment-dots icon-label"></i> เหตุผลการขอแทนเวร</label>
-          <textarea id="reason" name="reason" class="form-control" placeholder="ระบุเหตุผลที่ขอทำหน้าที่แทน (ถ้ามี)"></textarea>
+          <div class="form-group">
+            <label for="reason"><i class="fas fa-comment-dots icon-label"></i> เหตุผลการขอแทนเวร</label>
+            <textarea id="reason" name="reason" class="form-control" placeholder="ระบุเหตุผลที่ขอทำหน้าที่แทน (ถ้ามี)"></textarea>
+          </div>
         </div>
 
         <!-- หมายเหตุ -->
@@ -431,28 +359,30 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
       </form>
 
     <?php else: ?>
-      <div class="closed-box fade-in-up delay-3">
+      <div class="section-title">แบบฟอร์มขอแทนเวร</div>
+      <div class="closed-box fade-in-up delay-2">
         <div class="closed-icon"><i class="fas fa-ban"></i></div>
         <div class="closed-title">ระบบปิดรับคำขอแทนเวรชั่วคราว</div>
         <p class="closed-desc">ขณะนี้ระบบไม่อนุญาตให้ยื่นคำขอแทนเวร หากมีข้อสงสัยหรือเหตุจำเป็น กรุณาติดต่อผู้ดูแลระบบหรือกองพัน</p>
       </div>
     <?php endif; ?>
-
-    <!-- Bottom Navigation -->
-    <div class="bottom-nav">
-      <a href="main.php" class="nav-link">
-        <i class="fas fa-home"></i>
-        <span>หน้าหลัก</span>
-      </a>
-
-      <!-- กำหนดหน้าปัจจุบันเป็น active -->
-      <a href="substitute.php" class="nav-link active">
-        <i class="fas fa-exchange-alt"></i>
-        <span>แทนเวร</span>
-      </a>
-    </div>
+    </main>
 
   </div>
+
+  <!-- Bottom Navigation -->
+  <nav class="bottom-nav" aria-label="เมนูหลัก">
+    <a href="main.php" class="nav-link">
+      <i class="fas fa-home"></i>
+      <span>หน้าหลัก</span>
+    </a>
+
+    <!-- กำหนดหน้าปัจจุบันเป็น active -->
+    <a href="substitute.php" class="nav-link active">
+      <i class="fas fa-exchange-alt"></i>
+      <span>แทนเวร</span>
+    </a>
+  </nav>
 
 <script>
 <?php if ($is_system_open): ?>
@@ -568,7 +498,7 @@ if (form) {
             text: 'กรุณาตรวจสอบความถูกต้อง คุณแน่ใจหรือไม่ว่าต้องการแทนเวรให้เพื่อนคนนี้?',
             icon: 'question',
             showCancelButton: true,
-            confirmButtonColor: '#5a42a0',
+            confirmButtonColor: '#503896',
             cancelButtonColor: '#94a3b8',
             confirmButtonText: 'ยืนยัน',
             cancelButtonText: 'ยกเลิก'
