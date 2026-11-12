@@ -1,7 +1,7 @@
 <?php
 session_start();
 require_once 'db.php';
-require_once 'vote_lib.php'; // เรียกใช้งานฟังก์ชันกลางและค่า START_DATE, DUTY_PER_DAY
+require_once 'vote_lib.php'; // เรียกใช้งานฟังก์ชันกลาง
 
 // ตรวจสอบสิทธิ์ Admin
 if (empty($_SESSION['admin_id'])) {
@@ -105,14 +105,19 @@ try {
 }
 
 // ==========================================
-// 2. ดึงข้อมูลนักเรียนทั้งหมดและคำนวณเวรด้วย Logic เดียวกับ vote_lib.php
+// 2. ดึงข้อมูลเวรและกักบริเวณ
 // ==========================================
 $restricted_ids = [];
+$duty_codes = [];
 $students_data = [];
 $summary = ['total' => 0, 'home' => 0, 'stay' => 0, 'duty' => 0, 'restrict' => 0, 'unvoted' => 0];
 
 try {
-    // 2.1 ดึงรหัสนักเรียนที่ถูกกักบริเวณในวันที่เลือก
+    // 2.1 ดึงรหัสนักเรียนที่เข้าเวรในวันที่เลือก (จากฟังก์ชันกลางใน vote_lib.php)
+    $duty_list = duty_students_for_date($conn, $target_date);
+    $duty_codes = array_column($duty_list, 'code');
+
+    // 2.2 ดึงรหัสนักเรียนที่ถูกกักบริเวณในวันที่เลือก
     $stmt_rest = $conn->prepare("
         SELECT DISTINCT student_code 
         FROM restrictions 
@@ -127,9 +132,6 @@ try {
         $restricted_ids[] = $r_row['student_code'];
     }
     $stmt_rest->close();
-
-    // 2.2 หาจำนวนนักเรียนทั้งหมด ($total) สำหรับคำนวณเวร
-    $total_students = (int)$conn->query('SELECT COUNT(*) AS c FROM students')->fetch_assoc()['c'];
 
     // 2.3 ดึงข้อมูลนักเรียนทั้งหมด (รองรับการค้นหา) พร้อม Join ผลโหวตและ Admin Overrides
     $sql_students = "
@@ -164,29 +166,10 @@ try {
 }
 
 // ==========================================
-// 3. ฟังก์ชันคำนวณเวรของนักเรียนแต่ละคน (ตามสูตรใน vote_lib.php)
-// ==========================================
-function check_student_duty(mysqli $conn, int $student_id, int $total_students, string $target_date): bool {
-    if ($total_students <= 0) return false;
-
-    // หาตำแหน่ง ลำดับ (pos) จากจำนวนนักเรียนที่มี id น้อยกว่าคนนี้
-    $stmt_pos = $conn->prepare('SELECT COUNT(*) AS c FROM students WHERE id < ?');
-    $stmt_pos->bind_param('i', $student_id);
-    $stmt_pos->execute();
-    $pos = (int)$stmt_pos->get_result()->fetch_assoc()['c'];
-    $stmt_pos->close();
-
-    $diff  = max(0, (int)floor((strtotime($target_date) - strtotime(START_DATE)) / 86400));
-    $start = ($diff * DUTY_PER_DAY) % $total_students;
-    
-    return (((($pos - $start) % $total_students) + $total_students) % $total_students) < DUTY_PER_DAY;
-}
-
-// ==========================================
-// 4. คำนวณ Summary สถิติภาพรวมทั้งหมดของโรงเรียน (ไม่จำกัดการค้นหา)
+// 3. คำนวณ Summary สถิติภาพรวมทั้งหมดของโรงเรียน (ไม่จำกัดการค้นหา)
 // ==========================================
 $res_summary_data = $conn->query("
-    SELECT s.id, s.student_code, v.status AS normal_vote, a.override_status 
+    SELECT s.student_code, v.status AS normal_vote, a.override_status 
     FROM students s
     LEFT JOIN weekly_votes v ON s.student_code = v.student_code AND v.vote_date = '" . $conn->real_escape_string($target_date) . "'
     LEFT JOIN admin_overrides a ON s.student_code = a.student_code AND a.target_date = '" . $conn->real_escape_string($target_date) . "'
@@ -195,10 +178,9 @@ $res_summary_data = $conn->query("
 if ($res_summary_data) {
     while ($s_row = $res_summary_data->fetch_assoc()) {
         $code = $s_row['student_code'];
-        $id = (int)$s_row['id'];
         $final_status = 'unvoted';
         
-        $on_duty = check_student_duty($conn, $id, $total_students, $target_date);
+        $on_duty = in_array($code, $duty_codes);
         $is_restricted = in_array($code, $restricted_ids);
         $is_overridden = !empty($s_row['override_status']);
 
@@ -221,15 +203,14 @@ if ($res_summary_data) {
 }
 
 // ==========================================
-// 5. ประมวลผลสถานะสำหรับรายการแสดงผลในหน้าจอ (รองรับ Filter ค้นหา)
+// 4. ประมวลผลสถานะสำหรับรายการแสดงผลในหน้าจอ (รองรับ Filter ค้นหา)
 // ==========================================
 $processed_students = [];
 foreach ($students_data as $stu) {
     $code = $stu['student_code'];
-    $id = (int)$stu['id'];
     $final_status = 'unvoted';
 
-    $on_duty = check_student_duty($conn, $id, $total_students, $target_date);
+    $on_duty = in_array($code, $duty_codes);
     $is_restricted = in_array($code, $restricted_ids);
     $is_overridden = !empty($stu['override_status']);
 
@@ -248,7 +229,7 @@ foreach ($students_data as $stu) {
 }
 
 // ==========================================
-// 6. ฟังก์ชัน Export CSV
+// 5. ฟังก์ชัน Export CSV
 // ==========================================
 if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     $filename = "report_votes_" . date('Ymd', strtotime($target_date)) . ".csv";
@@ -270,7 +251,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     
     // ดึงข้อมูลทั้งหมดสำหรับ Export CSV แบบเต็ม
     $res_export = $conn->query("
-        SELECT s.id, s.student_code, s.prefix, s.first_name, s.last_name, s.platoon, s.company, s.section, 
+        SELECT s.student_code, s.prefix, s.first_name, s.last_name, s.platoon, s.company, s.section, 
                v.status AS normal_vote, v.province, v.travel_method,
                a.override_status, a.override_reason, a.admin_username
         FROM students s
@@ -282,10 +263,9 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     $run_no = 1;
     while ($s = $res_export->fetch_assoc()) {
         $code = $s['student_code'];
-        $id = (int)$s['id'];
         $f_status = 'unvoted';
 
-        $on_duty = check_student_duty($conn, $id, $total_students, $target_date);
+        $on_duty = in_array($code, $duty_codes);
         $is_restricted = in_array($code, $restricted_ids);
 
         if ($on_duty) {
