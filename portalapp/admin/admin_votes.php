@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $stmt_del->execute();
         $stmt_del->close();
 
-        // [เพิ่มใหม่] ลบรายชื่อออกจาก restrictions ด้วยเมื่อกดยกเลิก
+        // ลบรายชื่อออกจาก restrictions ด้วยเมื่อกดยกเลิก
         $stmt_del_rest = $conn->prepare("DELETE FROM restrictions WHERE student_code = ?");
         $stmt_del_rest->bind_param("s", $target_stu);
         $stmt_del_rest->execute();
@@ -51,17 +51,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
         $stmt_chk->close();
 
-        // ==========================================
-        // [เพิ่มใหม่] จัดการข้อมูลลงตาราง restrictions
-        // ==========================================
+        // จัดการข้อมูลลงตาราง restrictions
         if ($new_status === 'restrict') {
-            // เช็คว่ามีการบันทึกกักบริเวณในวันนี้ไปแล้วหรือยัง (ป้องกันการ Insert ซ้ำเวลาแอดมินกดบันทึกหลายรอบ)
             $stmt_chk_rest = $conn->prepare("SELECT id FROM restrictions WHERE student_code = ? AND restrict_type = 'restrict' AND DATE(created_at) = CURRENT_DATE");
             $stmt_chk_rest->bind_param("s", $target_stu);
             $stmt_chk_rest->execute();
             
             if ($stmt_chk_rest->get_result()->num_rows == 0) {
-                // ถ้ายังไม่มีให้ Insert ใหม่ (weeks_count เป็น 1 สัปดาห์อัตโนมัติ ตาม Default ของตาราง)
                 $stmt_ins_rest = $conn->prepare("INSERT INTO restrictions (student_code, weeks_count, restrict_type) VALUES (?, 1, 'restrict')");
                 $stmt_ins_rest->bind_param("s", $target_stu);
                 $stmt_ins_rest->execute();
@@ -69,7 +65,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             }
             $stmt_chk_rest->close();
         } else {
-            // หากแอดมินเปลี่ยนใจ แก้จาก "กักบริเวณ" เป็น "กลับบ้าน/อยู่ รร./เข้าเวร" ให้ลบข้อมูลกักบริเวณออก
             $stmt_del_rest = $conn->prepare("DELETE FROM restrictions WHERE student_code = ? AND restrict_type = 'restrict'");
             $stmt_del_rest->bind_param("s", $target_stu);
             $stmt_del_rest->execute();
@@ -84,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 }
 
 // ==========================================
-// 1. ระบบคำนวณวันที่ และการค้นหา
+// 1. ระบบคำนวณวันที่ และการตั้งค่าพื้นฐาน
 // ==========================================
 $default_target_date = (date('w') == 5) ? date('Y-m-d') : date('Y-m-d', strtotime('next friday'));
 $target_date = isset($_GET['target_date']) ? $_GET['target_date'] : $default_target_date;
@@ -109,13 +104,14 @@ try {
 }
 
 // ==========================================
-// 2. ดึงข้อมูลนักเรียน โหวต และการแทรกแซง
+// 2. ดึงข้อมูลนักเรียนทั้งหมดและคำนวณเวรแบบสมบูรณ์
 // ==========================================
+$all_students_for_duty = [];
 $students_data = [];
 $restricted_ids = [];
 
 try {
-    // 2.1 ดึงรหัสนักเรียนที่ถูกกักบริเวณ
+    // 2.1 ดึงรหัสนักเรียนที่ถูกกักบริเวณในวันที่เลือก
     $stmt_rest = $conn->prepare("
         SELECT DISTINCT student_code 
         FROM restrictions 
@@ -131,7 +127,26 @@ try {
     }
     $stmt_rest->close();
 
-    // 2.2 ดึงข้อมูลนักเรียนทั้งหมด (รวมระบบค้นหา)
+    // 2.2 ดึงรายชื่อนักเรียนทั้งหมด (เรียงตาม ID) เพื่อนำมาคำนวณเวรให้ถูกต้องแม่นยำเสมอไม่ว่าจะค้นหาหรือไม่
+    $res_all = $conn->query("SELECT student_code FROM students ORDER BY id ASC");
+    while ($row_all = $res_all->fetch_assoc()) {
+        $all_students_for_duty[] = $row_all['student_code'];
+    }
+
+    // คำนวณรายชื่อผู้มีเวร (Duty Codes) 16 คน ตามสูตรลำดับวัน
+    $duty_codes = [];
+    $total_all_students = count($all_students_for_duty);
+    if ($total_all_students > 0) {
+        $diff_days = floor((strtotime($target_date) - strtotime($start_date)) / 86400);
+        if ($diff_days < 0) $diff_days = 0;
+        $start_index = ($diff_days * 16) % $total_all_students;
+        for ($i = 0; $i < 16; $i++) {
+            $idx = ($start_index + $i) % $total_all_students;
+            $duty_codes[] = $all_students_for_duty[$idx];
+        }
+    }
+
+    // 2.3 ดึงข้อมูลนักเรียนสำหรับแสดงผล (รองรับการค้นหา)
     $sql_students = "
         SELECT s.id, s.student_code, s.prefix, s.first_name, s.last_name, s.platoon, s.company, s.section, 
                v.status AS normal_vote, v.province, v.travel_method, v.return_day, v.created_at,
@@ -159,36 +174,49 @@ try {
     }
     $stmt->close();
 
-    // คำนวณ duty_codes เพื่อใช้เปรียบเทียบ (โดยไม่เกี่ยวกับการค้นหา จะต้องดึงรายชื่อทั้งหมดมานับใหม่ถ้าต้องการให้แม่นยำ)
-    // หมายเหตุ: หากมีการค้นหา การคำนวณเวรแบบสุ่มด้วยดัชนีอาจจะคลาดเคลื่อนได้ แนะนำให้ดึง duty_codes แยกต่างหากถ้าจำเป็น
-    // เพื่อความรวดเร็ว จะคำนวณจาก $students_data เฉพาะกรณีไม่ได้ค้นหา
-    $duty_codes = [];
-    if ($search_query === '') {
-        $total_all = count($students_data);
-        if ($total_all > 0) {
-            $diff_days = floor((strtotime($target_date) - strtotime($start_date)) / 86400);
-            if ($diff_days < 0) $diff_days = 0;
-            $start_index = ($diff_days * 16) % $total_all;
-            for ($i = 0; $i < 16; $i++) {
-                $idx = ($start_index + $i) % $total_all;
-                if (isset($students_data[$idx])) {
-                    $duty_codes[] = $students_data[$idx]['student_code'];
-                }
-            }
-        }
-    }
-
 } catch (Exception $e) {
     error_log("Data fetch error: " . $e->getMessage());
 }
 
 // ==========================================
-// 3. สรุปสถานะ
+// 3. ประมวลผลสถานะและคำนวณยอดรวมภาพรวมทั้งหมด (ไม่จำกัดเฉพาะที่ค้นหา)
 // ==========================================
-$total_displayed = count($students_data);
-$summary = ['total' => $total_displayed, 'home' => 0, 'stay' => 0, 'duty' => 0, 'restrict' => 0, 'unvoted' => 0];
-$processed_students = [];
+// เพื่อให้สถิติใน Summary Card ตรงกับภาพรวมทั้งหมดของโรงเรียน
+$summary = ['total' => 0, 'home' => 0, 'stay' => 0, 'duty' => 0, 'restrict' => 0, 'unvoted' => 0];
 
+// ดึงข้อมูลทั้งหมดมาคำนวณ Summary สถิติภาพรวม
+$res_summary_data = $conn->query("
+    SELECT s.student_code, v.status AS normal_vote, a.override_status 
+    FROM students s
+    LEFT JOIN weekly_votes v ON s.student_code = v.student_code AND v.vote_date = '" . $conn->real_escape_string($target_date) . "'
+    LEFT JOIN admin_overrides a ON s.student_code = a.student_code AND a.target_date = '" . $conn->real_escape_string($target_date) . "'
+");
+
+if ($res_summary_data) {
+    while ($s_row = $res_summary_data->fetch_assoc()) {
+        $code = $s_row['student_code'];
+        $final_status = 'unvoted';
+        $is_overridden = !empty($s_row['override_status']);
+
+        if (in_array($code, $duty_codes)) {
+            $final_status = 'duty';
+        } elseif ($is_overridden) {
+            $final_status = $s_row['override_status'];
+        } elseif (in_array($code, $restricted_ids)) {
+            $final_status = 'restrict';
+        } elseif (!empty($s_row['normal_vote'])) {
+            $final_status = $s_row['normal_vote'];
+        }
+
+        if (isset($summary[$final_status])) {
+            $summary[$final_status]++;
+        }
+        $summary['total']++;
+    }
+}
+
+// ประมวลผลสถานะสำหรับรายการที่จะแสดงผลในหน้าจอ (รวมการค้นหา)
+$processed_students = [];
 foreach ($students_data as $stu) {
     $code = $stu['student_code'];
     $final_status = 'unvoted';
@@ -206,17 +234,12 @@ foreach ($students_data as $stu) {
 
     $stu['final_status'] = $final_status;
     $processed_students[] = $stu;
-
-    if (isset($summary[$final_status])) {
-        $summary[$final_status]++;
-    }
 }
 
 // ==========================================
 // 4. ฟังก์ชัน Export CSV
 // ==========================================
 if (isset($_GET['export']) && $_GET['export'] === 'csv') {
-    // โค้ดส่วน Export CSV เดิม (เก็บไว้เหมือนเดิม)
     $filename = "report_votes_" . date('Ymd', strtotime($target_date)) . ".csv";
     header('Content-Type: text/csv; charset=UTF-8');
     header('Content-Disposition: attachment; filename="' . $filename . '"');
@@ -234,14 +257,37 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     
     fputcsv($output, ['ลำดับ', 'รหัสประจำตัว', 'ชื่อ - นามสกุล', 'หมวด', 'กองร้อย', 'ตอนเรียน', 'สถานะ', 'จังหวัด', 'การเดินทาง', 'หมายเหตุ']);
     
+    // ดึงข้อมูลทั้งหมดสำหรับ Export CSV
+    $res_export = $conn->query("
+        SELECT s.student_code, s.prefix, s.first_name, s.last_name, s.platoon, s.company, s.section, 
+               v.status AS normal_vote, v.province, v.travel_method,
+               a.override_status, a.override_reason, a.admin_username
+        FROM students s
+        LEFT JOIN weekly_votes v ON s.student_code = v.student_code AND v.vote_date = '" . $conn->real_escape_string($target_date) . "'
+        LEFT JOIN admin_overrides a ON s.student_code = a.student_code AND a.target_date = '" . $conn->real_escape_string($target_date) . "'
+        ORDER BY s.id ASC
+    ");
+
     $run_no = 1;
-    foreach ($processed_students as $s) {
+    while ($s = $res_export->fetch_assoc()) {
+        $code = $s['student_code'];
+        $f_status = 'unvoted';
+        if (in_array($code, $duty_codes)) {
+            $f_status = 'duty';
+        } elseif (!empty($s['override_status'])) {
+            $f_status = $s['override_status'];
+        } elseif (in_array($code, $restricted_ids)) {
+            $f_status = 'restrict';
+        } elseif (!empty($s['normal_vote'])) {
+            $f_status = $s['normal_vote'];
+        }
+
         $full_name = trim(($s['prefix'] ?? '') . ($s['first_name'] ?? '') . ' ' . ($s['last_name'] ?? ''));
         $status_th = 'ยังไม่ทำรายการ';
-        if ($s['final_status'] == 'home') $status_th = 'กลับภูมิลำเนา';
-        if ($s['final_status'] == 'stay') $status_th = 'อยู่ รร.ชท.';
-        if ($s['final_status'] == 'duty') $status_th = 'เวรรักษาการณ์';
-        if ($s['final_status'] == 'restrict') $status_th = 'กักบริเวณ';
+        if ($f_status == 'home') $status_th = 'กลับภูมิลำเนา';
+        if ($f_status == 'stay') $status_th = 'อยู่ รร.ชท.';
+        if ($f_status == 'duty') $status_th = 'เวรรักษาการณ์';
+        if ($f_status == 'restrict') $status_th = 'กักบริเวณ';
 
         $note = '';
         if (!empty($s['override_status'])) {
@@ -266,7 +312,6 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
-    /* ... (CSS เดิมของคุณ) ... */
     :root { --primary: #0f172a; --bg-color: #f8fafc; --text-dark: #1e293b; --text-gray: #64748b; }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body { font-family: 'Prompt', sans-serif; background-color: #e2e8f0; margin: 0; display: flex; justify-content: center; user-select: none; }
@@ -318,7 +363,6 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     .vote-details { font-size: 0.8rem; color: #475569; background: #f8fafc; padding: 10px; border-radius: 8px; display: flex; flex-direction: column; gap: 4px; }
     .override-note { font-size: 0.75rem; color: #ea580c; background: #fff7ed; padding: 6px 10px; border-radius: 6px; border-left: 3px solid #ea580c; margin-top: 5px; }
 
-    /* CSS สำหรับปุ่มแก้ไข */
     .edit-btn { border: none; background: #f1f5f9; color: #64748b; padding: 5px 8px; border-radius: 6px; font-size: 0.7rem; font-family: 'Prompt'; cursor: pointer; transition: 0.2s; margin-top: 5px; width: 100%;}
     .edit-btn:hover { background: #e2e8f0; color: #0f172a; }
 
@@ -327,7 +371,6 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     .nav-link.active { color: var(--primary); }
     .nav-link i { font-size: 1.3rem; }
 
-    /* Modal CSS */
     .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center; }
     .modal-content { background: white; width: 90%; max-width: 380px; border-radius: 16px; padding: 20px; font-family: 'Prompt', sans-serif; position: relative; animation: fadeInUp 0.3s ease; }
     .modal-close { position: absolute; top: 15px; right: 20px; font-size: 1.2rem; color: #94a3b8; cursor: pointer; }
@@ -374,9 +417,9 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
       </form>
     </div>
 
-    <!-- Summary Card -->
+    <!-- Summary Card (ยอดรวมทั้งหมดของ รร. อย่างถูกต้องแม่นยำ) -->
     <div class="summary-card fade-in-up delay-2">
-      <h2>ข้อมูลที่แสดง <?= $summary['total'] ?> นาย</h2>
+      <h2>นักเรียนทั้งหมด <?= $summary['total'] ?> นาย</h2>
       <div class="stats-grid">
         <div class="stat-item"><h3 style="color: #4ade80;"><?= $summary['home'] ?></h3><p>กลับบ้าน</p></div>
         <div class="stat-item"><h3 style="color: #facc15;"><?= $summary['stay'] ?></h3><p>อยู่ รร.</p></div>
@@ -418,7 +461,6 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
               </div>
               <div style="text-align: right;">
                 <div class="status-badge <?= $badge_class ?>"><?= htmlspecialchars($status_th) ?></div>
-                <!-- ปุ่มแก้ไขสถานะ -->
                 <button type="button" class="edit-btn" onclick="openEditModal('<?= $s['student_code'] ?>', '<?= htmlspecialchars($full_name) ?>', '<?= $s['override_status'] ?? '' ?>', '<?= htmlspecialchars($s['override_reason'] ?? '') ?>')">
                   <i class="fas fa-cog"></i> แก้ไข
                 </button>
@@ -492,7 +534,6 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
   </div>
 
   <script>
-    // สคริปต์เปิด-ปิด Modal
     function openEditModal(code, name, status, reason) {
       document.getElementById('modal_student_code').value = code;
       document.getElementById('modal_student_name').value = name + ' (รหัส: ' + code + ')';
@@ -501,7 +542,6 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
       statusSelect.value = status ? status : 'clear';
       
       document.getElementById('modal_override_reason').value = reason;
-      
       document.getElementById('editModal').style.display = 'flex';
     }
 
