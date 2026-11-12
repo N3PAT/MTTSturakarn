@@ -1,7 +1,7 @@
 <?php
 session_start();
 require_once 'db.php';
-require_once '/vote_lib.php'; // เรียกใช้งานฟังก์ชันกลางและค่า START_DATE, DUTY_PER_DAY
+require_once 'vote_lib.php'; // เรียกใช้งานฟังก์ชันกลางและค่า START_DATE, DUTY_PER_DAY
 
 // ตรวจสอบสิทธิ์ Admin
 if (empty($_SESSION['admin_id'])) {
