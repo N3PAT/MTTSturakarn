@@ -105,19 +105,63 @@ try {
 }
 
 // ==========================================
-// 2. ดึงข้อมูลเวรและกักบริเวณ
+// 2. ดึงข้อมูลนักเรียนและคำนวณเวรด้วย Algorithm เดียวกับฝั่งนักเรียน
 // ==========================================
+$all_students = [];
+$start_date = "2026-07-06"; // วันเริ่มต้นคำนวณเวรหลัก
+$skip_resigned_from = "2026-10-31"; // เงื่อนไขข้ามคนลาออก
 $restricted_ids = [];
 $duty_codes = [];
 $students_data = [];
 $summary = ['total' => 0, 'home' => 0, 'stay' => 0, 'duty' => 0, 'restrict' => 0, 'unvoted' => 0];
 
 try {
-    // 2.1 ดึงรหัสนักเรียนที่เข้าเวรในวันที่เลือก (จากฟังก์ชันกลางใน vote_lib.php)
-    $duty_list = duty_students_for_date($conn, $target_date);
-    $duty_codes = array_column($duty_list, 'code');
+    // 2.1 ดึงรายชื่อนักเรียนทั้งหมด (รวมคนลาออก เพื่อรักษาลำดับ id)
+    $res_all = $conn->query("SELECT student_code, status FROM students ORDER BY id ASC");
+    if ($res_all) {
+        while ($row = $res_all->fetch_assoc()) {
+            $all_students[] = $row;
+        }
+    }
 
-    // 2.2 ดึงรหัสนักเรียนที่ถูกกักบริเวณในวันที่เลือก
+    // 2.2 ฟังก์ชันจำลองการสร้างตารางเวรตามวันที่เลือก (ตรงกับฝั่งนักเรียน 100%)
+    function getDutyCodesForDate(array $students, string $start_date, string $target_date, string $skip_from, int $per_day = 16): array {
+        $total = count($students);
+        if ($total === 0) return [];
+
+        $p = 0; 
+        $target_ts = strtotime($target_date);
+        $start_ts = strtotime($start_date);
+        
+        if ($target_ts < $start_ts) return [];
+
+        $schedule_for_date = [];
+        for ($ts = $start_ts; $ts <= $target_ts; $ts += 86400) {
+            $date = date('Y-m-d', $ts);
+            $slots = [];
+            for ($i = 0; $i < $per_day; $i++) {
+                $tries = 0;
+                while ($tries < $total) {
+                    $s = $students[$p];
+                    $p = ($p + 1) % $total;
+                    $tries++;
+                    $is_resigned = (($s['status'] ?? 'studying') === 'resigned');
+                    if ($is_resigned && $date >= $skip_from) continue;
+                    $slots[$i] = $s['student_code'];
+                    break;
+                }
+            }
+            if ($date === $target_date) {
+                $schedule_for_date = $slots;
+                break;
+            }
+        }
+        return $schedule_for_date;
+    }
+
+    $duty_codes = getDutyCodesForDate($all_students, $start_date, $target_date, $skip_resigned_from, 16);
+
+    // 2.3 ดึงรหัสนักเรียนที่ถูกกักบริเวณในวันที่เลือก
     $stmt_rest = $conn->prepare("
         SELECT DISTINCT student_code 
         FROM restrictions 
@@ -133,9 +177,9 @@ try {
     }
     $stmt_rest->close();
 
-    // 2.3 ดึงข้อมูลนักเรียนทั้งหมด (รองรับการค้นหา) พร้อม Join ผลโหวตและ Admin Overrides
+    // 2.4 ดึงข้อมูลนักเรียนสำหรับแสดงผล (รองรับการค้นหา)
     $sql_students = "
-        SELECT s.id, s.student_code, s.prefix, s.first_name, s.last_name, s.platoon, s.company, s.section, 
+        SELECT s.id, s.student_code, s.prefix, s.first_name, s.last_name, s.platoon, s.company, s.section, s.status,
                v.status AS normal_vote, v.province, v.travel_method, v.return_day, v.created_at,
                a.override_status, a.override_reason, a.admin_username
         FROM students s
@@ -166,7 +210,7 @@ try {
 }
 
 // ==========================================
-// 3. คำนวณ Summary สถิติภาพรวมทั้งหมดของโรงเรียน (ไม่จำกัดการค้นหา)
+// 3. ประมวลผลสถานะและคำนวณยอดรวมภาพรวมทั้งหมด (ไม่จำกัดเฉพาะที่ค้นหา)
 // ==========================================
 $res_summary_data = $conn->query("
     SELECT s.student_code, v.status AS normal_vote, a.override_status 
@@ -179,17 +223,13 @@ if ($res_summary_data) {
     while ($s_row = $res_summary_data->fetch_assoc()) {
         $code = $s_row['student_code'];
         $final_status = 'unvoted';
-        
-        $on_duty = in_array($code, $duty_codes);
-        $is_restricted = in_array($code, $restricted_ids);
         $is_overridden = !empty($s_row['override_status']);
 
-        // ลำดับความสำคัญ: Admin Override > เข้าเวร > กักบริเวณ > ผลโหวตปกติ
         if ($is_overridden) {
             $final_status = $s_row['override_status'];
-        } elseif ($on_duty) {
+        } elseif (in_array($code, $duty_codes)) {
             $final_status = 'duty';
-        } elseif ($is_restricted) {
+        } elseif (in_array($code, $restricted_ids)) {
             $final_status = 'restrict';
         } elseif (!empty($s_row['normal_vote'])) {
             $final_status = $s_row['normal_vote'];
@@ -202,23 +242,18 @@ if ($res_summary_data) {
     }
 }
 
-// ==========================================
-// 4. ประมวลผลสถานะสำหรับรายการแสดงผลในหน้าจอ (รองรับ Filter ค้นหา)
-// ==========================================
+// ประมวลผลสถานะสำหรับรายการที่จะแสดงผลในหน้าจอ (รวมการค้นหา)
 $processed_students = [];
 foreach ($students_data as $stu) {
     $code = $stu['student_code'];
     $final_status = 'unvoted';
-
-    $on_duty = in_array($code, $duty_codes);
-    $is_restricted = in_array($code, $restricted_ids);
     $is_overridden = !empty($stu['override_status']);
 
     if ($is_overridden) {
         $final_status = $stu['override_status'];
-    } elseif ($on_duty) {
+    } elseif (in_array($code, $duty_codes)) {
         $final_status = 'duty';
-    } elseif ($is_restricted) {
+    } elseif (in_array($code, $restricted_ids)) {
         $final_status = 'restrict';
     } elseif (!empty($stu['normal_vote'])) {
         $final_status = $stu['normal_vote'];
@@ -229,7 +264,7 @@ foreach ($students_data as $stu) {
 }
 
 // ==========================================
-// 5. ฟังก์ชัน Export CSV
+// 4. ฟังก์ชัน Export CSV
 // ==========================================
 if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     $filename = "report_votes_" . date('Ymd', strtotime($target_date)) . ".csv";
@@ -249,7 +284,6 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     
     fputcsv($output, ['ลำดับ', 'รหัสประจำตัว', 'ชื่อ - นามสกุล', 'หมวด', 'กองร้อย', 'ตอนเรียน', 'สถานะ', 'จังหวัด', 'การเดินทาง', 'หมายเหตุ']);
     
-    // ดึงข้อมูลทั้งหมดสำหรับ Export CSV แบบเต็ม
     $res_export = $conn->query("
         SELECT s.student_code, s.prefix, s.first_name, s.last_name, s.platoon, s.company, s.section, 
                v.status AS normal_vote, v.province, v.travel_method,
@@ -264,15 +298,11 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     while ($s = $res_export->fetch_assoc()) {
         $code = $s['student_code'];
         $f_status = 'unvoted';
-
-        $on_duty = in_array($code, $duty_codes);
-        $is_restricted = in_array($code, $restricted_ids);
-
-        if ($on_duty) {
-            $f_status = 'duty';
-        } elseif (!empty($s['override_status'])) {
+        if (!empty($s['override_status'])) {
             $f_status = $s['override_status'];
-        } elseif ($is_restricted) {
+        } elseif (in_array($code, $duty_codes)) {
+            $f_status = 'duty';
+        } elseif (in_array($code, $restricted_ids)) {
             $f_status = 'restrict';
         } elseif (!empty($s['normal_vote'])) {
             $f_status = $s['normal_vote'];
@@ -308,7 +338,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
-    :root { --primary: #0f172a; --bg-color: #f8fafc; --text-dark: #1e293b; --text-gray: #64748b; }
+    :root { --primary: #503896; --bg-color: #f8fafc; --text-dark: #1e293b; --text-gray: #64748b; }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body { font-family: 'Prompt', sans-serif; background-color: #e2e8f0; margin: 0; display: flex; justify-content: center; user-select: none; }
     .fade-in-up { opacity: 0; transform: translateY(20px); animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
@@ -316,14 +346,14 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     .delay-1 { animation-delay: 0.1s; } .delay-2 { animation-delay: 0.2s; } .delay-3 { animation-delay: 0.3s; }
     .app-container { width: 100%; max-width: 430px; background-color: var(--bg-color); min-height: 100vh; padding-bottom: 100px; box-shadow: 0 0 20px rgba(0,0,0,0.05); position: relative; }
     
-    .top-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 10px; }
+    .top-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 10px; background: var(--primary); color: #fff; }
     .header-left { display: flex; align-items: center; gap: 12px; }
     .back-btn { font-size: 1.2rem; color: var(--text-dark); text-decoration: none; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 12px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-    .page-title h1 { font-size: 1.1rem; font-weight: 700; color: var(--text-dark); margin: 0; }
+    .page-title h1 { font-size: 1.1rem; font-weight: 700; color: #fff; margin: 0; }
     .export-btn { background-color: #10b981; color: white; padding: 8px 12px; border-radius: 10px; font-size: 0.85rem; font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3); transition: transform 0.1s; }
     .export-btn:active { transform: scale(0.95); }
 
-    .filter-section { margin: 10px 24px 0; }
+    .filter-section { margin: 15px 24px 0; }
     .select-wrapper { position: relative; display: flex; align-items: center; margin-bottom: 10px; }
     .select-icon { position: absolute; left: 14px; color: var(--primary); font-size: 1rem; pointer-events: none; }
     .week-select, .search-input { width: 100%; padding: 12px 14px 12px 40px; border-radius: 14px; border: 1px solid #cbd5e1; background-color: white; font-family: 'Prompt', sans-serif; font-size: 0.88rem; font-weight: 500; outline: none; box-shadow: 0 2px 6px rgba(0,0,0,0.03); }
@@ -332,7 +362,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     .search-icon { position: absolute; left: 14px; color: #94a3b8; font-size: 1rem; }
     .search-input { padding-left: 40px; }
 
-    .summary-card { background: linear-gradient(135deg, var(--primary), #1e293b); border-radius: 18px; padding: 20px; margin: 15px 24px 20px; color: white; }
+    .summary-card { background: linear-gradient(135deg, var(--primary), #3d2b78); border-radius: 18px; padding: 20px; margin: 15px 24px 20px; color: white; }
     .summary-card h2 { font-size: 1.1rem; font-weight: 600; margin: 0 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;}
     .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
     .stat-item { background: rgba(255,255,255,0.1); padding: 10px 5px; border-radius: 12px; text-align: center; border: 1px solid rgba(255,255,255,0.15); }
@@ -362,9 +392,9 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     .edit-btn { border: none; background: #f1f5f9; color: #64748b; padding: 5px 8px; border-radius: 6px; font-size: 0.7rem; font-family: 'Prompt'; cursor: pointer; transition: 0.2s; margin-top: 5px; width: 100%;}
     .edit-btn:hover { background: #e2e8f0; color: #0f172a; }
 
-    .bottom-nav { position: fixed; bottom: 0; width: 100%; max-width: 430px; left: 50%; transform: translateX(-50%); height: 70px; background: white; border-top-left-radius: 25px; border-top-right-radius: 25px; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 -5px 20px rgba(0,0,0,0.03); padding: 0 10px; z-index: 1000; }
-    .nav-link { display: flex; flex-direction: column; align-items: center; text-decoration: none; color: #94a3b8; font-size: 0.7rem; font-weight: 600; width: 30%; gap: 4px; }
-    .nav-link.active { color: var(--primary); }
+    .bottom-nav { position: fixed; bottom: 0; width: 100%; max-width: 430px; left: 50%; transform: translateX(-50%); height: 70px; background: var(--primary); border-top-left-radius: 25px; border-top-right-radius: 25px; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 -5px 20px rgba(0,0,0,0.03); padding: 0 10px; z-index: 1000; }
+    .nav-link { display: flex; flex-direction: column; align-items: center; text-decoration: none; color: rgba(255,255,255,0.6); font-size: 0.7rem; font-weight: 600; width: 30%; gap: 4px; }
+    .nav-link.active { color: #fff; }
     .nav-link i { font-size: 1.3rem; }
 
     .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center; }
@@ -382,7 +412,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
   <div class="app-container">
     <div class="top-header fade-in-up delay-1">
       <div class="header-left">
-        <a href="turakarn.php" class="back-btn"><i class="fas fa-chevron-left"></i></a>
+        <a href="turakarn.php" class="back-btn" style="color:#1e293b;"><i class="fas fa-chevron-left"></i></a>
         <div class="page-title">
           <h1>ผลการทำรายการ</h1>
         </div>
@@ -413,7 +443,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
       </form>
     </div>
 
-    <!-- Summary Card (ยอดรวมทั้งหมดของ รร. อย่างถูกต้องแม่นยำ) -->
+    <!-- Summary Card -->
     <div class="summary-card fade-in-up delay-2">
       <h2>นักเรียนทั้งหมด <?= $summary['total'] ?> นาย</h2>
       <div class="stats-grid">
