@@ -34,23 +34,10 @@ function status_label(string $status, string $target_date): string
     return $label;
 }
 
-// จำนวนนักเรียนทั้งหมด (แคช 60 วินาทีถ้ามี APCu)
-function student_total(mysqli $conn): int
-{
-    $key = 'mtts_student_total';
-    if (function_exists('apcu_fetch')) {
-        $v = apcu_fetch($key, $hit);
-        if ($hit) { return (int)$v; }
-    }
-    $n = (int)$conn->query('SELECT COUNT(*) AS c FROM students')->fetch_assoc()['c'];
-    if (function_exists('apcu_store')) { apcu_store($key, $n, 60); }
-    return $n;
-}
-
-// ข้อมูลนักเรียน 1 คน + สถานะบังคับ (กักบริเวณ/เวร)
+// ดึงข้อมูลนักเรียน 1 คน + สถานะบังคับ (กักบริเวณ/เวร) อ้างอิงระบบข้ามคนลาออก
 function get_student_info(mysqli $conn, string $code, string $target_date): ?array
 {
-    $stmt = $conn->prepare('SELECT id, prefix, first_name, last_name, section FROM students WHERE student_code = ? LIMIT 1');
+    $stmt = $conn->prepare('SELECT id, student_code, prefix, first_name, last_name, section, status FROM students WHERE student_code = ? LIMIT 1');
     $stmt->bind_param('s', $code);
     $stmt->execute();
     $row = $stmt->get_result()->fetch_assoc();
@@ -70,20 +57,46 @@ function get_student_info(mysqli $conn, string $code, string $target_date): ?arr
     $restricted = $stmt->get_result()->num_rows > 0;
     $stmt->close();
 
-    // อยู่เวรหรือไม่
+    // ตรวจสอบเวรประจำวัน โดยจำลองการวนลูปข้ามคนลาออก (ตั้งแต่วันที่ 2026-10-31 เป็นต้นไป) ให้ตรงกับระบบกลาง
     $on_duty = false;
-    $total   = student_total($conn);
-    if ($total > 0) {
-        $id = (int)$row['id'];
-        $stmt = $conn->prepare('SELECT COUNT(*) AS c FROM students WHERE id < ?');
-        $stmt->bind_param('i', $id);
-        $stmt->execute();
-        $pos = (int)$stmt->get_result()->fetch_assoc()['c'];
-        $stmt->close();
+    $start_date = START_DATE;
+    $skip_resigned_from = "2026-10-31";
+    $per_day = DUTY_PER_DAY;
 
-        $diff  = max(0, (int)floor((strtotime($target_date) - strtotime(START_DATE)) / 86400));
-        $start = ($diff * DUTY_PER_DAY) % $total;
-        $on_duty = ((($pos - $start) % $total) + $total) % $total < DUTY_PER_DAY;
+    $all_students = [];
+    $res_all = $conn->query("SELECT student_code, status FROM students ORDER BY id ASC");
+    while ($r_all = $res_all->fetch_assoc()) {
+        $all_students[] = $r_all;
+    }
+    
+    $total = count($all_students);
+    if ($total > 0 && strtotime($target_date) >= strtotime($start_date)) {
+        $p = 0;
+        $target_ts = strtotime($target_date);
+        $start_ts = strtotime($start_date);
+        
+        for ($ts = $start_ts; $ts <= $target_ts; $ts += 86400) {
+            $date = date('Y-m-d', $ts);
+            $slots = [];
+            for ($i = 0; $i < $per_day; $i++) {
+                $tries = 0;
+                while ($tries < $total) {
+                    $s = $all_students[$p];
+                    $p = ($p + 1) % $total;
+                    $tries++;
+                    $is_resigned = (($s['status'] ?? 'studying') === 'resigned');
+                    if ($is_resigned && $date >= $skip_resigned_from) continue;
+                    $slots[] = $s['student_code'];
+                    break;
+                }
+            }
+            if ($date === $target_date) {
+                if (in_array($code, $slots)) {
+                    $on_duty = true;
+                }
+                break;
+            }
+        }
     }
 
     return [
@@ -134,7 +147,6 @@ function process_vote(mysqli $conn, array $in, string $target_date, bool $is_ope
             return vote_fail("ไม่พบรหัส $code ในระบบ");
         }
         
-        // ดึงตอนเรียนจากฐานข้อมูลมาใช้อัตโนมัติ
         $section = trim($info['section']);
         if ($section === '') {
             return vote_fail("รหัส $code ยังไม่มีข้อมูลตอนเรียนในระบบ กรุณาติดต่อธุรการ");
