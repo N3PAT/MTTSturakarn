@@ -16,11 +16,11 @@ $start_date = $settings['start_date'] ?? '2026-07-06';
 $skip_resigned_from = "2026-10-31"; // วันที่เริ่มใช้งานเงื่อนไขข้ามคนลาออก
 $per_day = 16; // 4 ผลัด x 4 จุด = 16 คน
 
-// 2. ดึงข้อมูลนักเรียนทั้งหมด (เรียงตาม id เพื่อรักษารักษารอบเวร และดึง status มาตรวจสอบ)
+// 2. ดึงข้อมูลนักเรียนทั้งหมด (เพิ่ม nickname และดึงมาเก็บไว้)
 $all_students = [];
 $student_names = [];
 $res = $conn->query("
-    SELECT student_code, first_name, last_name, status 
+    SELECT student_code, first_name, last_name, nickname, status 
     FROM students 
     WHERE student_code COLLATE utf8mb4_unicode_ci NOT IN (
         SELECT student_code COLLATE utf8mb4_unicode_ci FROM duty_exemptions WHERE is_active = 1
@@ -29,7 +29,8 @@ $res = $conn->query("
 ");
 while ($row = $res->fetch_assoc()) {
     $all_students[] = $row;
-    $student_names[$row['student_code']] = $row['first_name']; // ใช้ชื่อจริงตามแบบฟอร์ม
+    // เลือกแสดงชื่อเล่น หากไม่มีชื่อเล่นให้ใช้ชื่อจริงแทน
+    $student_names[$row['student_code']] = !empty($row['nickname']) ? $row['nickname'] : $row['first_name']; 
 }
 $total_students = count($all_students);
 
@@ -40,7 +41,7 @@ while ($row = $res_override->fetch_assoc()) {
     $overrides[$row['target_date']][$row['original_student_code']] = $row['new_student_code'];
 }
 
-// 3. ฟังก์ชันคำนวณตารางเวรรายวันแบบข้ามคนลาออก (อิงตามระบบหลัก)
+// 3. ฟังก์ชันคำนวณตารางเวรรายวันแบบข้ามคนลาออก
 function buildMonthlyRoster(array $students, string $start_date, string $target_month, string $skip_from, array $overrides, int $per_day = 16): array {
     $monthly_roster = [];
     $total = count($students);
@@ -71,7 +72,6 @@ function buildMonthlyRoster(array $students, string $start_date, string $target_
                 $tries++;
                 
                 $is_resigned = (($s['status'] ?? 'studying') === 'resigned');
-                // ข้ามเฉพาะคนลาออก ตั้งแต่วันที่กำหนดเป็นต้นไป
                 if ($is_resigned && $date >= $skip_from) continue;
                 
                 $slots[] = $s['student_code'];
@@ -79,12 +79,10 @@ function buildMonthlyRoster(array $students, string $start_date, string $target_
             }
         }
 
-        // หากอยู่ในเดือนที่กำลังเลือก ให้บันทึกลงตารางประจำเดือน
         if ($current_m === $target_month) {
             $day_num = (int)date('j', $ts);
             $daily_duty = [];
             foreach ($slots as $orig_code) {
-                // ตรวจสอบว่ามีการ Override หรือไม่
                 $actual = isset($overrides[$date][$orig_code]) ? $overrides[$date][$orig_code] : $orig_code;
                 $daily_duty[] = $student_names[$actual] ?? $actual;
             }
@@ -100,9 +98,8 @@ $monthly_roster = buildMonthlyRoster($all_students, $start_date, $target_month, 
 $weeks = [];
 $current_week = [];
 $days_in_month = date('t', strtotime($target_month . '-01'));
-$first_day_of_month_w = date('N', strtotime($target_month . '-01')); // 1=จันทร์, 7=อาทิตย์
+$first_day_of_month_w = date('N', strtotime($target_month . '-01'));
 
-// เติมช่องว่างสัปดาห์แรก
 for ($i = 1; $i < $first_day_of_month_w; $i++) {
     $current_week[$i] = null; 
 }
@@ -123,10 +120,10 @@ for ($day = 1; $day <= $days_in_month; $day++) {
 }
 
 // แปลงเดือน/ปี เป็นภาษาไทย
-$thai_months = ["01"=>"มกราคม", "02"=>"กุมภาพันธ์", "03"=>"มีนาคม", "04"=>"เมษายน", "05"=>"พฤษภาคม", "06"=>"มิถุนายน", "07"=>"กรกฎาคม", "08"=>"สิงหาคม", "09"=>"กันยายน", "10"=>"ตุลาคม", "11"=>"พฤศจิกายน", "12"=>"ธันวาคม"];
+$thai_months = ["01"=>"มกราคม", "02"=>"กุมภาพันธ์", "03"=>"มีนาคม", "04"=>"เมษายน", "05"=>"พฤษภาคม", "06"=>"มิถุนายน", "07"=>"กรกฎาคม", "08"=>"สิงหาคม", "09"=>"กันยายน", "10"=>"ตลาคม", "11"=>"พฤศจิกายน", "12"=>"ธันวาคม"];
 $th_month = $thai_months[date('m', strtotime($target_month))];
 $th_year = date('Y', strtotime($target_month)) + 543;
-$th_year_short = substr($th_year, 2, 2); // เช่น 69
+$th_year_short = substr($th_year, 2, 2);
 
 $shifts = ['ผลัดที่ ๑', 'ผลัดที่ ๒', 'ผลัดที่ ๓', 'ผลัดที่ ๔'];
 $points = ['จุดที่ ๔', 'จุดที่ ๕', 'จุดที่ ๖', 'จุดที่ ๓'];
