@@ -1,12 +1,13 @@
 <?php
 session_start();
 require_once '../db.php';
+require_once __DIR__ . '/../duty_core.php'; // ตัวคำนวณเวรกลาง (ข้ามคนลาออก)
 
 if (empty($_SESSION['admin_id'])) {
     die("Unauthorized Access");
 }
 
-$target_month = $_GET['month'] ?? date('Y-m');
+$target_month = (isset($_GET['month']) && preg_match('/^\d{4}-\d{2}$/', $_GET['month'])) ? $_GET['month'] : date('Y-m');
 
 // 1. ดึงข้อมูลการตั้งค่า
 $settings_query = $conn->query("SELECT * FROM duty_settings LIMIT 1");
@@ -16,10 +17,12 @@ $per_day = 16; // อิงตามแบบฟอร์ม 4 ผลัด x 4 
 
 // 2. ดึงข้อมูลนักเรียนและ Overrides
 $active_students = [];
+$active_rows = [];
 $student_names = [];
-$res = $conn->query("SELECT student_code, first_name, last_name FROM students WHERE student_code COLLATE utf8mb4_unicode_ci NOT IN (SELECT student_code COLLATE utf8mb4_unicode_ci FROM duty_exemptions WHERE is_active = 1) ORDER BY id ASC");
+$res = $conn->query("SELECT student_code, first_name, last_name, status FROM students WHERE student_code COLLATE utf8mb4_unicode_ci NOT IN (SELECT student_code COLLATE utf8mb4_unicode_ci FROM duty_exemptions WHERE is_active = 1) ORDER BY id ASC");
 while ($row = $res->fetch_assoc()) {
     $active_students[] = $row['student_code'];
+    $active_rows[] = ['student_code' => $row['student_code'], 'status' => $row['status']];
     $student_names[$row['student_code']] = $row['first_name']; // ใช้แค่ชื่อจริงตามแบบฟอร์ม
 }
 
@@ -34,16 +37,17 @@ $monthly_roster = [];
 $days_in_month = date('t', strtotime($target_month . '-01'));
 $total_active = count($active_students);
 
+$month_end = date('Y-m-t', strtotime($target_month . '-01'));
+$full_schedule = ($total_active > 0 && strtotime($month_end) >= strtotime($start_date))
+    ? duty_build_schedule($active_rows, $start_date, $month_end, DUTY_SKIP_RESIGNED_FROM, $per_day)
+    : [];
+
 for ($day = 1; $day <= $days_in_month; $day++) {
     $current_date = date('Y-m-d', strtotime("$target_month-$day"));
-    $diff_days = floor((strtotime($current_date) - strtotime($start_date)) / 86400);
 
     $daily_duty = [];
-    if ($diff_days >= 0 && $total_active > 0) {
-        $start_index = ($diff_days * $per_day) % $total_active;
-        for ($i = 0; $i < $per_day; $i++) {
-            $idx = ($start_index + $i) % $total_active;
-            $orig = $active_students[$idx];
+    if (isset($full_schedule[$current_date])) {
+        foreach ($full_schedule[$current_date] as $orig) {
             $actual = isset($overrides[$current_date][$orig]) ? $overrides[$current_date][$orig] : $orig;
             $daily_duty[] = $student_names[$actual] ?? $actual;
         }
@@ -224,9 +228,9 @@ $day_names = [1 => 'จันทร์', 2 => 'อังคาร', 3 => 'พุ
             <div class="footer-right">
                 <p>ตรวจถูกต้อง</p>
                 <br><br>
-                <p>พ.ต. .....................................................</p>
-                <p>(อัคเดช ใจเที่ยงกุล)</p>
-                <p>ผบ.ร้อย กรม นร.รร.ชท.</p>
+                <p>ร.ท. .....................................................</p>
+                <p>(ปฎิพัฒ ปิยะธนากร)</p>
+                <p>ผบ.มว กรม นร.รร.ชท.</p>
             </div>
         </div>
         <?php endif; ?>
