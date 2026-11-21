@@ -31,20 +31,24 @@ if (isset($_GET['check_status'])) {
     exit();
 }
 
-/* โหวตกลับบ้านสัปดาห์นี้แล้วหรือยัง
-   นับว่าโหวตแล้ว ถ้ากดส่งในสัปดาห์นี้ (created_at) หรือวันกลับ (vote_date) อยู่ในสัปดาห์นี้/ยังไม่ถึง
-   (เดิมดูแค่ vote_date จึงขึ้นว่ายังไม่โหวต เมื่อตั้งวันกลับเป็นสัปดาห์หน้า) */
+/* โหวตกลับบ้านแล้วหรือยัง: เทียบ vote_date กับ target_date ของ vote_window() (ตัวเดียวกับที่ fill.php บันทึก) */
+@include_once 'vote_lib.php';
 function has_voted_current_week(mysqli $db, string $code): bool
 {
-    $stmt = $db->prepare(
-        "SELECT COUNT(*) FROM weekly_votes
-         WHERE TRIM(student_code) = TRIM(?)
-           AND (
-                YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)
-             OR YEARWEEK(vote_date, 1)  = YEARWEEK(CURDATE(), 1)
-             OR vote_date >= CURDATE()
-           )");
-    $stmt->bind_param('s', $code);
+    $target = null;
+    if (function_exists('vote_window')) {
+        $w = vote_window($db);
+        $target = $w['target_date'] ?? null;
+    }
+    if ($target) {
+        $stmt = $db->prepare("SELECT COUNT(*) FROM weekly_votes WHERE student_code = ? AND vote_date = ?");
+        $c = trim($code);
+        $stmt->bind_param('ss', $c, $target);
+    } else {
+        $stmt = $db->prepare("SELECT COUNT(*) FROM weekly_votes WHERE TRIM(student_code) = TRIM(?)
+            AND (YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1) OR vote_date >= CURDATE())");
+        $stmt->bind_param('s', $code);
+    }
     $stmt->execute();
     $stmt->bind_result($cnt);
     $stmt->fetch();
