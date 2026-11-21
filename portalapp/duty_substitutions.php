@@ -8,6 +8,7 @@ if (empty($_SESSION['csrf_token'])) {
 }
 
 require 'db.php';
+require_once __DIR__ . '/duty_core.php'; // ตัวคำนวณเวรกลาง (ข้ามคนลาออก)
 
 function getStudentDutyForDate($conn, $student_code, $duty_date) {
     if (empty($duty_date) or empty($student_code)) {
@@ -31,28 +32,15 @@ function getStudentDutyForDate($conn, $student_code, $duty_date) {
         return null;
     }
 
-    $all_students = array();
+    // ใช้ตัวคำนวณกลาง (ข้ามคนที่ status = 'resigned') ให้ตรงกับหน้าอื่น
     try {
-        $res = $conn->query("SELECT student_code FROM students ORDER BY id ASC");
-        if ($res and $res->num_rows > 0) {
-            while ($row = $res->fetch_assoc()) {
-                $all_students[] = $row['student_code'];
-            }
-        }
+        $codes = duty_codes_for_date($conn, date('Y-m-d', $eval_ts), $start_date, 16);
     } catch (Exception $e) {
         return null;
     }
 
-    $total_students = count($all_students);
-    if ($total_students === 0) {
-        return null;
-    }
-
-    $start_index = ($diff_days * 16) % $total_students;
-
-    for ($i = 0; $i < 16; $i++) {
-        $idx = ($start_index + $i) % $total_students;
-        if (isset($all_students[$idx]) and $all_students[$idx] === $student_code) {
+    foreach ($codes as $i => $code_on_duty) {
+        if ($code_on_duty === (string)$student_code) {
             $shift_idx = floor($i / 4);
             $loc_idx = $i % 4;
             return array(
