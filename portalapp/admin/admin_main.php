@@ -6,8 +6,8 @@ date_default_timezone_set('Asia/Bangkok');
 if (file_exists('db.php')) {
     require_once 'db.php';
     // ตัวคำนวณเวรกลาง (ข้ามคนลาออก) — ถ้าไม่พบไฟล์ จะไม่ทำให้หน้าล่ม แต่ใช้สูตรสำรองด้านล่างแทน
-    if (is_file(__DIR__ . '/duty_core.php')) {
-        require_once __DIR__ . '/duty_core.php';
+    foreach ([__DIR__ . '/duty_core.php', __DIR__ . '/../duty_core.php'] as $__duty_core) {
+        if (is_file($__duty_core)) { require_once $__duty_core; break; }
     }
 } else {
     die("Error: ไม่พบไฟล์ db.php หรือตั้งชื่อไฟล์ผิด (ตัวพิมพ์เล็ก-ใหญ่มีผลบน Server)");
