@@ -15,7 +15,12 @@ try {
         throw new Exception("ไม่พบไฟล์ 'db.php' กรุณาตรวจสอบการอัปโหลดไฟล์");
     }
     require_once 'db.php';
-    require_once __DIR__ . '/duty_core.php'; // ตัวคำนวณเวรกลาง (ข้ามคนลาออก)
+    foreach ([__DIR__ . '/duty_core.php', __DIR__ . '/../duty_core.php'] as $__duty_core) {
+        if (is_file($__duty_core)) { require_once $__duty_core; break; }
+    }
+    if (!function_exists('duty_build_schedule')) {
+        throw new Exception("ไม่พบไฟล์ 'duty_core.php' กรุณาอัปโหลดไว้ในโฟลเดอร์เดียวกับ db.php");
+    }
 
     // 2. ตรวจสอบสิทธิ์ Admin
     if (empty($_SESSION['admin_id'])) {
