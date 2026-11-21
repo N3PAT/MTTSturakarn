@@ -277,6 +277,7 @@ $menu_items = [
     ['href' => 'discipline_history.php', 'icon' => 'fa-file-alt',     'color' => 'bg-blue',   'label' => 'บัตรวินัย'],
     ['href' => 'duty_substitutions.php', 'icon' => 'fa-address-book', 'color' => 'bg-green',  'label' => 'เปลี่ยนเวร'],
     ['href' => 'commanders.php', 'icon' => 'fa-solid fa-user-tie', 'color' => 'bg-green',  'label' => 'รายนามผู้บังคับบัญชา'],
+    ['href' => 'feedback.php',           'icon' => 'fa-comment-dots', 'color' => 'bg-purple', 'label' => 'ข้อเสนอแนะ'],
 ];
 
 $nav_items = [
@@ -487,6 +488,8 @@ $profile = [
     .menu-item[href='discipline_history.php'] .icon-box{background-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' fill='%230284c7'/><rect x='11' y='16' width='42' height='32' rx='5' fill='%23fff'/><path d='M11 21a5 5 0 0 1 5-5h32a5 5 0 0 1 5 5v4H11z' fill='%23f472b6'/><circle cx='23' cy='36' r='5' fill='%23bae6fd'/><rect x='32' y='31' width='15' height='3' rx='1.5' fill='%23cbd5e1'/><rect x='32' y='38' width='11' height='3' rx='1.5' fill='%23cbd5e1'/></svg>")}
     .menu-item[href='duty_substitutions.php'] .icon-box{background-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' fill='%23059669'/><circle cx='22' cy='22' r='6' fill='%23fff'/><path d='M12 38a10 10 0 0 1 20 0z' fill='%23fff'/><circle cx='44' cy='22' r='6' fill='%23a7f3d0'/><path d='M34 38a10 10 0 0 1 20 0z' fill='%23a7f3d0'/><path d='M16 49h32M21 44l-5 5 5 5M43 44l5 5-5 5' stroke='%23fff' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>")}
     .menu-item[href='commanders.php'] .icon-box{background-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' fill='%231e3a8a'/><circle cx='32' cy='23' r='9' fill='%23fff'/><path d='M14 54c0-11 8-17 18-17s18 6 18 17z' fill='%23fff'/><path d='M29 38h6l-1 4 3 12H27l3-12z' fill='%23fbbf24'/></svg>")}
+
+    .menu-item[href='feedback.php'] .icon-box{background-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' fill='%23db2777'/><path d='M14 16h36a4 4 0 0 1 4 4v20a4 4 0 0 1-4 4H30l-10 9v-9h-6a4 4 0 0 1-4-4V20a4 4 0 0 1 4-4z' fill='%23fff'/><path d='M32 21l3 6.2 6.8.9-5 4.7 1.3 6.7-6.1-3.3-6.1 3.3 1.3-6.7-5-4.7 6.8-.9z' fill='%23fbbf24'/></svg>")}
 
     /* news */
     .news-carousel{display:flex;gap:14px;padding:4px var(--g) 10px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;scrollbar-width:none}
