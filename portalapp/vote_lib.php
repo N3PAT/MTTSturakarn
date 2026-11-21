@@ -4,6 +4,7 @@
  * (วางไฟล์นี้ไว้โฟลเดอร์เดียวกับ db.php)
  */
 date_default_timezone_set('Asia/Bangkok');
+require_once __DIR__ . '/duty_core.php'; // ตัวคำนวณเวรกลาง (ข้ามคนลาออก)
 
 const START_DATE   = '2026-07-06';  // วันเริ่มต้นคำนวณเวรหลัก
 const DUTY_PER_DAY = 16;            // จำนวนผู้อยู่เวรต่อวัน
@@ -86,22 +87,24 @@ function vote_window(mysqli $conn): array
     ];
 }
 
-// รายชื่อผู้อยู่เวรของวันที่กำหนด — สูตรเดียวกับ get_student_info() ใน fill.php
+// รายชื่อผู้อยู่เวรของวันที่กำหนด — ใช้ตัวคำนวณกลางใน duty_core.php (ข้ามคนลาออกตั้งแต่ DUTY_SKIP_RESIGNED_FROM)
 function duty_students_for_date(mysqli $conn, string $date): array
 {
-    $rows  = $conn->query('SELECT student_code, prefix, first_name, last_name, section FROM students ORDER BY id')
-                  ->fetch_all(MYSQLI_ASSOC);
-    $total = count($rows);
-    if ($total === 0) return [];
+    $codes = duty_codes_for_date($conn, $date, START_DATE, DUTY_PER_DAY);
+    if (!$codes) return [];
 
-    $diff  = max(0, (int)floor((strtotime($date) - strtotime(START_DATE)) / 86400));
-    $start = ($diff * DUTY_PER_DAY) % $total;
+    $by_code = [];
+    $res = $conn->query('SELECT student_code, prefix, first_name, last_name, section FROM students');
+    while ($r = $res->fetch_assoc()) {
+        $by_code[(string)$r['student_code']] = $r;
+    }
 
     $out = [];
-    for ($k = 0, $n = min(DUTY_PER_DAY, $total); $k < $n; $k++) {
-        $r = $rows[($start + $k) % $total];
+    foreach ($codes as $code) {
+        $r = $by_code[$code] ?? null;
+        if ($r === null) continue;
         $out[] = [
-            'code'    => (string)$r['student_code'],
+            'code'    => (string)$code,
             'name'    => trim(($r['prefix'] ?? '') . ($r['first_name'] ?? '') . ' ' . ($r['last_name'] ?? '')),
             'section' => (string)($r['section'] ?? ''),
         ];
