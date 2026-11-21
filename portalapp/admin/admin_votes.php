@@ -113,7 +113,9 @@ $skip_resigned_from = "2026-10-31"; // เงื่อนไขข้ามค�
 $restricted_ids = [];
 $duty_codes = [];
 $students_data = [];
-$summary = ['total' => 0, 'home' => 0, 'stay' => 0, 'duty' => 0, 'restrict' => 0, 'unvoted' => 0];
+$summary = ['total' => 0, 'home' => 0, 'stay' => 0, 'duty' => 0, 'restrict' => 0, 'unvoted' => 0, 'resigned' => 0];
+$stat_keys = ['home', 'stay', 'duty', 'restrict', 'unvoted'];
+$group_summary = []; // สรุปยอดแยกตาม ร้อย. > หมวด : [company][platoon] => จำนวนแต่ละสถานะ
 
 try {
     // 2.1 ดึงรายชื่อนักเรียนทั้งหมด (รวมคนลาออก เพื่อรักษาลำดับ id)
@@ -213,7 +215,7 @@ try {
 // 3. ประมวลผลสถานะและคำนวณยอดรวมภาพรวมทั้งหมด (ไม่จำกัดเฉพาะที่ค้นหา)
 // ==========================================
 $res_summary_data = $conn->query("
-    SELECT s.student_code, v.status AS normal_vote, a.override_status 
+    SELECT s.student_code, s.company, s.platoon, s.status AS student_status, v.status AS normal_vote, a.override_status 
     FROM students s
     LEFT JOIN weekly_votes v ON s.student_code = v.student_code AND v.vote_date = '" . $conn->real_escape_string($target_date) . "'
     LEFT JOIN admin_overrides a ON s.student_code = a.student_code AND a.target_date = '" . $conn->real_escape_string($target_date) . "'
@@ -221,6 +223,12 @@ $res_summary_data = $conn->query("
 
 if ($res_summary_data) {
     while ($s_row = $res_summary_data->fetch_assoc()) {
+        // ผู้ลาออกไม่นับเป็นยอดของหน่วย (ไม่ให้ไปปนอยู่ในช่อง "ยังไม่ทำรายการ")
+        if (($s_row['student_status'] ?? '') === 'resigned') {
+            $summary['resigned']++;
+            continue;
+        }
+
         $code = $s_row['student_code'];
         $final_status = 'unvoted';
         $is_overridden = !empty($s_row['override_status']);
@@ -234,13 +242,26 @@ if ($res_summary_data) {
         } elseif (!empty($s_row['normal_vote'])) {
             $final_status = $s_row['normal_vote'];
         }
-
-        if (isset($summary[$final_status])) {
-            $summary[$final_status]++;
+        if (!in_array($final_status, $stat_keys, true)) {
+            $final_status = 'unvoted'; // ค่าที่ไม่รู้จัก นับเป็นยังไม่ทำรายการ เพื่อให้ยอดรวมตรงกันเสมอ
         }
+
+        $summary[$final_status]++;
         $summary['total']++;
+
+        // สรุปยอดแยกตามหมวด (ร้อย. > หมวด)
+        $co = trim((string)($s_row['company'] ?? ''));  if ($co === '') $co = '-';
+        $pl = trim((string)($s_row['platoon'] ?? ''));  if ($pl === '') $pl = '-';
+        if (!isset($group_summary[$co][$pl])) {
+            $group_summary[$co][$pl] = array_fill_keys(array_merge(['total'], $stat_keys), 0);
+        }
+        $group_summary[$co][$pl][$final_status]++;
+        $group_summary[$co][$pl]['total']++;
     }
 }
+ksort($group_summary, SORT_NATURAL);
+foreach ($group_summary as &$__pls) { ksort($__pls, SORT_NATURAL); }
+unset($__pls);
 
 // ประมวลผลสถานะสำหรับรายการที่จะแสดงผลในหน้าจอ (รวมการค้นหา)
 $processed_students = [];
@@ -259,6 +280,7 @@ foreach ($students_data as $stu) {
         $final_status = $stu['normal_vote'];
     }
 
+    if (($stu['status'] ?? '') === 'resigned') { $final_status = 'resigned'; }
     $stu['final_status'] = $final_status;
     $processed_students[] = $stu;
 }
@@ -280,13 +302,29 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     fputcsv($output, ['4. กักบริเวณ', $summary['restrict'], 'นาย']);
     fputcsv($output, ['5. ยังไม่ทำรายการ', $summary['unvoted'], 'นาย']);
     fputcsv($output, ['รวมทั้งสิ้น', $summary['total'], 'นาย']);
+    if ($summary['resigned'] > 0) {
+        fputcsv($output, ['(ไม่นับผู้ลาออก)', $summary['resigned'], 'นาย']);
+    }
+    fputcsv($output, []);
+
+    // สรุปยอดแยกตามหมวด
+    fputcsv($output, ['สรุปยอดแต่ละหมวด']);
+    fputcsv($output, ['ร้อย.', 'หมวด', 'รวม', 'กลับภูมิลำเนา', 'อยู่ รร.ชท.', 'เวรรักษาการณ์', 'กักบริเวณ', 'ยังไม่ทำรายการ']);
+    foreach ($group_summary as $co => $pls) {
+        $co_tot = array_fill_keys(array_merge(['total'], $stat_keys), 0);
+        foreach ($pls as $pl => $g) {
+            fputcsv($output, [$co, $pl, $g['total'], $g['home'], $g['stay'], $g['duty'], $g['restrict'], $g['unvoted']]);
+            foreach ($co_tot as $k => $_) { $co_tot[$k] += $g[$k]; }
+        }
+        fputcsv($output, ["รวมร้อย.$co", '', $co_tot['total'], $co_tot['home'], $co_tot['stay'], $co_tot['duty'], $co_tot['restrict'], $co_tot['unvoted']]);
+    }
     fputcsv($output, []); 
     
     fputcsv($output, ['ลำดับ', 'รหัสประจำตัว', 'ชื่อ - นามสกุล', 'หมวด', 'กองร้อย', 'ตอนเรียน', 'สถานะ', 'จังหวัด', 'การเดินทาง', 'หมายเหตุ']);
     
     $res_export = $conn->query("
         SELECT s.student_code, s.prefix, s.first_name, s.last_name, s.platoon, s.company, s.section, 
-               v.status AS normal_vote, v.province, v.travel_method,
+               s.status AS student_status, v.status AS normal_vote, v.province, v.travel_method,
                a.override_status, a.override_reason, a.admin_username
         FROM students s
         LEFT JOIN weekly_votes v ON s.student_code = v.student_code AND v.vote_date = '" . $conn->real_escape_string($target_date) . "'
@@ -308,8 +346,11 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
             $f_status = $s['normal_vote'];
         }
 
+        if (($s['student_status'] ?? '') === 'resigned') { $f_status = 'resigned'; }
+
         $full_name = trim(($s['prefix'] ?? '') . ($s['first_name'] ?? '') . ' ' . ($s['last_name'] ?? ''));
         $status_th = 'ยังไม่ทำรายการ';
+        if ($f_status == 'resigned') $status_th = 'ลาออก';
         if ($f_status == 'home') $status_th = 'กลับภูมิลำเนา';
         if ($f_status == 'stay') $status_th = 'อยู่ รร.ชท.';
         if ($f_status == 'duty') $status_th = 'เวรรักษาการณ์';
@@ -385,6 +426,19 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     .status-duty { background: #fee2e2; color: #991b1b; } 
     .status-restrict { background: #ffedd5; color: #c2410c; }
     .status-unvoted { background: #f1f5f9; color: #475569; }
+    .status-resigned { background: #e2e8f0; color: #64748b; text-decoration: line-through; }
+
+    .group-card { background: white; border-radius: 18px; padding: 16px 12px; margin: 0 24px 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1px solid #f1f5f9; }
+    .group-card h2 { font-size: 1rem; font-weight: 600; margin: 0 4px 10px; color: var(--text-dark); }
+    .group-co { font-size: 0.8rem; font-weight: 600; color: var(--primary); margin: 12px 4px 6px; }
+    .group-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; text-align: center; }
+    .group-table th { font-weight: 600; font-size: 0.68rem; color: var(--text-gray); padding: 6px 2px; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+    .group-table td { padding: 7px 2px; border-bottom: 1px solid #f1f5f9; color: var(--text-dark); }
+    .group-table td:first-child, .group-table th:first-child { text-align: left; padding-left: 4px; }
+    .group-table tr.sub td { font-weight: 700; background: #f8fafc; border-bottom: none; }
+    .group-table .c-home { color: #16a34a; } .group-table .c-stay { color: #ca8a04; } .group-table .c-duty { color: #dc2626; }
+    .group-table .c-restrict { color: #ea580c; } .group-table .c-unvoted { color: #64748b; }
+    .group-note { font-size: 0.7rem; color: var(--text-gray); margin: 10px 4px 0; }
     
     .vote-details { font-size: 0.8rem; color: #475569; background: #f8fafc; padding: 10px; border-radius: 8px; display: flex; flex-direction: column; gap: 4px; }
     .override-note { font-size: 0.75rem; color: #ea580c; background: #fff7ed; padding: 6px 10px; border-radius: 6px; border-left: 3px solid #ea580c; margin-top: 5px; }
@@ -445,7 +499,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
 
     <!-- Summary Card -->
     <div class="summary-card fade-in-up delay-2">
-      <h2>นักเรียนทั้งหมด <?= $summary['total'] ?> นาย</h2>
+      <h2>นักเรียนทั้งหมด <?= $summary['total'] ?> นาย<?php if ($summary['resigned'] > 0): ?> <span style="font-size:0.7rem; font-weight:400; opacity:0.8;">(ไม่นับผู้ลาออก <?= $summary['resigned'] ?> นาย)</span><?php endif; ?></h2>
       <div class="stats-grid">
         <div class="stat-item"><h3 style="color: #4ade80;"><?= $summary['home'] ?></h3><p>กลับบ้าน</p></div>
         <div class="stat-item"><h3 style="color: #facc15;"><?= $summary['stay'] ?></h3><p>อยู่ รร.</p></div>
@@ -453,6 +507,49 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
         <div class="stat-item"><h3 style="color: #fb923c;"><?= $summary['restrict'] ?></h3><p>กักบริเวณ</p></div>
         <div class="stat-item" style="grid-column: span 2;"><h3 style="color: #cbd5e1;"><?= $summary['unvoted'] ?></h3><p>ยังไม่ทำรายการ</p></div>
       </div>
+    </div>
+
+
+    <!-- สรุปยอดแต่ละหมวด -->
+    <div class="group-card fade-in-up delay-2">
+      <h2>สรุปยอดแต่ละหมวด</h2>
+      <?php if (empty($group_summary)): ?>
+        <div class="group-note">ไม่มีข้อมูล</div>
+      <?php else: ?>
+        <?php foreach ($group_summary as $co => $pls): ?>
+          <?php $co_tot = array_fill_keys(array_merge(['total'], $stat_keys), 0); ?>
+          <div class="group-co">ร้อย. <?= htmlspecialchars((string)$co) ?></div>
+          <table class="group-table">
+            <thead>
+              <tr><th>หมวด</th><th>รวม</th><th>บ้าน</th><th>อยู่</th><th>เวร</th><th>กัก</th><th>ยังไม่</th></tr>
+            </thead>
+            <tbody>
+              <?php foreach ($pls as $pl => $g): ?>
+                <?php foreach ($co_tot as $k => $_) { $co_tot[$k] += $g[$k]; } ?>
+                <tr>
+                  <td>หมวด <?= htmlspecialchars((string)$pl) ?></td>
+                  <td><b><?= $g['total'] ?></b></td>
+                  <td class="c-home"><?= $g['home'] ?></td>
+                  <td class="c-stay"><?= $g['stay'] ?></td>
+                  <td class="c-duty"><?= $g['duty'] ?></td>
+                  <td class="c-restrict"><?= $g['restrict'] ?></td>
+                  <td class="c-unvoted"><?= $g['unvoted'] ?></td>
+                </tr>
+              <?php endforeach; ?>
+              <tr class="sub">
+                <td>รวมร้อย. <?= htmlspecialchars((string)$co) ?></td>
+                <td><?= $co_tot['total'] ?></td>
+                <td class="c-home"><?= $co_tot['home'] ?></td>
+                <td class="c-stay"><?= $co_tot['stay'] ?></td>
+                <td class="c-duty"><?= $co_tot['duty'] ?></td>
+                <td class="c-restrict"><?= $co_tot['restrict'] ?></td>
+                <td class="c-unvoted"><?= $co_tot['unvoted'] ?></td>
+              </tr>
+            </tbody>
+          </table>
+        <?php endforeach; ?>
+        <div class="group-note">บ้าน = กลับภูมิลำเนา · อยู่ = อยู่ รร.ชท. · เวร = เวรรักษาการณ์ · กัก = กักบริเวณ · ยังไม่ = ยังไม่ทำรายการ</div>
+      <?php endif; ?>
     </div>
 
     <div class="section-title fade-in-up delay-3">
@@ -478,6 +575,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
             if ($s['final_status'] === 'stay') { $status_th = 'อยู่ รร.'; $badge_class = 'status-stay'; }
             if ($s['final_status'] === 'duty') { $status_th = 'เข้าเวร'; $badge_class = 'status-duty'; }
             if ($s['final_status'] === 'restrict') { $status_th = 'กักบริเวณ'; $badge_class = 'status-restrict'; }
+            if ($s['final_status'] === 'resigned') { $status_th = 'ลาออก'; $badge_class = 'status-resigned'; }
           ?>
           <div class="vote-card">
             <div class="vote-header">
