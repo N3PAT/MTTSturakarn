@@ -1,7 +1,12 @@
 <?php
 session_start();
 require_once '../db.php';
-require_once __DIR__ . '/../duty_core.php'; // ตัวคำนวณเวรกลาง (ข้ามคนลาออก)
+foreach ([__DIR__ . '/../duty_core.php', __DIR__ . '/../../duty_core.php'] as $__duty_core) {
+    if (is_file($__duty_core)) { require_once $__duty_core; break; }
+}
+if (!function_exists('duty_build_schedule')) {
+    die('Error: duty_core.php not found');
+}
 
 if (empty($_SESSION['admin_id'])) {
     die("Unauthorized Access");
