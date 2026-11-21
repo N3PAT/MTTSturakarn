@@ -5,6 +5,7 @@ date_default_timezone_set('Asia/Bangkok');
 // 1. ป้องกัน HTTP 500 กรณีไฟล์ db.php หาย
 if (file_exists('db.php')) {
     require_once 'db.php';
+    require_once __DIR__ . '/duty_core.php'; // ตัวคำนวณเวรกลาง (ข้ามคนลาออก)
 } else {
     die("Error: ไม่พบไฟล์ db.php หรือตั้งชื่อไฟล์ผิด (ตัวพิมพ์เล็ก-ใหญ่มีผลบน Server)");
 }
@@ -96,19 +97,9 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
         }
         
         $total_std_count = count($all_students_for_duty);
-        if ($total_std_count > 0) {$start_timestamp = strtotime($start_date);$target_timestamp = strtotime($target_date);$diff_days = floor((($target_timestamp -$start_timestamp) / 86400));
-            
-            if ($diff_days < 0) {$diff_days = 0;
-            }
-            
-            // คำนวณหา 16 คนของรอบเวรเป้าหมาย
-            $start_index = (int) fmod(($diff_days * 16), $total_std_count);$today_duty_list = [];
-            
-            for ($i = 0; $i < 16; $i++) {
-               $idx = (int) fmod(($start_index + $i),$total_std_count);
-                if (isset($all_students_for_duty[$idx])) {$today_duty_list[] = $all_students_for_duty[$idx]['student_code'];
-                }
-            }
+        if ($total_std_count > 0) {
+            // ใช้ตัวคำนวณกลาง (ข้ามคนที่ status = 'resigned') ให้ตรงกับหน้านักเรียน
+            $today_duty_list = duty_codes_for_date($conn, $target_date, $start_date, 16);
             $today_duties = count($today_duty_list); // ยอดปกติคือ 16 คน
         }
 
