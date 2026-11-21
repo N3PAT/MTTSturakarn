@@ -15,6 +15,7 @@ try {
         throw new Exception("ไม่พบไฟล์ 'db.php' กรุณาตรวจสอบการอัปโหลดไฟล์");
     }
     require_once 'db.php';
+    require_once __DIR__ . '/duty_core.php'; // ตัวคำนวณเวรกลาง (ข้ามคนลาออก)
 
     // 2. ตรวจสอบสิทธิ์ Admin
     if (empty($_SESSION['admin_id'])) {
@@ -89,9 +90,10 @@ try {
 
     // 5. ดึงข้อมูลนักเรียน (ป้องกัน Collation Error ด้วย COLLATE)
     $active_students = [];
+    $active_rows = [];
     $student_names = [];
     $res = $conn->query("
-        SELECT student_code, prefix, first_name, last_name 
+        SELECT student_code, prefix, first_name, last_name, status 
         FROM students 
         WHERE student_code COLLATE utf8mb4_unicode_ci NOT IN (
             SELECT student_code COLLATE utf8mb4_unicode_ci FROM duty_exemptions WHERE is_active = 1
@@ -103,6 +105,7 @@ try {
 
     while ($row = $res->fetch_assoc()) {
         $active_students[] = $row['student_code'];
+        $active_rows[] = ['student_code' => $row['student_code'], 'status' => $row['status']];
         $student_names[$row['student_code']] = $row['prefix'] . $row['first_name'] . ' ' . $row['last_name'];
     }
 
@@ -122,18 +125,18 @@ try {
     $days_in_month = date('t', strtotime($target_month . '-01'));
     $total_active = count($active_students);
 
+    // ตารางเวรจากตัวคำนวณกลาง (ข้ามคนที่ status = 'resigned' ตั้งแต่วันที่กำหนด)
+    $month_end = date('Y-m-t', strtotime($target_month . '-01'));
+    $full_schedule = ($total_active > 0 && strtotime($month_end) >= strtotime($start_date))
+        ? duty_build_schedule($active_rows, $start_date, $month_end, DUTY_SKIP_RESIGNED_FROM, (int)$per_day)
+        : [];
+
     for ($day = 1; $day <= $days_in_month; $day++) {
         $current_date = date('Y-m-d', strtotime("$target_month-$day"));
-        $diff_days = floor((strtotime($current_date) - strtotime($start_date)) / 86400);
+        if (!isset($full_schedule[$current_date])) continue;
 
-        if ($diff_days < 0 || $total_active == 0) continue; 
-
-        $start_index = ($diff_days * $per_day) % $total_active;
         $daily_duty = [];
-
-        for ($i = 0; $i < $per_day; $i++) {
-            $idx = ($start_index + $i) % $total_active;
-            $original_student = $active_students[$idx];
+        foreach ($full_schedule[$current_date] as $original_student) {
             $actual_student = $original_student;
             $is_swapped = false;
 
