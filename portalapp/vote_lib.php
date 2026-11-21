@@ -4,7 +4,10 @@
  * (วางไฟล์นี้ไว้โฟลเดอร์เดียวกับ db.php)
  */
 date_default_timezone_set('Asia/Bangkok');
-require_once __DIR__ . '/duty_core.php'; // ตัวคำนวณเวรกลาง (ข้ามคนลาออก)
+// ตัวคำนวณเวรกลาง (ข้ามคนลาออก) — หาไฟล์ใน admin/ ก่อน แล้วค่อยหาที่ root
+foreach ([__DIR__ . '/duty_core.php', __DIR__ . '/../duty_core.php'] as $__duty_core) {
+    if (is_file($__duty_core)) { require_once $__duty_core; break; }
+}
 
 const START_DATE   = '2026-07-06';  // วันเริ่มต้นคำนวณเวรหลัก
 const DUTY_PER_DAY = 16;            // จำนวนผู้อยู่เวรต่อวัน
