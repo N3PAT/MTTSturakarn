@@ -13,6 +13,9 @@ const STATUS_LABELS = [
     'restrict' => 'กักบริเวณ',
 ];
 
+/* ===================== การแก้ไขยอด ===================== */
+const VOTE_MAX_EDITS = 3;   // แก้ไขสถานะที่ส่งไปแล้วได้กี่ครั้ง (ไม่รวมการส่งครั้งแรก)
+
 /* ===================== ฟังก์ชันช่วย ===================== */
 function json_out(array $data, int $http = 200): void
 {
@@ -108,6 +111,69 @@ function get_student_info(mysqli $conn, string $code, string $target_date): ?arr
     ];
 }
 
+// เส้นตายการแก้ไข = 12:00 น. วันพุธของสัปดาห์ของวันที่กำหนด (วันพุธล่าสุดก่อนวันที่กำหนด)
+function vote_edit_deadline(string $target_date): DateTime
+{
+    $d    = new DateTime($target_date . ' 12:00:00', new DateTimeZone('Asia/Bangkok'));
+    $back = ((int)$d->format('N') - 3 + 7) % 7;   // วันศุกร์ -> ถอยหลัง 2 วัน = วันพุธ
+    if ($back === 0) { $back = 7; }
+    $d->modify("-$back days");
+    return $d;
+}
+
+function vote_edit_is_open(string $target_date): bool
+{
+    return new DateTime('now', new DateTimeZone('Asia/Bangkok')) < vote_edit_deadline($target_date);
+}
+
+function vote_edit_deadline_label(string $target_date): string
+{
+    $d = vote_edit_deadline($target_date);
+    return '12:00 น. ' . thai_day_name($d->format('Y-m-d')) . 'ที่ ' . $d->format('d/m/Y');
+}
+
+// ต้องมีคอลัมน์ edit_count / updated_at ใน weekly_votes — ถ้ายังไม่มีจะพยายามเพิ่มให้อัตโนมัติ (ครั้งเดียว)
+function vote_edit_columns_ready(mysqli $conn): bool
+{
+    static $ready = null;
+    if ($ready !== null) { return $ready; }
+    try {
+        $r = $conn->query("SHOW COLUMNS FROM weekly_votes LIKE 'edit_count'");
+        if ($r && $r->num_rows > 0) { return $ready = true; }
+        $conn->query("ALTER TABLE weekly_votes
+                        ADD COLUMN edit_count TINYINT UNSIGNED NOT NULL DEFAULT 0,
+                        ADD COLUMN updated_at DATETIME NULL DEFAULT NULL");
+        return $ready = true;
+    } catch (Throwable $e) {
+        error_log('vote_edit_columns_ready: ' . $e->getMessage());
+        return $ready = false;
+    }
+}
+
+// ข้อมูลที่ส่งไว้แล้วของรหัสนี้ในวันที่กำหนด (null ถ้ายังไม่เคยส่ง)
+function get_existing_vote(mysqli $conn, string $code, string $target_date): ?array
+{
+    $ready = vote_edit_columns_ready($conn);
+    $sql   = $ready
+        ? 'SELECT status, edit_count FROM weekly_votes WHERE student_code = ? AND vote_date = ? LIMIT 1'
+        : 'SELECT status, 0 AS edit_count FROM weekly_votes WHERE student_code = ? AND vote_date = ? LIMIT 1';
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param('ss', $code, $target_date);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$row) { return null; }
+
+    $status = (string)$row['status'];
+    $used   = (int)$row['edit_count'];
+    return [
+        'status'     => $status,
+        'label'      => array_key_exists($status, STATUS_LABELS) ? status_label($status, $target_date) : $status,
+        'edits_used' => $used,
+        'edits_left' => $ready ? max(0, VOTE_MAX_EDITS - $used) : 0,
+    ];
+}
+
 function vote_fail(string $msg): array
 {
     return ['http' => 200, 'body' => ['ok' => false, 'message' => $msg]];
@@ -175,17 +241,42 @@ function process_vote(mysqli $conn, array $in, string $target_date, bool $is_ope
             $conn->rollback();
             if ((int)$e->getCode() !== 1062) { throw $e; }
 
-            $stmt = $conn->prepare('SELECT status FROM weekly_votes WHERE student_code = ? AND vote_date = ? LIMIT 1');
-            $stmt->bind_param('ss', $code, $target_date);
-            $stmt->execute();
-            $prev = (string)($stmt->get_result()->fetch_assoc()['status'] ?? '');
-            $stmt->close();
+            // มีข้อมูลของรหัสนี้ในวันที่กำหนดอยู่แล้ว -> ตรวจสิทธิ์แก้ไข
+            $existing = get_existing_vote($conn, $code, $target_date);
+            if ($existing === null) {
+                return ['http' => 503, 'body' => ['ok' => false, 'retry' => true, 'message' => 'ระบบกำลังหนาแน่น กรุณาลองใหม่อีกครั้ง']];
+            }
+            $prev     = $existing['status'];
 
             if ($prev === $status) {
                 return vote_ok("รหัส $code ได้บันทึกข้อมูลประจำ{$day_name}ที่ $date_th ไว้แล้ว", $info['name'], status_label($status, $target_date), $date_th);
             }
-            $was = array_key_exists($prev, STATUS_LABELS) ? status_label($prev, $target_date) : $prev;
-            return vote_fail("รหัส $code ได้ทำการบันทึกข้อมูลของสัปดาห์นี้ไปแล้ว (สถานะ: $was) ไม่สามารถทำรายการซ้ำได้");
+            $was = $existing['label'];
+
+            if (!vote_edit_columns_ready($conn)) {
+                return vote_fail("รหัส $code ได้ทำการบันทึกข้อมูลของสัปดาห์นี้ไปแล้ว (สถานะ: $was) ไม่สามารถทำรายการซ้ำได้");
+            }
+            if (!vote_edit_is_open($target_date)) {
+                return vote_fail("หมดเวลาแก้ไขข้อมูล (แก้ไขได้ก่อน " . vote_edit_deadline_label($target_date) . ") สถานะปัจจุบันของรหัส $code คือ $was");
+            }
+            if ($existing['edits_left'] <= 0) {
+                return vote_fail("รหัส $code แก้ไขข้อมูลครบ " . VOTE_MAX_EDITS . " ครั้งแล้ว ไม่สามารถแก้ไขได้อีก (สถานะปัจจุบัน: $was)");
+            }
+
+            // อัปเดตแบบ atomic: นับสิทธิ์ใน WHERE ป้องกันกดซ้ำพร้อมกันเกินจำนวนครั้ง
+            $now_upd = date('Y-m-d H:i:s');
+            $max     = VOTE_MAX_EDITS;
+            $stmt = $conn->prepare('UPDATE weekly_votes SET status = ?, edit_count = edit_count + 1, updated_at = ? WHERE student_code = ? AND vote_date = ? AND edit_count < ?');
+            $stmt->bind_param('ssssi', $status, $now_upd, $code, $target_date, $max);
+            $stmt->execute();
+            $changed = $stmt->affected_rows;
+            $stmt->close();
+
+            if ($changed < 1) {
+                return vote_fail("รหัส $code ไม่สามารถแก้ไขข้อมูลได้ในขณะนี้ (อาจแก้ไขครบ " . VOTE_MAX_EDITS . " ครั้งแล้ว) กรุณารีเฟรชหน้าเว็บ");
+            }
+            $left = max(0, $existing['edits_left'] - 1);
+            return vote_ok("แก้ไขข้อมูลรหัส $code ประจำ{$day_name}ที่ $date_th จาก \"$was\" เป็น \"" . status_label($status, $target_date) . "\" เรียบร้อยแล้ว (แก้ไขได้อีก $left ครั้ง ก่อน " . vote_edit_deadline_label($target_date) . ")", $info['name'], status_label($status, $target_date), $date_th);
         }
 
         return vote_ok("บันทึกข้อมูลรหัส $code ประจำ{$day_name}ที่ $date_th เรียบร้อยแล้ว", $info['name'], status_label($status, $target_date), $date_th);
@@ -205,7 +296,8 @@ if (($_GET['action'] ?? '') === 'get_student_name') {
     try {
         $info = get_student_info($conn, $code, vote_window($conn)['target_date']);
         if (!$info) { json_out(['found' => false]); }
-        json_out(['found' => true, 'name' => $info['name'], 'section' => $info['section'], 'forced' => $info['forced']]);
+        json_out(['found' => true, 'name' => $info['name'], 'section' => $info['section'], 'forced' => $info['forced'],
+                  'existing' => get_existing_vote($conn, $code, vote_window($conn)['target_date'])]);
     } catch (Throwable $e) {
         error_log('fill lookup: ' . $e->getMessage());
         json_out(['found' => false, 'error' => true], 503);
@@ -240,6 +332,12 @@ $csrf = $_SESSION['csrf_token'];
 session_write_close();
 
 $date_th_full = thai_date_full($target_date);
+$edit_cfg = [
+    'enabled'  => vote_edit_columns_ready($conn),
+    'max'      => VOTE_MAX_EDITS,
+    'open'     => vote_edit_is_open($target_date),
+    'deadline' => vote_edit_deadline_label($target_date),
+];
 $tiles = [
     'home'     => ['๑', 'กลับภูมิลำเนา', 'home'],
     'stay'     => ['๒', 'ประสงค์อยู่ รร.ชท.', 'pin'],
@@ -479,6 +577,7 @@ dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
     </fieldset>
 
     <div id="forcedNote" class="notice" role="status" hidden><svg class="ic"><use href="#i-alert"/></svg><span></span></div>
+    <div id="voteNote" class="notice" role="status" hidden><svg class="ic"><use href="#i-info"/></svg><span></span></div>
 
     <div class="help">
       <svg class="ic"><use href="#i-headset"/></svg>
@@ -584,6 +683,7 @@ dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
     }
   }
 
+  var EDIT = <?php echo json_encode($edit_cfg, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP); ?>;
   var FLASH = <?php echo json_encode($flash, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP); ?>;
   if (FLASH) showResult(FLASH);
 
@@ -620,10 +720,21 @@ dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
     }
   }
 
-  function reset() { state = 'idle'; setLookup(null); applyForced(null, true); secIn.value = ''; }
+  var voteNote = $('#voteNote');
+  function showExisting(x) {
+    if (!x) { voteNote.hidden = true; return; }
+    var t = 'ส่งข้อมูลไว้แล้ว: ' + x.label;
+    if (!EDIT.enabled) t += ' · ไม่สามารถแก้ไขได้';
+    else if (!EDIT.open) t += ' · หมดเวลาแก้ไขแล้ว (แก้ไขได้ก่อน ' + EDIT.deadline + ')';
+    else if (x.edits_left <= 0) t += ' · แก้ไขครบ ' + EDIT.max + ' ครั้งแล้ว';
+    else t += ' · แก้ไขได้อีก ' + x.edits_left + ' ครั้ง (ก่อน ' + EDIT.deadline + ')';
+    voteNote.lastElementChild.textContent = t; voteNote.hidden = false;
+  }
+
+  function reset() { state = 'idle'; setLookup(null); applyForced(null, true); secIn.value = ''; showExisting(null); }
 
   function apply(d) {
-    if (!d.found) { state = 'notfound'; setLookup('bad', 'ไม่พบรหัสนี้ในระบบ'); applyForced(null, true); secIn.value = ''; return; }
+    if (!d.found) { state = 'notfound'; setLookup('bad', 'ไม่พบรหัสนี้ในระบบ'); applyForced(null, true); secIn.value = ''; showExisting(null); return; }
     state = 'found'; setLookup('ok', d.name, d.section);
     if (d.section) {
       secIn.value = 'วิชาชีพช่าง ' + d.section;
@@ -631,6 +742,7 @@ dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
       secIn.value = 'ไม่พบข้อมูลตอนเรียน';
     }
     applyForced(d.forced, false);
+    showExisting(d.existing);
   }
 
   async function run(code) {
@@ -692,9 +804,12 @@ dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
     var picked = form.querySelector('input[name=status]:checked');
     var ok = await showDialog({
       type: 'warning', title: 'โปรดยืนยันการทำรายการ',
-      lines: ['กรุณาตรวจสอบข้อมูลให้ถูกต้องก่อนกดยืนยัน'],
+      lines: ['กรุณาตรวจสอบข้อมูลให้ถูกต้องก่อนกดยืนยัน'].concat(
+        (cache[c] && cache[c].existing && EDIT.enabled) ? ['รหัสนี้ส่งข้อมูลไว้แล้ว การส่งครั้งนี้จะนับเป็นการแก้ไข 1 ครั้ง'] : []),
       summary: [['รหัส', c], ['ชื่อ', ($('b', lookupBox) || {}).textContent || '-'], ['ตอน', secIn.value], ['สถานะ', picked ? $('.tile-text', picked.closest('.tile')).textContent : '-']],
-      warn: 'ข้อควรระวัง : ไม่สามารถแก้ไขข้อมูลภายหลังได้ คิดดีๆ ถ้าไม่อยากใส่ชุดจับหมู',
+      warn: EDIT.enabled
+        ? 'ข้อควรระวัง : แก้ไขข้อมูลได้ไม่เกิน ' + EDIT.max + ' ครั้ง และต้องแก้ไขก่อน ' + EDIT.deadline + ' คิดดีๆ ถ้าไม่อยากใส่ชุดจับหมู'
+        : 'ข้อควรระวัง : ไม่สามารถแก้ไขข้อมูลภายหลังได้ คิดดีๆ ถ้าไม่อยากใส่ชุดจับหมู',
       confirm: 'ยืนยันการส่งข้อมูล', cancel: 'ยกเลิก', countdown: 10
     });
     if (!ok) return;
