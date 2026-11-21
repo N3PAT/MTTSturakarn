@@ -5,10 +5,7 @@ if (!isset($conn)) {
     require_once 'db.php';
 }
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
-// ตัวคำนวณเวรกลาง (ข้ามคนลาออก) — หาไฟล์ใน admin/ ก่อน แล้วค่อยหาที่ root
-foreach ([__DIR__ . '/duty_core.php', __DIR__ . '/../duty_core.php'] as $__duty_core) {
-    if (is_file($__duty_core)) { require_once $__duty_core; break; }
-}
+require_once __DIR__ . '/duty_core.php'; // ตัวคำนวณเวรกลาง (ข้ามคนลาออก)
 
 /* ===================== ค่าคงที่ ===================== */
 const START_DATE   = '2026-07-06';  // วันเริ่มต้นคำนวณเวรหลัก
@@ -217,6 +214,6 @@ function process_vote(mysqli $conn, array $in, string $target_date, bool $is_ope
 
     } catch (Throwable $e) {
         error_log('fill submit: ' . $e->getMessage());
-        return ['http' => 503, 'body' => ['ok' => false, 'retry' => true, 'message' => 'ระบบกำลังหนาแน่น กรุณาลองใหม่อีกครั้ง']];
+        return ['http' => 503, 'body' => ['ok' => false, 'retry' => true, 'message' => 'ระบบกำลังรับคำขอจำนวนมาก กรุณาลองใหม่อีกครั้ง']];
     }
 }
