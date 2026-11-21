@@ -22,6 +22,7 @@ header("Pragma: no-cache");
 header("Expires: 0");
 
 require_once 'db.php';
+@include_once 'vote_lib.php'; // vote_window()
 
 /* ---------- โหมดปิดปรับปรุงระบบ (ใช้ logic เดียวกับ login.php) ---------- */
 // true = บังคับปิดปรับปรุงทันที / false = อ่านค่าจากตาราง system_settings
@@ -152,21 +153,33 @@ function fetch_upcoming_duties(mysqli $db, string $code): array
 }
 
 /**
- * โหวตประสงค์กลับบ้านในสัปดาห์นี้แล้วหรือยัง
- * นับว่าโหวตแล้วถ้า "วันที่กดส่งฟอร์ม" (created_at) อยู่ในสัปดาห์นี้
- * หรือ "วันกลับที่เลือก" (vote_date) อยู่ในสัปดาห์นี้/ยังไม่ถึง
- * (เดิมเช็กแค่ vote_date ทำให้ถ้าตั้งวันกลับเป็นสัปดาห์หน้า จะยังขึ้นว่าไม่ได้โหวต)
+ * โหวตประสงค์กลับบ้านแล้วหรือยัง
+ * fill.php บันทึก vote_date = วันกำหนดกลับ (target_date จาก vote_window() ใน vote_lib.php)
+ * ซึ่งมักเป็นวันศุกร์ "สัปดาห์หน้า" ของวันเสาร์-อาทิตย์ จึงต้องเทียบกับ target_date โดยตรง
+ * ไม่ใช่เทียบกับสัปดาห์ปัจจุบัน
  */
 function has_voted_this_week(mysqli $db, string $code): bool
 {
-    $row = db_one($db,
-        "SELECT COUNT(*) AS vote_count FROM weekly_votes
-         WHERE TRIM(student_code) = TRIM(?)
-           AND (
-                YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)
-             OR YEARWEEK(vote_date, 1)  = YEARWEEK(CURDATE(), 1)
-             OR vote_date >= CURDATE()
-           )", 's', [$code]);
+    $target = null;
+    try {
+        if (function_exists('vote_window')) {
+            $w = vote_window($db);
+            $target = $w['target_date'] ?? null;
+        }
+    } catch (Throwable $e) {
+        error_log('main.php vote_window: ' . $e->getMessage());
+    }
+
+    if ($target) {
+        $row = db_one($db,
+            "SELECT COUNT(*) AS vote_count FROM weekly_votes
+             WHERE student_code = ? AND vote_date = ?", 'ss', [trim($code), $target]);
+    } else { // สำรอง ถ้าใช้ vote_window ไม่ได้
+        $row = db_one($db,
+            "SELECT COUNT(*) AS vote_count FROM weekly_votes
+             WHERE TRIM(student_code) = TRIM(?)
+               AND (YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1) OR vote_date >= CURDATE())", 's', [$code]);
+    }
     return $row ? ((int)$row['vote_count'] > 0) : true;
 }
 
