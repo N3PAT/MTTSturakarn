@@ -5,6 +5,10 @@ if (!isset($conn)) {
     require_once 'db.php';
 }
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+// ตัวคำนวณเวรกลาง (ข้ามคนลาออก) — หาไฟล์ใน admin/ ก่อน แล้วค่อยหาที่ root
+foreach ([__DIR__ . '/duty_core.php', __DIR__ . '/../duty_core.php'] as $__duty_core) {
+    if (is_file($__duty_core)) { require_once $__duty_core; break; }
+}
 
 /* ===================== ค่าคงที่ ===================== */
 const START_DATE   = '2026-07-06';  // วันเริ่มต้นคำนวณเวรหลัก
@@ -118,21 +122,8 @@ function get_student_info(mysqli $conn, string $code, string $target_date): ?arr
     $restricted = $stmt->get_result()->num_rows > 0;
     $stmt->close();
 
-    // อยู่เวรหรือไม่ คำนวณตามวันที่เป้าหมาย
-    $on_duty = false;
-    $total   = student_total($conn);
-    if ($total > 0) {
-        $id = (int)$row['id'];
-        $stmt = $conn->prepare('SELECT COUNT(*) AS c FROM students WHERE id < ?');
-        $stmt->bind_param('i', $id);
-        $stmt->execute();
-        $pos = (int)$stmt->get_result()->fetch_assoc()['c'];
-        $stmt->close();
-
-        $diff  = max(0, (int)floor((strtotime($target_date) - strtotime(START_DATE)) / 86400));
-        $start = ($diff * DUTY_PER_DAY) % $total;
-        $on_duty = ((($pos - $start) % $total) + $total) % $total < DUTY_PER_DAY;
-    }
+    // อยู่เวรหรือไม่ — ใช้ตัวคำนวณกลาง (ข้ามคนที่ status = 'resigned')
+    $on_duty = in_array((string)$code, duty_codes_for_date($conn, $target_date, START_DATE, DUTY_PER_DAY), true);
 
     return [
         'name'       => trim(($row['prefix'] ?? '') . ($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? '')),
@@ -226,6 +217,6 @@ function process_vote(mysqli $conn, array $in, string $target_date, bool $is_ope
 
     } catch (Throwable $e) {
         error_log('fill submit: ' . $e->getMessage());
-        return ['http' => 503, 'body' => ['ok' => false, 'retry' => true, 'message' => 'ระบบกำลังรับคำขอจำนวนมาก กรุณาลองใหม่อีกครั้ง']];
+        return ['http' => 503, 'body' => ['ok' => false, 'retry' => true, 'message' => 'ระบบกำลังหนาแน่น กรุณาลองใหม่อีกครั้ง']];
     }
 }
