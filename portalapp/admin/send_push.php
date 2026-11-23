@@ -103,9 +103,68 @@ $auth = [
     ],
 ];
 
-try {
-    $webPush = new WebPush($auth);
+/**
+ * บันทึกแจ้งเตือนลงตาราง app_notifications เพื่อให้แอป Android (NotificationSyncWorker) ดึงไปแสดง
+ */
+function queueAndroidDeviceNotifications(mysqli $conn, ?string $studentId, string $title, string $body, string $url): int
+{
+    $inserted = 0;
 
+    // ตรวจสอบว่ามีตาราง android_devices หรือไม่
+    $checkTable = $conn->query("SHOW TABLES LIKE 'android_devices'");
+    if (!$checkTable || $checkTable->num_rows === 0) {
+        return 0;
+    }
+
+    $checkNotiTable = $conn->query("SHOW TABLES LIKE 'app_notifications'");
+    if (!$checkNotiTable || $checkNotiTable->num_rows === 0) {
+        return 0;
+    }
+
+    $targetStudentIds = [];
+
+    if (!empty($studentId)) {
+        $devStmt = $conn->prepare("SELECT DISTINCT student_id FROM android_devices WHERE student_id = ? AND student_id IS NOT NULL AND student_id != ''");
+        if ($devStmt) {
+            $devStmt->bind_param("s", $studentId);
+            $devStmt->execute();
+            $devRes = $devStmt->get_result();
+            while ($r = $devRes->fetch_assoc()) {
+                $targetStudentIds[] = (string)$r['student_id'];
+            }
+            $devStmt->close();
+        }
+    } else {
+        $devRes = $conn->query("SELECT DISTINCT student_id FROM android_devices WHERE student_id IS NOT NULL AND student_id != ''");
+        if ($devRes) {
+            while ($r = $devRes->fetch_assoc()) {
+                $targetStudentIds[] = (string)$r['student_id'];
+            }
+        }
+    }
+
+    if (empty($targetStudentIds)) {
+        return 0;
+    }
+
+    $insStmt = $conn->prepare("INSERT INTO app_notifications (notice_key, student_id, title, message, url) VALUES (?, ?, ?, ?, ?)");
+    if (!$insStmt) {
+        return 0;
+    }
+
+    foreach ($targetStudentIds as $sid) {
+        $noticeKey = uniqid('ntf_', true);
+        $insStmt->bind_param("sssss", $noticeKey, $sid, $title, $body, $url);
+        if ($insStmt->execute()) {
+            $inserted++;
+        }
+    }
+    $insStmt->close();
+
+    return $inserted;
+}
+
+try {
     // ------------------------------------------------------------------
     // 6. ดึงและทำความสะอาด Input Data
     // ------------------------------------------------------------------
@@ -119,8 +178,11 @@ try {
     $body  = isset($inputData['body']) ? (string)$inputData['body'] : "ระบบตรวจสอบพบว่าคุณยังไม่ได้ทำรายการประจำวันที่ {$targetDate}\n\nกรุณาเข้าสู่ระบบเพื่อดำเนินการให้เรียบร้อย";
     $url   = isset($inputData['url']) ? (string)$inputData['url'] : '/main.php';
 
+    // บันทึกแจ้งเตือนสำหรับเครื่อง Android ในตาราง app_notifications ก่อน
+    $androidQueuedCount = queueAndroidDeviceNotifications($conn, $studentId, $title, $body, $url);
+
     // ------------------------------------------------------------------
-    // 7. ดึงข้อมูลผู้รับแจ้งเตือนจากตาราง push_subscriptions
+    // 7. ดึงข้อมูลผู้รับแจ้งเตือนจากตาราง push_subscriptions (Web Push)
     // ------------------------------------------------------------------
     if (!empty($studentId)) {
         $stmt = $conn->prepare("SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE student_id = ?");
@@ -132,102 +194,102 @@ try {
     $stmt->execute();
     $result = $stmt->get_result();
 
-    if ($result->num_rows === 0) {
+    $sentCount = 0;
+    $skippedCount = 0;
+    $failedIds = [];
+
+    if ($result->num_rows > 0) {
+        $webPush = new WebPush($auth);
+
+        // --------------------------------------------------------------
+        // 8. เตรียม Payload
+        // --------------------------------------------------------------
+        $payload = json_encode([
+            'title' => $title,
+            'body'  => $body,
+            'icon'  => 'https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg',
+            'image' => isset($inputData['image']) ? (string)$inputData['image'] : 'https://taothetutor.wordpress.com/wp-content/uploads/2026/09/wp-17898328944611784106779603276252.jpg',
+            'url'   => $url,
+            'requireInteraction' => true,
+            'vibrate' => [200, 100, 200],
+            'actions' => [
+                [
+                    'action' => 'open_app',
+                    'title'  => 'เข้าสู่ระบบเพื่อทำรายการ'
+                ]
+            ]
+        ], JSON_UNESCAPED_UNICODE);
+
+        // --------------------------------------------------------------
+        // 9. เข้าคิวแจ้งเตือน (Queue Batching)
+        // --------------------------------------------------------------
+        $subscriptionsMap = [];
+        $queuedCount = 0;
+
+        while ($row = $result->fetch_assoc()) {
+            try {
+                $subscription = Subscription::create([
+                    'endpoint'  => $row['endpoint'],
+                    'publicKey' => $row['p256dh'],
+                    'authToken' => $row['auth'],
+                ]);
+
+                $webPush->queueNotification($subscription, $payload);
+                $subscriptionsMap[$row['endpoint']] = (int)$row['id'];
+                $queuedCount++;
+            } catch (Throwable $subErr) {
+                $skippedCount++;
+                error_log("Skipped invalid subscription id={$row['id']}: " . $subErr->getMessage());
+            }
+        }
+
+        // --------------------------------------------------------------
+        // 10. ประมวลผลยิงข้อมูลออกพร้อมกันแบบ Asynchronous
+        // --------------------------------------------------------------
+        if ($queuedCount > 0) {
+            foreach ($webPush->flush() as $report) {
+                $endpoint = $report->getRequest()->getUri()->__toString();
+
+                if ($report->isSuccess()) {
+                    $sentCount++;
+                } elseif ($report->isSubscriptionExpired() && isset($subscriptionsMap[$endpoint])) {
+                    $failedIds[] = $subscriptionsMap[$endpoint];
+                }
+            }
+        }
+
+        // --------------------------------------------------------------
+        // 11. เคลียร์ข้อมูล Token ที่หมดอายุออกจาก DB
+        // --------------------------------------------------------------
+        if (!empty($failedIds)) {
+            $delStmt = $conn->prepare("DELETE FROM push_subscriptions WHERE id = ?");
+            if ($delStmt) {
+                foreach ($failedIds as $expiredId) {
+                    $idInt = (int)$expiredId;
+                    $delStmt->bind_param("i", $idInt);
+                    $delStmt->execute();
+                }
+                $delStmt->close();
+            }
+        }
+    }
+    $stmt->close();
+
+    if ($sentCount === 0 && $androidQueuedCount === 0) {
         echo json_encode([
             'success' => false,
+            'sent_count' => 0,
+            'android_queued' => 0,
+            'skipped_count' => $skippedCount,
             'message' => 'ไม่พบข้อมูลเครื่องที่ลงทะเบียนรับแจ้งเตือนในระบบ'
         ], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
-    // ------------------------------------------------------------------
-    // 8. เตรียม Payload
-    // ------------------------------------------------------------------
-    $payload = json_encode([
-        'title' => $title,
-        'body'  => $body,
-        'icon'  => 'https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg',
-        'image' => isset($inputData['image']) ? (string)$inputData['image'] : 'https://taothetutor.wordpress.com/wp-content/uploads/2026/09/wp-17898328944611784106779603276252.jpg',
-        'url'   => $url,
-        'requireInteraction' => true,
-        'vibrate' => [200, 100, 200],
-        'actions' => [
-            [
-                'action' => 'open_app',
-                'title'  => 'เข้าสู่ระบบเพื่อทำรายการ'
-            ]
-        ]
-    ], JSON_UNESCAPED_UNICODE);
-
-    // ------------------------------------------------------------------
-    // 9. เข้าคิวแจ้งเตือน (Queue Batching)
-    // ------------------------------------------------------------------
-    $subscriptionsMap = [];
-    $queuedCount = 0;
-    $skippedCount = 0;
-
-    while ($row = $result->fetch_assoc()) {
-        try {
-            $subscription = Subscription::create([
-                'endpoint'  => $row['endpoint'],
-                'publicKey' => $row['p256dh'],
-                'authToken' => $row['auth'],
-            ]);
-
-            $webPush->queueNotification($subscription, $payload);
-            $subscriptionsMap[$row['endpoint']] = (int)$row['id'];
-            $queuedCount++;
-        } catch (Throwable $subErr) {
-            $skippedCount++;
-            error_log("Skipped invalid subscription id={$row['id']}: " . $subErr->getMessage());
-        }
-    }
-    $stmt->close();
-
-    if ($queuedCount === 0) {
-        echo json_encode([
-            'success' => false,
-            'sent_count' => 0,
-            'skipped_count' => $skippedCount,
-            'message' => 'ไม่พบ Subscription ที่พร้อมใช้งานสำหรับส่ง Web Push'
-        ], JSON_UNESCAPED_UNICODE);
-        exit;
-    }
-
-    // ------------------------------------------------------------------
-    // 10. ประมวลผลยิงข้อมูลออกพร้อมกันแบบ Asynchronous
-    // ------------------------------------------------------------------
-    $sentCount = 0;
-    $failedIds = [];
-
-    foreach ($webPush->flush() as $report) {
-        $endpoint = $report->getRequest()->getUri()->__toString();
-
-        if ($report->isSuccess()) {
-            $sentCount++;
-        } elseif ($report->isSubscriptionExpired() && isset($subscriptionsMap[$endpoint])) {
-            $failedIds[] = $subscriptionsMap[$endpoint];
-        }
-    }
-
-    // ------------------------------------------------------------------
-    // 11. เคลียร์ข้อมูล Token ที่หมดอายุออกจาก DB
-    // ------------------------------------------------------------------
-    if (!empty($failedIds)) {
-        $delStmt = $conn->prepare("DELETE FROM push_subscriptions WHERE id = ?");
-        if ($delStmt) {
-            foreach ($failedIds as $expiredId) {
-                $idInt = (int)$expiredId;
-                $delStmt->bind_param("i", $idInt);
-                $delStmt->execute();
-            }
-            $delStmt->close();
-        }
-    }
-
     echo json_encode([
         'success' => true,
         'sent_count' => $sentCount,
+        'android_queued' => $androidQueuedCount,
         'skipped_count' => $skippedCount,
         'expired_removed' => count($failedIds)
     ], JSON_UNESCAPED_UNICODE);
