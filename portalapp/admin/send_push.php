@@ -58,7 +58,7 @@ if (!file_exists($autoloadPath)) {
 if (!file_exists($autoloadPath)) {
     http_response_code(500);
     echo json_encode([
-        'success' => false, 
+        'success' => false,
         'message' => 'ไม่พบโฟลเดอร์ vendor/autoload.php กรุณารัน composer install บน Render'
     ], JSON_UNESCAPED_UNICODE);
     exit;
@@ -110,34 +110,31 @@ try {
     // 6. ดึงและทำความสะอาด Input Data
     // ------------------------------------------------------------------
     $inputData  = json_decode(file_get_contents('php://input'), true) ?? [];
-    
-    $studentId  = isset($inputData['student_id']) ? trim($inputData['student_id']) : null;
-    $rawDate    = isset($inputData['target_date']) ? $inputData['target_date'] : date('d/m/Y');
+
+    $studentId  = isset($inputData['student_id']) ? trim((string)$inputData['student_id']) : null;
+    $rawDate    = isset($inputData['target_date']) ? (string)$inputData['target_date'] : date('d/m/Y');
     $targetDate = htmlspecialchars(strip_tags($rawDate), ENT_QUOTES, 'UTF-8');
 
-    // รองรับการระบุหัวข้อ และข้อความ (หากไม่ระบุจะใช้ค่าเริ่มต้น)
-    $title = isset($inputData['title']) ? $inputData['title'] : 'ประกาศ: ยังไม่ได้ทำรายการ';
-    $body  = isset($inputData['body']) ? $inputData['body'] : "ระบบตรวจสอบพบว่าคุณยังไม่ได้ทำรายการประจำวันที่ {$targetDate}\n\nกรุณาเข้าสู่ระบบเพื่อดำเนินการให้เรียบร้อย";
-    $url   = isset($inputData['url']) ? $inputData['url'] : '/main.php';
+    $title = isset($inputData['title']) ? (string)$inputData['title'] : 'ประกาศ: ยังไม่ได้ทำรายการ';
+    $body  = isset($inputData['body']) ? (string)$inputData['body'] : "ระบบตรวจสอบพบว่าคุณยังไม่ได้ทำรายการประจำวันที่ {$targetDate}\n\nกรุณาเข้าสู่ระบบเพื่อดำเนินการให้เรียบร้อย";
+    $url   = isset($inputData['url']) ? (string)$inputData['url'] : '/main.php';
 
     // ------------------------------------------------------------------
     // 7. ดึงข้อมูลผู้รับแจ้งเตือนจากตาราง push_subscriptions
     // ------------------------------------------------------------------
     if (!empty($studentId)) {
-        // กรณีระบุ student_id (ส่งเตือนเฉพาะบุคคล เช่น โดนบัตร/เข้าเวร)
         $stmt = $conn->prepare("SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE student_id = ?");
         $stmt->bind_param("s", $studentId);
     } else {
-        // กรณีกระจายข่าวสารทั่วไป (ส่งหาทุกคน)
         $stmt = $conn->prepare("SELECT id, endpoint, p256dh, auth FROM push_subscriptions");
     }
-    
+
     $stmt->execute();
     $result = $stmt->get_result();
 
     if ($result->num_rows === 0) {
         echo json_encode([
-            'success' => false, 
+            'success' => false,
             'message' => 'ไม่พบข้อมูลเครื่องที่ลงทะเบียนรับแจ้งเตือนในระบบ'
         ], JSON_UNESCAPED_UNICODE);
         exit;
@@ -150,7 +147,7 @@ try {
         'title' => $title,
         'body'  => $body,
         'icon'  => 'https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg',
-        'image' => isset($inputData['image']) ? $inputData['image'] : 'https://taothetutor.wordpress.com/wp-content/uploads/2026/09/wp-17898328944611784106779603276252.jpg',
+        'image' => isset($inputData['image']) ? (string)$inputData['image'] : 'https://taothetutor.wordpress.com/wp-content/uploads/2026/09/wp-17898328944611784106779603276252.jpg',
         'url'   => $url,
         'requireInteraction' => true,
         'vibrate' => [200, 100, 200],
@@ -166,17 +163,35 @@ try {
     // 9. เข้าคิวแจ้งเตือน (Queue Batching)
     // ------------------------------------------------------------------
     $subscriptionsMap = [];
+    $queuedCount = 0;
+    $skippedCount = 0;
 
     while ($row = $result->fetch_assoc()) {
-        $subscription = Subscription::create([
-            'endpoint'  => $row['endpoint'],
-            'publicKey' => $row['p256dh'],
-            'authToken' => $row['auth'],
-        ]);
+        try {
+            $subscription = Subscription::create([
+                'endpoint'  => $row['endpoint'],
+                'publicKey' => $row['p256dh'],
+                'authToken' => $row['auth'],
+            ]);
 
-        // จัดเข้าคิว
-        $webPush->queueNotification($subscription, $payload);
-        $subscriptionsMap[$row['endpoint']] = $row['id'];
+            $webPush->queueNotification($subscription, $payload);
+            $subscriptionsMap[$row['endpoint']] = (int)$row['id'];
+            $queuedCount++;
+        } catch (Throwable $subErr) {
+            $skippedCount++;
+            error_log("Skipped invalid subscription id={$row['id']}: " . $subErr->getMessage());
+        }
+    }
+    $stmt->close();
+
+    if ($queuedCount === 0) {
+        echo json_encode([
+            'success' => false,
+            'sent_count' => 0,
+            'skipped_count' => $skippedCount,
+            'message' => 'ไม่พบ Subscription ที่พร้อมใช้งานสำหรับส่ง Web Push'
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
     }
 
     // ------------------------------------------------------------------
@@ -187,14 +202,11 @@ try {
 
     foreach ($webPush->flush() as $report) {
         $endpoint = $report->getRequest()->getUri()->__toString();
-        
+
         if ($report->isSuccess()) {
             $sentCount++;
-        } else {
-            // เช็คเฉพาะกรณี Token หมดอายุหรือถูกลบออกจากบราวเซอร์
-            if ($report->isSubscriptionExpired() && isset($subscriptionsMap[$endpoint])) {
-                $failedIds[] = $subscriptionsMap[$endpoint];
-            }
+        } elseif ($report->isSubscriptionExpired() && isset($subscriptionsMap[$endpoint])) {
+            $failedIds[] = $subscriptionsMap[$endpoint];
         }
     }
 
@@ -202,19 +214,28 @@ try {
     // 11. เคลียร์ข้อมูล Token ที่หมดอายุออกจาก DB
     // ------------------------------------------------------------------
     if (!empty($failedIds)) {
-        $idsList = implode(',', array_map('intval', $failedIds));
-        $conn->query("DELETE FROM push_subscriptions WHERE id IN ($idsList)");
+        $delStmt = $conn->prepare("DELETE FROM push_subscriptions WHERE id = ?");
+        if ($delStmt) {
+            foreach ($failedIds as $expiredId) {
+                $idInt = (int)$expiredId;
+                $delStmt->bind_param("i", $idInt);
+                $delStmt->execute();
+            }
+            $delStmt->close();
+        }
     }
 
     echo json_encode([
-        'success' => true, 
-        'sent_count' => $sentCount
+        'success' => true,
+        'sent_count' => $sentCount,
+        'skipped_count' => $skippedCount,
+        'expired_removed' => count($failedIds)
     ], JSON_UNESCAPED_UNICODE);
 
-} catch (Exception $e) {
+} catch (Throwable $e) {
     http_response_code(500);
     echo json_encode([
-        'success' => false, 
+        'success' => false,
         'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()
     ], JSON_UNESCAPED_UNICODE);
 }
