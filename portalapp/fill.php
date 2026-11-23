@@ -4,6 +4,7 @@ date_default_timezone_set('Asia/Bangkok');
 require 'db.php';                                       // ต้องมี $conn (mysqli)
 require 'vote_lib.php';                                 // START_DATE, DUTY_PER_DAY, vote_window() ฯลฯ
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+session_start();
 
 /* ===================== ตั้งค่า ===================== */
 const STATUS_LABELS = [
@@ -12,6 +13,22 @@ const STATUS_LABELS = [
     'duty'     => 'เวรรักษาการณ์ (วันศุกร์)',
     'restrict' => 'กักบริเวณ',
 ];
+
+/* ===================== รหัสนักเรียนจาก session ===================== */
+const LOGIN_URL = 'login.php';   // หน้าล็อกอิน (ถ้ายังไม่ได้ล็อกอินจะเด้งไปหน้านี้)
+// ชื่อ key ใน $_SESSION ที่เก็บรหัสนักเรียน (เรียงตามลำดับที่ลองหา) — ปรับให้ตรงกับระบบล็อกอินของคุณ
+const SESSION_CODE_KEYS = ['student_id', 'student_code', 'code', 'username'];
+
+function session_student_code(): string
+{
+    foreach (SESSION_CODE_KEYS as $k) {
+        if (isset($_SESSION[$k]) && is_scalar($_SESSION[$k])) {
+            $v = trim((string)$_SESSION[$k]);
+            if ($v !== '' && preg_match('/^[A-Za-z0-9_-]{1,20}$/', $v)) { return $v; }
+        }
+    }
+    return '';
+}
 
 /* ===================== การแก้ไขยอด ===================== */
 const VOTE_MAX_EDITS = 3;   // แก้ไขสถานะที่ส่งไปแล้วได้กี่ครั้ง (ไม่รวมการส่งครั้งแรก)
@@ -197,11 +214,11 @@ function process_vote(mysqli $conn, array $in, string $target_date, bool $is_ope
         return vote_fail('หมดเวลาทำรายการ ระบบเปิดให้ส่งข้อมูลเฉพาะวันเสาร์ถึงวันอังคารก่อนเวลา 16:00 น. เท่านั้น');
     }
 
-    $code   = trim((string)($in['student_code'] ?? ''));
+    $code   = session_student_code();   // ใช้รหัสจาก session เท่านั้น ไม่รับค่าจากฟอร์ม
     $status = trim((string)($in['status'] ?? ''));
 
-    if (!preg_match('/^[A-Za-z0-9_-]{1,20}$/', $code)) {
-        return vote_fail('รูปแบบรหัสประจำตัวไม่ถูกต้อง');
+    if ($code === '') {
+        return vote_fail('ไม่พบข้อมูลการเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่อีกครั้ง');
     }
     if (!array_key_exists($status, STATUS_LABELS)) {
         return vote_fail('สถานะไม่ถูกต้องตามที่ระบบกำหนด (กรุณาเลือกสถานะให้ครบถ้วน)');
@@ -289,9 +306,9 @@ function process_vote(mysqli $conn, array $in, string $target_date, bool $is_ope
 
 /* ===================== API ค้นหานักเรียน ===================== */
 if (($_GET['action'] ?? '') === 'get_student_name') {
-    $code = trim((string)($_GET['code'] ?? ''));
-    if (!preg_match('/^[A-Za-z0-9_-]{1,20}$/', $code)) {
-        json_out(['found' => false]);
+    $code = session_student_code();   // ไม่รับ code จาก URL
+    if ($code === '') {
+        json_out(['found' => false, 'auth' => false], 401);
     }
     try {
         $info = get_student_info($conn, $code, vote_window($conn)['target_date']);
@@ -305,7 +322,6 @@ if (($_GET['action'] ?? '') === 'get_student_name') {
 }
 
 /* ===================== session / ส่งข้อมูล ===================== */
-session_start();
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
@@ -323,6 +339,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $_SESSION['flash'] = $result['body'];
     header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
+    exit;
+}
+
+$my_code = session_student_code();
+if ($my_code === '') {
+    session_write_close();
+    header('Location: ' . LOGIN_URL);
     exit;
 }
 
@@ -548,15 +571,15 @@ dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
 
     <div class="group">
       <div class="field">
-        <label for="student_code"><svg class="ic"><use href="#i-card"/></svg>รหัสประจำตัว (นชท.) <span class="req">*</span></label>
-        <input class="input" type="text" id="student_code" name="student_code" required maxlength="10" inputmode="numeric" autocomplete="off" placeholder="เช่น 151xx">
+        <label for="student_code"><svg class="ic"><use href="#i-card"/></svg>รหัสประจำตัว (นชท.) <small style="font-weight:400">(ดึงอัตโนมัติจากบัญชีที่เข้าสู่ระบบ)</small></label>
+        <input class="input" type="text" id="student_code" name="student_code" value="<?php echo htmlspecialchars($my_code); ?>" readonly required autocomplete="off">
         <div id="lookup" class="lookup" aria-live="polite" hidden></div>
       </div>
 
       <!-- ช่องตอนเรียน ดึงข้อมูลอัตโนมัติจากระบบแบบ Readonly -->
       <div class="field">
         <label for="section"><svg class="ic"><use href="#i-layers"/></svg>ตอนเรียน (ดึงอัตโนมัติจากระบบ)</label>
-        <input class="input" type="text" id="section" name="section" readonly placeholder="กรอกรหัส นชท. เพื่อดึงข้อมูลอัตโนมัติ">
+        <input class="input" type="text" id="section" name="section" readonly placeholder="กำลังดึงข้อมูล...">
       </div>
     </div>
 
@@ -769,6 +792,9 @@ dialog p{margin:0 0 10px;font-size:.88rem;color:var(--mute);line-height:1.5}
   codeIn.addEventListener('change', function () {
     var c = codeIn.value.trim(); if (c && state === 'idle') { clearTimeout(timer); lookup(c); }
   });
+
+  /* ---- ดึงข้อมูลอัตโนมัติจากรหัสใน session ทันทีที่เปิดหน้า ---- */
+  if (codeIn.value.trim()) { lookup(codeIn.value.trim()); }
 
   /* ---- ส่งข้อมูล ---- */
   var btn = $('#submitBtn');
