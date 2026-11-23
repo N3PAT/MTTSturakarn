@@ -9,6 +9,11 @@ if (file_exists('db.php')) {
     foreach ([__DIR__ . '/duty_core.php', __DIR__ . '/../duty_core.php'] as $__duty_core) {
         if (is_file($__duty_core)) { require_once $__duty_core; break; }
     }
+} elseif (file_exists(__DIR__ . '/../db.php')) {
+    require_once __DIR__ . '/../db.php';
+    foreach ([__DIR__ . '/duty_core.php', __DIR__ . '/../duty_core.php'] as $__duty_core) {
+        if (is_file($__duty_core)) { require_once $__duty_core; break; }
+    }
 } else {
     die("Error: ไม่พบไฟล์ db.php หรือตั้งชื่อไฟล์ผิด (ตัวพิมพ์เล็ก-ใหญ่มีผลบน Server)");
 }
@@ -28,84 +33,99 @@ if (empty($_SESSION['admin_id'])) {
 
 // 4. จัดการระบบ Loading Screen
 $show_loading = false;
-if (!isset($_SESSION['admin_has_seen_loading'])) {$show_loading = true;
+if (!isset($_SESSION['admin_has_seen_loading'])) {
+    $show_loading = true;
     $_SESSION['admin_has_seen_loading'] = true;
 }
 
-$admin_id = $_SESSION['admin_id'];$admin_name = 'ผู้ดูแลระบบ MTTS';
+$admin_id = $_SESSION['admin_id'];
+$admin_name = 'ผู้ดูแลระบบ MTTS';
 
 $total_students = 0;
 $voted_count = 0;
 $today_duties = 0;
 
+// ตรวจสอบตำแหน่งไฟล์ send_push.php ที่แท้จริงเพื่อกำหนด URL ให้ถูกต้อง
+$pushApiUrl = 'send_push.php';
+if (!file_exists(__DIR__ . '/send_push.php')) {
+    if (file_exists(__DIR__ . '/../send_push.php')) {
+        $pushApiUrl = '../send_push.php';
+    } elseif (file_exists(__DIR__ . '/portalapp/send_push.php')) {
+        $pushApiUrl = 'portalapp/send_push.php';
+    } elseif (file_exists(__DIR__ . '/../portalapp/send_push.php')) {
+        $pushApiUrl = '../portalapp/send_push.php';
+    }
+}
+
 // =========================================================
 // คำนวณหาวันที่เป้าหมาย (วันศุกร์)
 // =========================================================
 $tz = new DateTimeZone('Asia/Bangkok');
-$dt = new DateTime('now',$tz);
+$dt = new DateTime('now', $tz);
 
 $current_day_of_week = (int)$dt->format('N');
-$days_until_friday = 5 -$current_day_of_week;
-if ($days_until_friday < 0) {$days_until_friday += 7;
+$days_until_friday = 5 - $current_day_of_week;
+if ($days_until_friday < 0) {
+    $days_until_friday += 7;
 }
 
-$target_dt = clone$dt;
+$target_dt = clone $dt;
 $target_dt->modify("+$days_until_friday days");
-$target_date = $target_dt->format('Y-m-d');$start_date = "2026-07-06"; // วันเริ่มต้นคำนวณเวรหลักการหมุนเวียน
+$target_date = $target_dt->format('Y-m-d');
+$start_date = "2026-07-06"; // วันเริ่มต้นคำนวณเวรหลักการหมุนเวียน
 
 // 5. ดึงข้อมูลสถิติ, ข้อมูลแอดมิน และ คำนวณเวร
-if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
+if (isset($conn) && $conn instanceof mysqli) {
+    $conn->set_charset("utf8mb4");
 
     try {
         // ดึงข้อมูล ชื่อ-นามสกุล และ Username ของ Admin จากฐานข้อมูล
-        $stmt_admin =$conn->prepare("SELECT username, first_name, last_name FROM admins WHERE id = ?");
-        if ($stmt_admin) {$stmt_admin->bind_param("i", $admin_id);$stmt_admin->execute();
-            $res_admin =$stmt_admin->get_result();
-            if ($row_admin =$res_admin->fetch_assoc()) {
+        $stmt_admin = $conn->prepare("SELECT username, first_name, last_name FROM admins WHERE id = ?");
+        if ($stmt_admin) {
+            $stmt_admin->bind_param("i", $admin_id);
+            $stmt_admin->execute();
+            $res_admin = $stmt_admin->get_result();
+            if ($row_admin = $res_admin->fetch_assoc()) {
                 $fname = trim($row_admin['first_name'] ?? '');
                 $lname = trim($row_admin['last_name'] ?? '');
-                
-                // หากมีการระบุชื่อ ให้แสดง ชื่อ-นามสกุล, ถ้าไม่มีให้แสดง Username แทน
-                if (!empty($fname)) {$admin_name = $fname . ' ' .$lname;
+
+                if (!empty($fname)) {
+                    $admin_name = $fname . ' ' . $lname;
                 } else {
-                    $admin_name =$row_admin['username'];
+                    $admin_name = $row_admin['username'];
                 }
             }
             $stmt_admin->close();
         }
 
         // ยอดนักเรียนทั้งหมด
-        $res_std =$conn->query("SELECT COUNT(*) as total FROM students");
-        if ($res_std && $row =$res_std->fetch_assoc()) {
-            $total_students =$row['total'];
+        $res_std = $conn->query("SELECT COUNT(*) as total FROM students");
+        if ($res_std && $row = $res_std->fetch_assoc()) {
+            $total_students = $row['total'];
         }
 
         // ยอดโหวตในสัปดาห์นี้
-        $res_vote =$conn->query("SELECT COUNT(DISTINCT student_code) as voted FROM weekly_votes WHERE vote_date = '$target_date'");
-        if ($res_vote && $row =$res_vote->fetch_assoc()) {
-            $voted_count =$row['voted'];
+        $res_vote = $conn->query("SELECT COUNT(DISTINCT student_code) as voted FROM weekly_votes WHERE vote_date = '$target_date'");
+        if ($res_vote && $row = $res_vote->fetch_assoc()) {
+            $voted_count = $row['voted'];
         }
 
         // =========================================================
         // คำนวณยอดคนเข้าเวรวันนี้
         // =========================================================
-        
-        // ดึงรายชื่อนักเรียนทั้งหมดเพื่อมาจำลองรอบเวรตาม Index
         $all_students_for_duty = [];
-        $res_all =$conn->query("SELECT student_code FROM students ORDER BY id ASC");
-        if ($res_all &&$res_all->num_rows > 0) {
-            while ($row =$res_all->fetch_assoc()) {
-                $all_students_for_duty[] =$row;
+        $res_all = $conn->query("SELECT student_code FROM students ORDER BY id ASC");
+        if ($res_all && $res_all->num_rows > 0) {
+            while ($row = $res_all->fetch_assoc()) {
+                $all_students_for_duty[] = $row;
             }
         }
-        
+
         $total_std_count = count($all_students_for_duty);
         if ($total_std_count > 0) {
-            // ใช้ตัวคำนวณกลาง (ข้ามคนที่ status = 'resigned') ให้ตรงกับหน้านักเรียน
             if (function_exists('duty_codes_for_date')) {
                 $today_duty_list = duty_codes_for_date($conn, $target_date, $start_date, 16);
             } else {
-                // สูตรสำรอง (ไม่ข้ามคนลาออก) ใช้เมื่อไม่พบ duty_core.php เท่านั้น
                 $diff_days = max(0, (int) floor((strtotime($target_date) - strtotime($start_date)) / 86400));
                 $start_index = ($diff_days * 16) % $total_std_count;
                 $today_duty_list = [];
@@ -114,7 +134,7 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
                     if ($row_duty) { $today_duty_list[] = $row_duty['student_code']; }
                 }
             }
-            $today_duties = count($today_duty_list); // ยอดปกติคือ 16 คน
+            $today_duties = count($today_duty_list);
         }
 
     } catch (Throwable $e) {
@@ -130,17 +150,17 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
   <title>หน้าหลักผู้ดูแล - MTTS</title>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
-  
+
   <style>
     :root {
-      --primary: #0f172a; 
+      --primary: #0f172a;
       --bg-color: #f6f8fc;
       --text-dark: #1e293b;
       --text-gray: #64748b;
     }
 
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    
+
     body {
       font-family: 'Prompt', sans-serif;
       background-color: #e2e8f0;
@@ -195,7 +215,7 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
     .school-logo { width: 45px; height: 45px; object-fit: contain; border-radius: 10px; }
     .school-name h1 { font-size: 1rem; font-weight: 700; color: var(--text-dark); margin: 0 0 2px 0; }
     .school-name p { font-size: 0.75rem; color: var(--text-gray); margin: 0; }
-    
+
     .noti-btn { position: relative; background: none; border: none; font-size: 1.4rem; color: #94a3b8; cursor: pointer; }
     .noti-badge { position: absolute; top: -2px; right: -2px; background: #ef4444; color: white; font-size: 0.65rem; font-weight: 700; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid var(--bg-color); }
 
@@ -218,7 +238,7 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
     .stat-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1rem; margin-bottom: 10px; }
     .stat-box h3 { font-size: 1.5rem; font-weight: 700; margin: 0 0 2px 0; color: var(--text-dark); line-height: 1; }
     .stat-box p { margin: 0; font-size: 0.75rem; color: var(--text-gray); font-weight: 500; }
-    
+
     .c-blue { background: #eff6ff; color: #3b82f6; }
     .c-green { background: #f0fdf4; color: #10b981; }
     .c-orange { background: #fffbeb; color: #f59e0b; }
@@ -228,7 +248,7 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
     .menu-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 0 20px 25px; }
     .menu-item { background: white; border-radius: 16px; padding: 18px 5px; text-decoration: none; color: var(--text-dark); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.03); transition: transform 0.2s, box-shadow 0.2s; border: none; cursor: pointer; font-family: 'Prompt', sans-serif;}
     .menu-item:active { transform: scale(0.95); }
-    
+
     .icon-box { width: 52px; height: 52px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin-bottom: 10px; }
     .menu-text { font-size: 0.8rem; font-weight: 600; line-height: 1.2; }
 
@@ -257,7 +277,7 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
   <?php endif; ?>
 
   <div class="app-container">
-    
+
     <div class="top-header fade-in-up delay-1">
       <div class="header-left">
         <img src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg" alt="Logo" class="school-logo">
@@ -266,7 +286,7 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
           <p>โรงเรียนช่างฝีมือทหาร</p>
         </div>
       </div>
-      <button class="noti-btn">
+      <button class="noti-btn" onclick="triggerPushNotification()">
         <i class="far fa-bell"></i>
         <div class="noti-badge">2</div>
       </button>
@@ -286,7 +306,7 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
       <div class="section-pill"></div>
       <h3>ภาพรวมวันที่ <?= date('d/m/Y', strtotime($target_date)) ?></h3>
     </div>
-    
+
     <div class="stats-grid fade-in-up delay-3">
       <div class="stat-box">
         <div class="stat-icon c-blue"><i class="fas fa-users"></i></div>
@@ -312,7 +332,7 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
       <div class="stat-box">
         <div class="stat-icon c-red"><i class="fas fa-exclamation-circle"></i></div>
         <div>
-            <h3><?= number_format(max(0, $total_students -$voted_count)) ?></h3>
+            <h3><?= number_format(max(0, $total_students - $voted_count)) ?></h3>
             <p>ยังไม่โหวต</p>
         </div>
       </div>
@@ -329,24 +349,24 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
         <div class="icon-box bg-blue"><i class="fas fa-user-edit"></i></div>
         <span class="menu-text">นร.ชท.</span>
       </a>
-      
+
       <a href="record_discipline.php" class="menu-item">
         <div class="icon-box bg-blue"><i class="fas fa-clipboard-list"></i></div>
         <span class="menu-text">บัตรวินัย.</span>
       </a>
-      
+
       <a href="admin_duties.php" class="menu-item">
         <div class="icon-box bg-purple"><i class="fas fa-calendar-alt"></i></div>
         <span class="menu-text">จัดเวร</span>
       </a>
-      
+
       <a href="admin_votes.php" class="menu-item">
         <div class="icon-box bg-green"><i class="fas fa-chart-bar"></i></div>
         <span class="menu-text">ผลโหวต</span>
       </a>
-      
+
       <!-- ปุ่มแจ้งเตือน -->
-      <button onclick="triggerPushNotification()" class="menu-item">
+      <button type="button" onclick="triggerPushNotification()" class="menu-item">
         <div class="icon-box bg-orange"><i class="fas fa-broadcast-tower"></i></div>
         <span class="menu-text">แจ้งเตือน</span>
       </button>
@@ -381,6 +401,8 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
   </div>
 
   <script>
+    const PUSH_API_URL = <?= json_encode($pushApiUrl, JSON_UNESCAPED_SLASHES) ?>;
+
     document.addEventListener("DOMContentLoaded", function() {
       const loader = document.getElementById('page-loader');
       if (loader) {
@@ -389,40 +411,49 @@ if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset("utf8mb4");
           setTimeout(function() {
             loader.remove();
           }, 500);
-        }, 1200); 
+        }, 1200);
       }
     });
 
     async function triggerPushNotification() {
       if (!confirm("คุณต้องการส่งแจ้งเตือนไปยังผู้ใช้ที่ยังไม่ได้ทำรายการ ใช่หรือไม่?")) {
-          return;
+        return;
       }
 
       try {
-          const today = new Date();
-          const targetDate = today.toLocaleDateString('en-GB'); 
+        const today = new Date();
+        const targetDate = today.toLocaleDateString('en-GB');
 
-          const response = await fetch('send_push.php', {
-              method: 'POST',
-              headers: {
-                  'Content-Type': 'application/json',
-                  'X-API-KEY': 'N4tthap41!nwza'
-              },
-              body: JSON.stringify({
-                  target_date: targetDate
-              })
-          });
+        const response = await fetch(PUSH_API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-KEY': 'N4tthap41!nwza'
+          },
+          body: JSON.stringify({
+            target_date: targetDate
+          })
+        });
 
-          const data = await response.json();
+        const rawText = await response.text();
+        let data;
+        try {
+          data = JSON.parse(rawText);
+        } catch (_parseErr) {
+          throw new Error(`ตอบกลับไม่ใช่ JSON (HTTP ${response.status}): ${rawText.slice(0, 120)}`);
+        }
 
-          if (data.success) {
-              alert(`ส่งแจ้งเตือนสำเร็จ!\nส่งไปยัง ${data.sent_count} อุปกรณ์`);
-          } else {
-              alert(`เกิดข้อผิดพลาด:\n${data.message}`);
-          }
+        if (!response.ok || !data.success) {
+          alert(`เกิดข้อผิดพลาด:\n${data.message || 'ไม่สามารถส่งแจ้งเตือนได้'}`);
+          return;
+        }
+
+        const webSent = Number(data.sent_count || 0);
+        const androidQueued = Number(data.android_queued || 0);
+        alert(`ส่งแจ้งเตือนสำเร็จ!\n• Web Push: ${webSent} เครื่อง\n• คิวแอป Android: ${androidQueued} รายการ`);
       } catch (error) {
-          console.error('Fetch Error:', error);
-          alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ หรือ URL ไม่ถูกต้อง');
+        console.error('Fetch Error:', error);
+        alert(`ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้:\n${error.message}`);
       }
     }
   </script>
