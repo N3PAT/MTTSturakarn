@@ -176,7 +176,7 @@ try {
 
     $title = isset($inputData['title']) ? (string)$inputData['title'] : 'ประกาศ: ยังไม่ได้ทำรายการ';
     $body  = isset($inputData['body']) ? (string)$inputData['body'] : "ระบบตรวจสอบพบว่าคุณยังไม่ได้ทำรายการประจำวันที่ {$targetDate}\n\nกรุณาเข้าสู่ระบบเพื่อดำเนินการให้เรียบร้อย";
-    $url   = isset($inputData['url']) ? (string)$inputData['url'] : '/main.php';
+    $url   = isset($inputData['url']) ? (string)$inputData['url'] : '/portalapp/main.php';
 
     // บันทึกแจ้งเตือนสำหรับเครื่อง Android ในตาราง app_notifications ก่อน
     $androidQueuedCount = queueAndroidDeviceNotifications($conn, $studentId, $title, $body, $url);
