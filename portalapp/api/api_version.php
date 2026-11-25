@@ -2,6 +2,24 @@
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 
+const PORTAL_BASE_URL = 'https://mttsturakarn.onrender.com/portalapp/';
+
+function normalizeNoticeUrl(?string $rawUrl, string$fallback = PORTAL_BASE_URL . 'main.php'): string
+{
+    $url = trim((string)$rawUrl);
+    if ($url === '') {
+        return $fallback;
+    }
+    if (preg_match('#^https?://#i', $url)) {
+        return $url;
+    }
+    $cleanPath = ltrim($url, '/');
+    if (str_starts_with($cleanPath, 'portalapp/')) {
+        return 'https://mttsturakarn.onrender.com/' . $cleanPath;
+    }
+    return PORTAL_BASE_URL . $cleanPath;
+}
+
 $appVersion = [
     'appName' => 'ระบบสารสนเทศนักเรียน MTTS',
     'version' => '1.2.0',
@@ -29,10 +47,9 @@ $appVersion = [
         '• ปรับปรุงประสิทธิภาพการโหลดหน้าหลัก',
         '• แก้ไขข้อผิดพลาดระบบสถิติการเข้าเวร'
     ]),
-    'url' => 'https://mttsturakarn.onrender.com/portalapp/main.php',
+    'url' => PORTAL_BASE_URL . 'main.php',
 ];
 
-// พยายามดึงแจ้งเตือนล่าสุดจากฐานข้อมูล app_notifications ตาม device_id (ถ้ามี)
 $dbPath = null;
 if (file_exists(__DIR__ . '/../db.php')) {
     $dbPath = __DIR__ . '/../db.php';
@@ -43,59 +60,42 @@ if (file_exists(__DIR__ . '/../db.php')) {
 if ($dbPath !== null) {
     require_once $dbPath;
 
-    if (isset($conn) && $conn instanceof mysqli) {
-        $deviceId = isset($_GET['device_id']) ? trim((string)$_GET['device_id']) : '';
-        $studentId = null;
+    if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset('utf8mb4');
+
+        $deviceId = isset($_GET['device_id']) ? trim((string)$_GET['device_id']) : '';$studentId = null;
 
         if ($deviceId !== '') {
-            $hasDevices = $conn->query("SHOW TABLES LIKE 'android_devices'");
-            if ($hasDevices && $hasDevices->num_rows > 0) {
-                $devStmt = $conn->prepare("SELECT student_id FROM android_devices WHERE device_id = ? LIMIT 1");
-                if ($devStmt) {
-                    $devStmt->bind_param("s", $deviceId);
-                    $devStmt->execute();
-                    $devRes = $devStmt->get_result();
-                    if ($devRow = $devRes->fetch_assoc()) {
-                        $studentId = $devRow['student_id'];
+            $hasDevices =$conn->query("SHOW TABLES LIKE 'android_devices'");
+            if ($hasDevices &&$hasDevices->num_rows > 0) {
+                $devStmt =$conn->prepare("SELECT student_id FROM android_devices WHERE device_id = ? LIMIT 1");
+                if ($devStmt) {$devStmt->bind_param("s", $deviceId);$devStmt->execute();
+                    $devRes =$devStmt->get_result();
+                    if ($devRow =$devRes->fetch_assoc()) {
+                        $studentId = trim((string)($devRow['student_id'] ?? ''));
                     }
                     $devStmt->close();
                 }
             }
         }
 
-        $hasNoti = $conn->query("SHOW TABLES LIKE 'app_notifications'");
-        if ($hasNoti && $hasNoti->num_rows > 0) {
+        $hasNoti =$conn->query("SHOW TABLES LIKE 'app_notifications'");
+        if ($hasNoti &&$hasNoti->num_rows > 0) {
             $noticeRow = null;
 
-            if (!empty($studentId)) {
-                $stmt = $conn->prepare("SELECT notice_key, title, message, url FROM app_notifications WHERE student_id = ? ORDER BY id DESC LIMIT 1");
-                if ($stmt) {
-                    $stmt->bind_param("s", $studentId);
-                    $stmt->execute();
-                    $res = $stmt->get_result();
-                    $noticeRow = $res->fetch_assoc();
-                    $stmt->close();
+            if ($studentId !== null &&$studentId !== '') {
+                $stmt =$conn->prepare("SELECT notice_key, title, message, url FROM app_notifications WHERE student_id = ? ORDER BY id DESC LIMIT 1");
+                if ($stmt) {$stmt->bind_param("s", $studentId);$stmt->execute();
+                    $res =$stmt->get_result();
+                    $noticeRow = $res->fetch_assoc();$stmt->close();
                 }
             }
 
             if (!$noticeRow) {
-                $res = $conn->query("SELECT notice_key, title, message, url FROM app_notifications ORDER BY id DESC LIMIT 1");
+                $res =$conn->query("SELECT notice_key, title, message, url FROM app_notifications WHERE student_id IS NULL OR student_id = '' ORDER BY id DESC LIMIT 1");
                 if ($res) {
                     $noticeRow = $res->fetch_assoc();
                 }
             }
 
             if ($noticeRow && !empty($noticeRow['notice_key'])) {
-                $appVersion['latest_notice_id'] = (string)$noticeRow['notice_key'];
-                $appVersion['title'] = (string)$noticeRow['title'];
-                $appVersion['message'] = (string)$noticeRow['message'];
-                if (!empty($noticeRow['url'])) {
-                    $appVersion['url'] = (string)$noticeRow['url'];
-                }
-            }
-        }
-    }
-}
-
-echo json_encode($appVersion, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-?>
+                $appVersion['latest_notice_id'] = (string)$noticeRow['notice_key
