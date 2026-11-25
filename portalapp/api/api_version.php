@@ -4,13 +4,16 @@ header('Access-Control-Allow-Origin: *');
 
 const PORTAL_BASE_URL = 'https://mttsturakarn.onrender.com/portalapp/';
 
-function normalizeNoticeUrl(?string $rawUrl, string$fallback = PORTAL_BASE_URL . 'main.php'): string
+function normalizeNoticeUrl(?string $rawUrl, string $fallback = PORTAL_BASE_URL . 'main.php'): string
 {
     $url = trim((string)$rawUrl);
     if ($url === '') {
         return $fallback;
     }
-    if (preg_match('#^https?://#i', $url)) {
+    if (
+        str_starts_with(strtolower($url), 'http://') ||
+        str_starts_with(strtolower($url), 'https://')
+    ) {
         return $url;
     }
     $cleanPath = ltrim($url, '/');
@@ -60,20 +63,61 @@ if (file_exists(__DIR__ . '/../db.php')) {
 if ($dbPath !== null) {
     require_once $dbPath;
 
-    if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset('utf8mb4');
+    if (isset($conn) && $conn instanceof mysqli) {
+        $conn->set_charset('utf8mb4');
 
-        $deviceId = isset($_GET['device_id']) ? trim((string)$_GET['device_id']) : '';$studentId = '';
+        $deviceId = isset($_GET['device_id']) ? trim((string)$_GET['device_id']) : '';
+        $studentId = '';
 
         if ($deviceId !== '') {
-            $hasDevices =$conn->query("SHOW TABLES LIKE 'android_devices'");
-            if ($hasDevices &&$hasDevices->num_rows > 0) {
-                $devStmt =$conn->prepare("SELECT student_id FROM android_devices WHERE device_id = ? LIMIT 1");
-                if ($devStmt) {$devStmt->bind_param("s", $deviceId);$devStmt->execute();
-                    $devRes =$devStmt->get_result();
-                    if ($devRow =$devRes->fetch_assoc()) {
+            $hasDevices = $conn->query("SHOW TABLES LIKE 'android_devices'");
+            if ($hasDevices && $hasDevices->num_rows > 0) {
+                $devStmt = $conn->prepare("SELECT student_id FROM android_devices WHERE device_id = ? LIMIT 1");
+                if ($devStmt) {
+                    $devStmt->bind_param("s", $deviceId);
+                    $devStmt->execute();
+                    $devRes = $devStmt->get_result();
+                    if ($devRow = $devRes->fetch_assoc()) {
                         $studentId = trim((string)($devRow['student_id'] ?? ''));
                     }
                     $devStmt->close();
                 }
             }
         }
+
+        $hasNoti = $conn->query("SHOW TABLES LIKE 'app_notifications'");
+        if ($hasNoti && $hasNoti->num_rows > 0) {
+            $noticeRow = null;
+
+            if ($studentId !== '') {
+                $sqlByStudent = "SELECT notice_key, title, message, url FROM app_notifications WHERE student_id = ? ORDER BY id DESC LIMIT 1";
+                $stmt = $conn->prepare($sqlByStudent);
+                if ($stmt) {
+                    $stmt->bind_param("s", $studentId);
+                    $stmt->execute();
+                    $res = $stmt->get_result();
+                    $noticeRow = $res->fetch_assoc();
+                    $stmt->close();
+                }
+            }
+
+            if (!$noticeRow) {
+                $sqlGlobal = "SELECT notice_key, title, message, url FROM app_notifications WHERE student_id IS NULL OR student_id = '' ORDER BY id DESC LIMIT 1";
+                $res = $conn->query($sqlGlobal);
+                if ($res) {
+                    $noticeRow = $res->fetch_assoc();
+                }
+            }
+
+            if ($noticeRow && !empty($noticeRow['notice_key'])) {
+                $appVersion['latest_notice_id'] = (string)$noticeRow['notice_key'];
+                $appVersion['title'] = (string)$noticeRow['title'];
+                $appVersion['message'] = (string)$noticeRow['message'];
+                $appVersion['url'] = normalizeNoticeUrl($noticeRow['url'] ?? null, $appVersion['url']);
+            }
+        }
+    }
+}
+
+echo json_encode($appVersion, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+?>
