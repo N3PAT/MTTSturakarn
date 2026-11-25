@@ -62,7 +62,7 @@ if ($dbPath !== null) {
 
     if (isset($conn) && $conn instanceof mysqli) {$conn->set_charset('utf8mb4');
 
-        $deviceId = isset($_GET['device_id']) ? trim((string)$_GET['device_id']) : '';$studentId = null;
+        $deviceId = isset($_GET['device_id']) ? trim((string)$_GET['device_id']) : '';$studentId = '';
 
         if ($deviceId !== '') {
             $hasDevices =$conn->query("SHOW TABLES LIKE 'android_devices'");
@@ -77,25 +77,3 @@ if ($dbPath !== null) {
                 }
             }
         }
-
-        $hasNoti =$conn->query("SHOW TABLES LIKE 'app_notifications'");
-        if ($hasNoti &&$hasNoti->num_rows > 0) {
-            $noticeRow = null;
-
-            if ($studentId !== null &&$studentId !== '') {
-                $stmt =$conn->prepare("SELECT notice_key, title, message, url FROM app_notifications WHERE student_id = ? ORDER BY id DESC LIMIT 1");
-                if ($stmt) {$stmt->bind_param("s", $studentId);$stmt->execute();
-                    $res =$stmt->get_result();
-                    $noticeRow = $res->fetch_assoc();$stmt->close();
-                }
-            }
-
-            if (!$noticeRow) {
-                $res =$conn->query("SELECT notice_key, title, message, url FROM app_notifications WHERE student_id IS NULL OR student_id = '' ORDER BY id DESC LIMIT 1");
-                if ($res) {
-                    $noticeRow = $res->fetch_assoc();
-                }
-            }
-
-            if ($noticeRow && !empty($noticeRow['notice_key'])) {
-                $appVersion['latest_notice_id'] = (string)$noticeRow['notice_key
