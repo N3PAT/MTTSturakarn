@@ -5,7 +5,6 @@ date_default_timezone_set('Asia/Bangkok');
 // 1. ป้องกัน HTTP 500 กรณีไฟล์ db.php หาย
 if (file_exists('db.php')) {
     require_once 'db.php';
-    // ตัวคำนวณเวรกลาง (ข้ามคนลาออก) — ถ้าไม่พบไฟล์ จะไม่ทำให้หน้าล่ม แต่ใช้สูตรสำรองด้านล่างแทน
     foreach ([__DIR__ . '/duty_core.php', __DIR__ . '/../duty_core.php'] as $__duty_core) {
         if (is_file($__duty_core)) { require_once $__duty_core; break; }
     }
@@ -286,7 +285,7 @@ if (isset($conn) && $conn instanceof mysqli) {
           <p>โรงเรียนช่างฝีมือทหาร</p>
         </div>
       </div>
-      <button class="noti-btn" onclick="triggerPushNotification()">
+      <button type="button" class="noti-btn" onclick="triggerPushNotification()" title="ส่งแจ้งเตือน PWA">
         <i class="far fa-bell"></i>
         <div class="noti-badge">2</div>
       </button>
@@ -298,7 +297,7 @@ if (isset($conn) && $conn instanceof mysqli) {
         <div class="badge-item"><i class="fas fa-crown"></i> สิทธิ์ผู้ดูแลระบบ</div>
       </div>
       <h2><?= htmlspecialchars($admin_name) ?></h2>
-      <p><i class="fas fa-circle" style="color: #4ade80; font-size: 0.6rem;"></i> สถานะระบบ: ทำงานปกติ (Online)</p>
+      <p><i class="fas fa-circle" style="color: #4ade80; font-size: 0.6rem;"></i> สถานะระบบ: ทำงานปกติ (PWA Push พร้อมใช้งาน)</p>
     </div>
 
     <!-- Stats Section -->
@@ -365,12 +364,11 @@ if (isset($conn) && $conn instanceof mysqli) {
         <span class="menu-text">ผลโหวต</span>
       </a>
 
-    
       <button type="button" onclick="triggerPushNotification()" class="menu-item">
         <div class="icon-box bg-orange"><i class="fa-solid fa-bullhorn"></i></div>
         <span class="menu-text">แจ้งเตือน</span>
       </button>
-       
+
       <a href="admin_announcements.php" class="menu-item">
         <div class="icon-box bg-red"><i class="fas fa-file-pdf"></i></div>
         <span class="menu-text">ประกาศ</span>
@@ -418,10 +416,16 @@ if (isset($conn) && $conn instanceof mysqli) {
           }, 500);
         }, 1200);
       }
+
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(function(err) {
+          console.error('SW register failed:', err);
+        });
+      }
     });
 
     async function triggerPushNotification() {
-      if (!confirm("คุณต้องการส่งแจ้งเตือนไปยังผู้ใช้ที่ยังไม่ได้ทำรายการ ใช่หรือไม่?")) {
+      if (!confirm("คุณต้องการส่งแจ้งเตือน PWA ไปยังผู้ใช้ที่ยังไม่ได้ทำรายการ ใช่หรือไม่?")) {
         return;
       }
 
@@ -454,8 +458,8 @@ if (isset($conn) && $conn instanceof mysqli) {
         }
 
         const webSent = Number(data.sent_count || 0);
-        const androidQueued = Number(data.android_queued || 0);
-        alert(`ส่งแจ้งเตือนสำเร็จ!\n• Web Push: ${webSent} เครื่อง\n• คิวแอป Android: ${androidQueued} รายการ`);
+        const expiredRemoved = Number(data.expired_removed || 0);
+        alert(`ส่งแจ้งเตือน PWA สำเร็จ!\n• ส่งสำเร็จ: ${webSent} เครื่อง\n• ลบ Token หมดอายุ: ${expiredRemoved} รายการ`);
       } catch (error) {
         console.error('Fetch Error:', error);
         alert(`ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้:\n${error.message}`);
