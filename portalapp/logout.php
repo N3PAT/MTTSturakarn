@@ -20,85 +20,91 @@ session_destroy();
 <html lang="th">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#503896" />
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>กำลังออกจากระบบ - MTTS</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet"/>
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet"/>
-  
+
   <style>
     :root {
-      --primary-color: #4361ee;
-      --primary-light: #e0e8ff;
-      --secondary-color: #3f3f46;
-      --bg-color: #f4f6f9;
-      --card-bg: #ffffff;
+      --primary: #503896;
+      --primary-dark: #3d2b78;
+      --st: env(safe-area-inset-top, 0px);
+      --sb: env(safe-area-inset-bottom, 0px);
     }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
 
     body {
       font-family: 'Prompt', sans-serif;
-      background: linear-gradient(135deg, #f4f6f9 0%, #eef2f7 100%);
-      color: var(--secondary-color);
       min-height: 100vh;
+      min-height: 100dvh;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 20px 15px;
-    }
-
-    @keyframes fadeInDown {
-      0% { opacity: 0; transform: translateY(-20px); }
-      100% { opacity: 1; transform: translateY(0); }
-    }
-
-    .logout-card {
-      background: var(--card-bg);
-      border-radius: 28px;
-      padding: 40px 30px;
-      box-shadow: 0 15px 35px rgba(67, 97, 238, 0.08);
+      gap: 18px;
+      padding: calc(24px + var(--st)) 24px calc(24px + var(--sb));
+      background: linear-gradient(160deg, var(--primary), var(--primary-dark));
+      color: #fff;
       text-align: center;
-      max-width: 380px;
-      width: 100%;
-      animation: fadeInDown 0.5s ease-out forwards;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-font-smoothing: antialiased;
     }
 
-    .spinner-box {
-      width: 70px;
-      height: 70px;
-      background: var(--primary-light);
-      color: var(--primary-color);
+    .logo {
+      width: 88px;
+      height: 88px;
+      padding: 6px;
+      border-radius: 22px;
+      background: #fff;
+      object-fit: contain;
+      animation: pulse 1.6s ease-in-out infinite;
+    }
+
+    .spinner {
+      width: 34px;
+      height: 34px;
+      border: 4px solid rgba(255,255,255,.25);
+      border-top-color: #fff;
       border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 20px;
-      font-size: 1.8rem;
+      animation: spin 1s linear infinite;
     }
 
-    h4 {
-      font-weight: 600;
-      color: #1e293b;
-      margin-bottom: 8px;
-    }
+    h1 { font-size: 1.15rem; font-weight: 600; }
+    p  { max-width: 280px; font-size: .85rem; line-height: 1.5; opacity: .8; }
 
-    p {
-      color: #64748b;
-      font-size: 0.9rem;
-      margin-bottom: 0;
+    .back-link {
+      margin-top: 6px;
+      padding: 10px 22px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.16);
+      color: #fff;
+      font-size: .85rem;
+      font-weight: 500;
+      text-decoration: none;
+      transition: transform .12s;
     }
+    .back-link:active { transform: scale(.96); }
+
+    @keyframes spin  { to { transform: rotate(360deg); } }
+    @keyframes pulse { 50% { transform: scale(1.05); } }
+
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
   </style>
 
   <meta http-equiv="refresh" content="1.5;url=login.php">
 </head>
 <body>
 
-  <div class="logout-card">
-    <div class="spinner-box">
-      <i class="fas fa-spinner fa-spin"></i>
-    </div>
-    <h4>กำลังออกจากระบบ</h4>
-    <p>กรุณารอสักครู่ ระบบกำลังพาคุณกลับหน้าเข้าสู่ระบบ...</p>
-  </div>
+  <img class="logo" src="https://upload.wikimedia.org/wikipedia/commons/2/2c/MTTS_Logo.jpg" alt="MTTS">
+  <div class="spinner" aria-hidden="true"></div>
+  <h1>กำลังออกจากระบบ</h1>
+  <p>กรุณารอสักครู่ ระบบกำลังพาคุณกลับหน้าเข้าสู่ระบบ...</p>
+  <a href="login.php" class="back-link">ไปหน้าเข้าสู่ระบบทันที</a>
 
   <script>
     // สั่งการสำรองเปลี่ยนหน้าผ่าน JavaScript ทันทีใน 1.5 วินาที
