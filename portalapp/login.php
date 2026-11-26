@@ -32,6 +32,65 @@ session_set_cookie_params([
 session_start();
 require_once 'db.php';
 
+// --- Security headers ---
+header('X-Frame-Options: DENY');
+header('X-Content-Type-Options: nosniff');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+
+// --- CSRF token ---
+if (empty($_SESSION['csrf_login'])) {
+    $_SESSION['csrf_login'] = bin2hex(random_bytes(32));
+}
+
+// --- จำกัดการลองรหัสผ่าน (ตารางสร้างอัตโนมัติ) ---
+const LOGIN_MAX_PER_CODE = 5;    // ผิดได้กี่ครั้งต่อรหัสประจำตัว
+const LOGIN_MAX_PER_IP   = 30;   // ผิดได้กี่ครั้งต่อ IP
+const LOGIN_WINDOW_MIN   = 15;   // ช่วงเวลา (นาที)
+
+function login_ip(): string {
+    return substr((string)($_SERVER['REMOTE_ADDR'] ?? ''), 0, 45);
+}
+function login_ensure_table(mysqli $conn): void {
+    $conn->query("CREATE TABLE IF NOT EXISTS login_attempts (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        student_code VARCHAR(50) NOT NULL,
+        ip VARCHAR(45) NOT NULL,
+        attempted_at DATETIME NOT NULL,
+        INDEX idx_code_time (student_code, attempted_at),
+        INDEX idx_ip_time (ip, attempted_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+}
+function login_is_locked(mysqli $conn, string $code): bool {
+    $ip = login_ip();
+    $since = date('Y-m-d H:i:s', time() - LOGIN_WINDOW_MIN * 60);
+    $st = $conn->prepare("SELECT
+        (SELECT COUNT(*) FROM login_attempts WHERE student_code = ? AND attempted_at > ?) AS c,
+        (SELECT COUNT(*) FROM login_attempts WHERE ip = ? AND attempted_at > ?) AS i");
+    $st->bind_param('ssss', $code, $since, $ip, $since);
+    $st->execute();
+    $r = $st->get_result()->fetch_assoc();
+    $st->close();
+    return (int)$r['c'] >= LOGIN_MAX_PER_CODE || (int)$r['i'] >= LOGIN_MAX_PER_IP;
+}
+function login_record_fail(mysqli $conn, string $code): void {
+    $ip = login_ip();
+    $now = date('Y-m-d H:i:s');
+    $st = $conn->prepare("INSERT INTO login_attempts (student_code, ip, attempted_at) VALUES (?, ?, ?)");
+    $st->bind_param('sss', $code, $ip, $now);
+    $st->execute();
+    $st->close();
+    if (mt_rand(1, 50) === 1) { // ล้างข้อมูลเก่าเป็นครั้งคราว
+        $conn->query("DELETE FROM login_attempts WHERE attempted_at < (NOW() - INTERVAL 1 DAY)");
+    }
+}
+function login_clear(mysqli $conn, string $code): void {
+    $st = $conn->prepare("DELETE FROM login_attempts WHERE student_code = ?");
+    $st->bind_param('s', $code);
+    $st->execute();
+    $st->close();
+}
+
 // ==========================================
 // 3. ดึงค่าการตั้งค่าจากฐานข้อมูล
 // ==========================================
@@ -45,7 +104,7 @@ $settings = [
 try {
     if (isset($conn) && ($conn instanceof mysqli)) {
         $conn->set_charset("utf8mb4");
-        $result = $conn->query("SELECT setting_name, setting_value FROM system_settings");
+        $result = $conn->query("SELECT setting_name, setting_value FROM system_settings WHERE setting_name IN ('maintenance_mode','duty_system_status','vote_system_status','reqdoc_system_status')");
         if ($result) {
             while ($row = $result->fetch_assoc()) {
                 // ตัดช่องว่างและ แปลงเป็นตัวพิมพ์เล็กทั้งหมด
@@ -91,16 +150,23 @@ $error = '';
 $student_code_input = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$is_maintenance) {
-    $student_code_input = trim($_POST['student_code'] ?? '');
+    $student_code_input = substr(trim($_POST['student_code'] ?? ''), 0, 50);
     $password = trim($_POST['password'] ?? ''); 
 
-    if (!empty($student_code_input) && !empty($password)) {
+    if (!hash_equals($_SESSION['csrf_login'], (string)($_POST['csrf'] ?? ''))) {
+        $error = 'เซสชันหมดอายุ กรุณารีเฟรชหน้าแล้วลองใหม่';
+    } elseif (!empty($student_code_input) && !empty($password)) {
         try {
             if (!isset($conn) || !($conn instanceof mysqli)) {
                 throw new Exception("Database connection error");
             }
 
-            $stmt = $conn->prepare("SELECT * FROM students WHERE student_code = ? LIMIT 1");
+            login_ensure_table($conn);
+            if (login_is_locked($conn, $student_code_input)) {
+                throw new RuntimeException('LOCKED');
+            }
+
+            $stmt = $conn->prepare("SELECT student_code, password, id_card, prefix, first_name, last_name, image, platoon, company, battalion, section FROM students WHERE student_code = ? LIMIT 1");
             if ($stmt) {
                 $stmt->bind_param("s", $student_code_input);
                 $stmt->execute();
@@ -113,14 +179,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$is_maintenance) {
                     $db_id_card = trim($student['id_card'] ?? '');
                     $is_password_correct = false;
 
-                    if (password_verify($password, $db_password)) {
+                    if ($db_password !== '' && password_verify($password, $db_password)) {
                         $is_password_correct = true;
-                    } elseif (!empty($db_id_card) && $password === $db_id_card) {
+                    } elseif (!empty($db_id_card) && hash_equals($db_id_card, $password)) {
+                        // ยังรองรับการเข้าด้วยเลขบัตรสำหรับผู้ที่ยังไม่ตั้งรหัสผ่านใหม่
                         $is_password_correct = true;
                     }
 
                     if ($is_password_correct) {
+                        login_clear($conn, $student_code_input);
                         session_regenerate_id(true);
+                        $_SESSION['csrf_login'] = bin2hex(random_bytes(32));
 
                         $_SESSION['student_code'] = $student['student_code'];
                         $_SESSION['student_name'] = trim(($student['prefix'] ?? '') . ($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''));
@@ -130,20 +199,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$is_maintenance) {
                         $_SESSION['company'] = $student['company'] ?? '-';
                         $_SESSION['battalion'] = $student['battalion'] ?? '-';
                         $_SESSION['section'] = $student['section'] ?? '-';
-                        $_SESSION['id_card'] = $db_id_card;
 
                         header("Location: main.php");
                         exit();
                     } else {
+                        login_record_fail($conn, $student_code_input);
                         $error = 'รหัสประจำตัวหรือรหัสผ่านไม่ถูกต้อง';
                     }
                 } else {
+                    password_verify($password, '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi'); // กัน timing
+                    login_record_fail($conn, $student_code_input);
                     $error = 'รหัสประจำตัวหรือรหัสผ่านไม่ถูกต้อง';
                 }
             }
         } catch (Throwable $e) {
-            error_log('Login Error: ' . $e->getMessage());
-            $error = 'เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง';
+            if ($e->getMessage() === 'LOCKED') {
+                $error = 'ลองเข้าสู่ระบบผิดหลายครั้ง กรุณารอ ' . LOGIN_WINDOW_MIN . ' นาทีแล้วลองใหม่';
+            } else {
+                error_log('Login Error: ' . $e->getMessage());
+                $error = 'เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง';
+            }
         }
     } else {
         $error = 'กรุณากรอกรหัสประจำตัวและรหัสผ่านให้ครบถ้วน';
@@ -304,7 +379,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$is_maintenance) {
         <div class="school-logo"></div>
         <h1 class="title" id="pageTitle">ระบบนักเรียน รุ่น 67</h1>
 
-        <form method="POST" action="" class="login-form">
+        <form method="POST" action="" class="login-form" autocomplete="off">
+          <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['csrf_login']) ?>">
           <?php if (!empty($error)): ?>
             <div class="alert-error">
               <i class="fas fa-exclamation-circle me-1"></i> <?= htmlspecialchars($error) ?>
@@ -314,14 +390,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$is_maintenance) {
           <div class="form-group">
             <label class="form-label" for="student_code">รหัสประจำตัว</label>
             <div class="input-wrapper">
-              <input type="text" class="form-control" id="student_code" name="student_code" placeholder="รหัสประจำตัว" value="<?= htmlspecialchars($student_code_input) ?>" inputmode="numeric" required>
+              <input type="text" class="form-control" id="student_code" name="student_code" placeholder="รหัสประจำตัว" value="<?= htmlspecialchars($student_code_input) ?>" inputmode="numeric" autocomplete="username" maxlength="50" required>
             </div>
           </div>
 
           <div class="form-group">
             <label class="form-label" for="password">เลขบัตรประจำตัวประชาชน</label>
             <div class="input-wrapper">
-              <input type="password" class="form-control" id="password" name="password" placeholder="เลขบัตร 13 หลัก" required>
+              <input type="password" class="form-control" id="password" name="password" placeholder="เลขบัตร 13 หลัก" autocomplete="current-password" required>
               <button type="button" class="toggle-password" id="togglePasswordBtn">
                 <i class="fas fa-eye" id="toggleIcon"></i>
               </button>
@@ -436,6 +512,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$is_maintenance) {
     const currentIsMaintenance = <?= $is_maintenance ? 'true' : 'false' ?>;
 
     function checkSystemStatusRealtime() {
+      if (document.hidden) return;
       // เรียกเช็กสถานะที่ไฟล์เดิม (ส่ง check_status=1 เพื่อให้ PHP คืนค่าเป็น JSON กลับมา)
       fetch('?check_status=1&_t=' + Date.now(), { cache: 'no-store' })
         .then(response => response.json())
