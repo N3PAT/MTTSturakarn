@@ -83,7 +83,10 @@ try {
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#503896">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>ข้อมูลส่วนตัว - Profile</title>
 
     <!-- FontAwesome & Google Fonts -->
@@ -92,89 +95,99 @@ try {
 
     <style>
         :root {
-            --primary: #5a42a0;
-            --primary-light: #7c5dfa;
-            --bg-color: #f6f8fc;
-            --text-dark: #0f172a;
-            --text-gray: #64748b;
-            --card-bg: #ffffff;
+            --primary: #503896;
+            --primary-dark: #3d2b78;
+            --bar: #503896;
+            --bg: #f2f3f8;
+            --ink: #1c1b29;
+            --mute: #6b7280;
+            --line: #eef0f5;
+            --g: 16px;
+            --nav: 64px;
+            --st: env(safe-area-inset-top, 0px);
+            --sb: env(safe-area-inset-bottom, 0px);
+            --shadow: 0 1px 2px rgba(20,20,43,.04), 0 2px 8px rgba(20,20,43,.04);
         }
 
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
+        html { -webkit-text-size-adjust: 100%; }
         [hidden] { display: none !important; }
 
         body {
             font-family: 'Prompt', sans-serif;
-            background-color: #e2e8f0;
-            margin: 0;
+            background: #d9dce6;
+            color: var(--ink);
             display: flex;
             justify-content: center;
+            min-height: 100vh;
+            min-height: 100dvh;
+            -webkit-user-select: none;
             user-select: none;
+            overscroll-behavior-y: none;
+            touch-action: manipulation;
+            -webkit-font-smoothing: antialiased;
         }
+        ::-webkit-scrollbar { display: none; }
 
         .app-container {
             width: 100%;
             max-width: 430px;
-            background-color: var(--bg-color);
             min-height: 100vh;
-            position: relative;
-            padding-bottom: 90px;
-            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            min-height: 100dvh;
+            background: var(--bg);
+            padding-bottom: calc(var(--nav) + var(--sb) + 20px);
             overflow-x: hidden;
         }
+        @media (min-width: 431px) { .app-container { box-shadow: 0 0 40px rgba(15,23,42,.14); } }
 
-        /* Top Header */
+        /* App bar */
         .top-header {
+            position: sticky;
+            top: 0;
+            z-index: 40;
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            padding: 20px 20px 10px;
-            background: var(--bg-color);
-        }
-
-        .header-title {
-            font-size: 1.2rem;
-            font-weight: 700;
-            color: var(--text-dark);
-            margin: 0;
+            gap: 12px;
+            padding: calc(10px + var(--st)) var(--g) 10px;
+            background: rgba(80,56,150,.94);
+            -webkit-backdrop-filter: saturate(180%) blur(14px);
+            backdrop-filter: saturate(180%) blur(14px);
+            color: #fff;
         }
 
         .back-btn {
-            color: var(--text-dark);
-            font-size: 1.2rem;
-            text-decoration: none;
-        }
-
-        /* Profile Main Card */
-        .profile-main-card {
-            background: var(--primary);
-            border-radius: 20px;
-            padding: 30px 20px;
-            margin: 10px 20px 20px;
-            color: white;
-            box-shadow: 0 10px 25px rgba(90, 66, 160, 0.25);
-            text-align: center;
-            position: relative;
-            overflow: hidden;
-        }
-
-        /* Background Pattern for Profile Card */
-        .profile-main-card::before {
-            content: '';
-            position: absolute;
-            top: -50px;
-            right: -50px;
-            width: 150px;
-            height: 150px;
-            background: rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex: none;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
+            background: rgba(255,255,255,.16);
+            color: #fff;
+            font-size: 1.05rem;
+            text-decoration: none;
+            transition: transform .12s;
+        }
+        .back-btn:active { transform: scale(.92); }
+
+        .header-title { font-size: 1.05rem; font-weight: 600; }
+
+        /* Profile card (การ์ดขาวเรียบ) */
+        .profile-main-card {
+            margin: 16px var(--g) 14px;
+            padding: 24px 20px 20px;
+            border-radius: 20px;
+            background: #fff;
+            box-shadow: var(--shadow);
+            text-align: center;
         }
 
         .profile-img-container {
             position: relative;
-            width: 110px;
-            height: 110px;
-            margin: 0 auto 15px;
+            width: 104px;
+            height: 104px;
+            margin: 0 auto 14px;
         }
 
         .profile-img {
@@ -182,54 +195,51 @@ try {
             height: 100%;
             object-fit: cover;
             border-radius: 50%;
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            background-color: #fff;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            border: 3px solid #efeaf9;
+            background: #fff;
         }
 
         .edit-img-btn {
             position: absolute;
             bottom: 0;
             right: 0;
-            background: #ea580c;
-            color: white;
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 0.8rem;
-            border: 2px solid var(--primary);
+            width: 34px;
+            height: 34px;
             padding: 0;
+            border: 3px solid #fff;
+            border-radius: 50%;
+            background: var(--primary);
+            color: #fff;
+            font-size: .8rem;
             cursor: pointer;
-            text-decoration: none;
+            transition: transform .12s;
         }
+        .edit-img-btn:active { transform: scale(.92); }
 
-        .profile-main-card h2 {
-            font-size: 1.3rem;
-            font-weight: 600;
-            margin: 0 0 5px 0;
-        }
+        .profile-main-card h2 { margin-bottom: 8px; font-size: 1.15rem; font-weight: 600; line-height: 1.3; }
 
         .profile-main-card p {
-            font-size: 0.9rem;
-            margin: 0;
-            opacity: 0.9;
-            background: rgba(0,0,0,0.15);
             display: inline-block;
-            padding: 4px 12px;
+            padding: 4px 14px;
             border-radius: 20px;
+            background: #efeaf9;
+            color: var(--primary);
+            font-size: .8rem;
+            font-weight: 500;
         }
 
         .photo-status {
             display: inline-block;
-            margin-top: 10px;
-            font-size: 0.75rem;
-            padding: 3px 10px;
+            margin-top: 12px;
+            padding: 4px 12px;
             border-radius: 20px;
             background: #fef3c7;
             color: #92400e;
+            font-size: .75rem;
+            font-weight: 500;
         }
 
         .photo-status-bad {
@@ -239,127 +249,114 @@ try {
             max-width: 100%;
         }
 
-        /* Info Sections */
+        /* Info sections: grouped list */
+        .section-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin: 18px calc(var(--g) + 4px) 8px;
+            font-size: .8rem;
+            font-weight: 600;
+            letter-spacing: .02em;
+            color: var(--mute);
+        }
+        .section-label i { color: var(--primary); }
+
         .info-section {
-            background: var(--card-bg);
-            border-radius: 16px;
-            margin: 0 20px 20px;
-            padding: 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.03);
-        }
-
-        .section-header {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 15px;
-            border-bottom: 1px solid #f1f5f9;
-            padding-bottom: 10px;
-        }
-
-        .section-icon {
-            width: 32px;
-            height: 32px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.9rem;
-        }
-
-        .bg-blue { background: #dbeafe; color: #2563eb; }
-        .bg-green { background: #dcfce7; color: #16a34a; }
-        .bg-orange { background: #ffedd5; color: #ea580c; }
-
-        .section-header h3 {
-            font-size: 1rem;
-            font-weight: 700;
-            color: var(--text-dark);
-            margin: 0;
+            margin: 0 var(--g);
+            padding: 0 16px;
+            border-radius: 20px;
+            background: #fff;
+            box-shadow: var(--shadow);
         }
 
         .info-row {
             display: flex;
+            align-items: center;
             justify-content: space-between;
-            padding: 10px 0;
-            border-bottom: 1px dashed #e2e8f0;
-            font-size: 0.85rem;
+            gap: 16px;
+            padding: 14px 0;
+            font-size: .88rem;
         }
+        .info-row + .info-row { border-top: 1px solid var(--line); }
 
-        .info-row:last-child {
-            border-bottom: none;
-            padding-bottom: 0;
-        }
+        .info-label { color: var(--mute); font-weight: 400; }
+        .info-value { color: var(--ink); font-weight: 600; text-align: right; }
+        .text-highlight { color: var(--primary); }
 
-        .info-label {
-            color: var(--text-gray);
-            font-weight: 500;
-        }
-
-        .info-value {
-            color: var(--text-dark);
-            font-weight: 600;
-            text-align: right;
-        }
-
-        .text-highlight {
-            color: var(--primary);
-        }
-
-        /* Bottom Nav */
+        /* Bottom nav สีม่วง */
         .bottom-nav {
             position: fixed;
             bottom: 0;
-            width: 100%;
-            max-width: 430px;
             left: 50%;
             transform: translateX(-50%);
-            height: 70px;
-            background: white;
-            border-top-left-radius: 25px;
-            border-top-right-radius: 25px;
-            display: flex;
-            justify-content: space-around;
-            align-items: center;
-            box-shadow: 0 -5px 20px rgba(0,0,0,0.03);
-            padding: 0 10px;
             z-index: 1000;
+            width: 100%;
+            max-width: 430px;
+            height: calc(var(--nav) + var(--sb));
+            padding-bottom: var(--sb);
+            display: flex;
+            align-items: center;
+            background: var(--bar);
+            box-shadow: 0 -4px 18px rgba(20,20,43,.18);
         }
 
         .nav-link {
+            flex: 1;
             display: flex;
             flex-direction: column;
             align-items: center;
+            gap: 2px;
+            padding: 6px 0;
+            color: rgba(255,255,255,.6);
+            font-size: .7rem;
+            font-weight: 500;
             text-decoration: none;
-            color: #94a3b8;
-            font-size: 0.7rem;
-            font-weight: 600;
-            width: 30%;
-            gap: 4px;
         }
+        .nav-link i {
+            display: grid;
+            place-items: center;
+            width: 56px;
+            height: 30px;
+            border-radius: 15px;
+            font-size: 1.2rem;
+            transition: background .2s;
+        }
+        .nav-link:active { color: #fff; }
+        .nav-link:active i { background: rgba(255,255,255,.2); }
+        .nav-link.danger { color: #fecaca; }
 
-        .nav-link.active { color: var(--primary); }
-        .nav-link i { font-size: 1.3rem; }
-
-        /* Photo upload modal */
+        /* Photo upload modal (bottom sheet) */
         .modal-backdrop {
             position: fixed;
             inset: 0;
-            background: rgba(15, 23, 42, 0.55);
             display: flex;
             align-items: flex-end;
             justify-content: center;
             z-index: 2000;
+            background: rgba(15,23,42,.5);
+            -webkit-backdrop-filter: blur(3px);
+            backdrop-filter: blur(3px);
         }
 
         .modal-sheet {
             width: 100%;
             max-width: 430px;
             max-height: 92vh;
+            max-height: 92dvh;
             overflow-y: auto;
+            padding: 10px 20px calc(24px + var(--sb));
+            border-radius: 26px 26px 0 0;
             background: #fff;
-            border-radius: 24px 24px 0 0;
-            padding: 20px 20px 28px;
+        }
+        .modal-sheet::before {
+            content: '';
+            display: block;
+            width: 40px;
+            height: 5px;
+            margin: 0 auto 14px;
+            border-radius: 3px;
+            background: #d4d8e2;
         }
 
         .modal-head {
@@ -368,48 +365,44 @@ try {
             justify-content: space-between;
             margin-bottom: 14px;
         }
-
-        .modal-head h3 { margin: 0; font-size: 1.05rem; color: var(--text-dark); }
+        .modal-head h3 { font-size: 1.05rem; font-weight: 600; color: var(--ink); }
 
         .modal-close {
-            border: none;
-            background: #f1f5f9;
-            color: var(--text-gray);
-            width: 32px;
-            height: 32px;
+            width: 34px;
+            height: 34px;
+            border: 0;
             border-radius: 50%;
+            background: #eef0f6;
+            color: var(--mute);
             cursor: pointer;
         }
 
         .guide {
             display: flex;
             gap: 12px;
-            background: #f8fafc;
-            border-radius: 14px;
-            padding: 12px;
             margin-bottom: 14px;
+            padding: 12px;
+            border-radius: 16px;
+            background: #f6f7fb;
         }
 
         .guide-img {
             width: 96px;
             height: 96px;
-            object-fit: cover;
-            border-radius: 10px;
             flex-shrink: 0;
+            object-fit: cover;
+            border-radius: 12px;
         }
 
-        .guide-title { font-size: 0.75rem; font-weight: 600; color: var(--text-dark); margin: 0 0 4px; }
+        .guide-title { margin: 0 0 4px; font-size: .78rem; font-weight: 600; color: var(--ink); }
 
         .guide-list {
             list-style: none;
-            margin: 0;
-            padding: 0;
-            font-size: 0.72rem;
-            color: var(--text-gray);
+            font-size: .72rem;
+            color: var(--mute);
             line-height: 1.5;
         }
-
-        .guide-list li { padding-left: 14px; position: relative; }
+        .guide-list li { position: relative; padding-left: 14px; }
         .guide-list li::before { content: '•'; position: absolute; left: 3px; color: var(--primary); }
 
         .preview-box {
@@ -417,70 +410,69 @@ try {
             aspect-ratio: 1 / 1;
             max-width: 220px;
             margin: 0 auto 14px;
-            border: 2px dashed #cbd5e1;
-            border-radius: 16px;
             display: flex;
             align-items: center;
             justify-content: center;
             overflow: hidden;
-            color: #94a3b8;
-            font-size: 0.8rem;
+            border: 2px dashed #cbd5e1;
+            border-radius: 18px;
+            color: #9aa3b2;
+            font-size: .8rem;
             text-align: center;
         }
-
         .preview-box img { width: 100%; height: 100%; object-fit: cover; }
 
         .btn {
             width: 100%;
-            border: none;
-            border-radius: 12px;
-            padding: 12px;
+            margin-top: 8px;
+            padding: 13px;
+            border: 0;
+            border-radius: 14px;
             font-family: inherit;
-            font-size: 0.9rem;
+            font-size: .92rem;
             font-weight: 600;
             cursor: pointer;
-            margin-top: 8px;
+            transition: transform .1s;
         }
-
+        .btn:active { transform: scale(.97); }
         .btn-outline { background: #fff; color: var(--primary); border: 1.5px solid var(--primary); }
         .btn-primary { background: var(--primary); color: #fff; }
-        .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .btn:disabled { opacity: .45; cursor: not-allowed; }
 
         .result-box {
-            border-radius: 12px;
-            padding: 12px;
-            font-size: 0.8rem;
             margin-top: 10px;
+            padding: 12px;
+            border-radius: 14px;
+            font-size: .8rem;
         }
-
         .result-ok { background: #dcfce7; color: #166534; }
         .result-bad { background: #fee2e2; color: #991b1b; }
         .result-warn { background: #fef3c7; color: #92400e; }
-
-        .result-msg { font-weight: 600; margin: 0; }
+        .result-msg { margin: 0; font-weight: 600; }
 
         .check-list { list-style: none; margin: 8px 0 0; padding: 0; }
         .check-list li { display: flex; gap: 8px; padding: 3px 0; line-height: 1.4; }
-        .check-list i { width: 14px; margin-top: 3px; flex-shrink: 0; }
+        .check-list i { flex-shrink: 0; width: 14px; margin-top: 3px; }
         .check-list .is-ok i { color: #16a34a; }
         .check-list .is-bad i { color: #dc2626; }
-        .check-note { display: block; opacity: 0.85; }
+        .check-note { display: block; opacity: .85; }
 
-        .spin { animation: spin 0.9s linear infinite; }
+        .spin { animation: spin .9s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
         /* Animations */
         .fade-in-up {
             opacity: 0;
-            transform: translateY(20px);
-            animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            transform: translateY(14px);
+            animation: fadeInUp .45s cubic-bezier(.16,1,.3,1) forwards;
         }
-        @keyframes fadeInUp { to { opacity: 1; transform: translateY(0); } }
-        .delay-1 { animation-delay: 0.1s; }
-        .delay-2 { animation-delay: 0.2s; }
-        .delay-3 { animation-delay: 0.3s; }
+        @keyframes fadeInUp { to { opacity: 1; transform: none; } }
+        .delay-1 { animation-delay: .08s; }
+        .delay-2 { animation-delay: .16s; }
+        .delay-3 { animation-delay: .24s; }
 
         @media (prefers-reduced-motion: reduce) {
+            * { transition: none !important; }
             .fade-in-up { animation: none; opacity: 1; transform: none; }
         }
     </style>
@@ -490,12 +482,12 @@ try {
 <div class="app-container">
 
     <!-- Top Header -->
-    <div class="top-header fade-in-up">
-        <a href="javascript:history.back()" class="back-btn"><i class="fas fa-chevron-left"></i></a>
+    <header class="top-header">
+        <a href="javascript:history.back()" class="back-btn" aria-label="ย้อนกลับ"><i class="fas fa-chevron-left"></i></a>
         <h1 class="header-title">ข้อมูลส่วนตัว</h1>
-        <div style="width: 20px;"></div>
-    </div>
+    </header>
 
+    <main>
     <!-- Profile Header Card -->
     <div class="profile-main-card fade-in-up delay-1">
         <div class="profile-img-container">
@@ -521,87 +513,84 @@ try {
     </div>
 
     <!-- ข้อมูลส่วนตัว -->
-    <div class="info-section fade-in-up delay-2">
-        <div class="section-header">
-            <div class="section-icon bg-blue"><i class="fas fa-user"></i></div>
-            <h3>ข้อมูลพื้นฐาน</h3>
-        </div>
-        <div class="info-row">
-            <span class="info-label">เลขประจำตัวประชาชน</span>
-            <span class="info-value"><?php echo htmlspecialchars($student['id_card'] ?? '-'); ?></span>
-        </div>
-        <div class="info-row">
-            <span class="info-label">เพศ</span>
-            <span class="info-value">ชาย</span>
-        </div>
-        <div class="info-row">
-            <span class="info-label">อายุ</span>
-            <span class="info-value"><?php echo $display_age; ?> ปี</span>
+    <div class="fade-in-up delay-2">
+        <div class="section-label"><i class="fas fa-user"></i> ข้อมูลพื้นฐาน</div>
+        <div class="info-section">
+            <div class="info-row">
+                <span class="info-label">เลขประจำตัวประชาชน</span>
+                <span class="info-value"><?php echo htmlspecialchars($student['id_card'] ?? '-'); ?></span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">เพศ</span>
+                <span class="info-value">ชาย</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">อายุ</span>
+                <span class="info-value"><?php echo $display_age; ?> ปี</span>
+            </div>
         </div>
     </div>
 
     <!-- ข้อมูลสังกัด -->
-    <div class="info-section fade-in-up delay-3">
-        <div class="section-header">
-            <div class="section-icon bg-orange"><i class="fas fa-sitemap"></i></div>
-            <h3>ข้อมูลสังกัด</h3>
-        </div>
-        <div class="info-row">
-            <span class="info-label">กองพัน</span>
-            <span class="info-value"><?php echo htmlspecialchars($student['battalion'] ?? '-'); ?></span>
-        </div>
-        <div class="info-row">
-            <span class="info-label">กองร้อย</span>
-            <span class="info-value"><?php echo htmlspecialchars($student['company'] ?? '-'); ?></span>
-        </div>
-        <div class="info-row">
-            <span class="info-label">หมวด</span>
-            <span class="info-value"><?php echo htmlspecialchars($student['platoon'] ?? '-'); ?></span>
-        </div>
-        <div class="info-row">
-            <span class="info-label">ตอน/วิชาชีพช่าง</span>
-            <span class="info-value"><?php echo htmlspecialchars($student['section'] ?? '-'); ?></span>
+    <div class="fade-in-up delay-3">
+        <div class="section-label"><i class="fas fa-sitemap"></i> ข้อมูลสังกัด</div>
+        <div class="info-section">
+            <div class="info-row">
+                <span class="info-label">กองพัน</span>
+                <span class="info-value"><?php echo htmlspecialchars($student['battalion'] ?? '-'); ?></span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">กองร้อย</span>
+                <span class="info-value"><?php echo htmlspecialchars($student['company'] ?? '-'); ?></span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">หมวด</span>
+                <span class="info-value"><?php echo htmlspecialchars($student['platoon'] ?? '-'); ?></span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">ตอน/วิชาชีพช่าง</span>
+                <span class="info-value"><?php echo htmlspecialchars($student['section'] ?? '-'); ?></span>
+            </div>
         </div>
     </div>
 
     <!-- ข้อมูลทางกายภาพ -->
-    <div class="info-section fade-in-up delay-3">
-        <div class="section-header">
-            <div class="section-icon bg-green"><i class="fas fa-weight-scale"></i></div>
-            <h3>ข้อมูลสุขภาพ</h3>
-        </div>
-        <div class="info-row">
-            <span class="info-label">น้ำหนัก</span>
-            <span class="info-value"><?php echo $display_weight; ?> กก.</span>
-        </div>
-        <div class="info-row">
-            <span class="info-label">ส่วนสูง</span>
-            <span class="info-value"><?php echo $display_height; ?> ซม.</span>
-        </div>
-        <div class="info-row">
-            <span class="info-label">ค่า BMI</span>
-            <span class="info-value"><?php echo $display_bmi; ?></span>
-        </div>
-        <div class="info-row">
-            <span class="info-label">เกณฑ์ BMI</span>
-            <span class="info-value text-highlight"><?php echo $display_bmi_cat; ?></span>
+    <div class="fade-in-up delay-3">
+        <div class="section-label"><i class="fas fa-weight-scale"></i> ข้อมูลสุขภาพ</div>
+        <div class="info-section">
+            <div class="info-row">
+                <span class="info-label">น้ำหนัก</span>
+                <span class="info-value"><?php echo $display_weight; ?> กก.</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">ส่วนสูง</span>
+                <span class="info-value"><?php echo $display_height; ?> ซม.</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">ค่า BMI</span>
+                <span class="info-value"><?php echo $display_bmi; ?></span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">เกณฑ์ BMI</span>
+                <span class="info-value text-highlight"><?php echo $display_bmi_cat; ?></span>
+            </div>
         </div>
     </div>
-
-    <!-- Bottom Navigation -->
-    <div class="bottom-nav">
-        <a href="main.php" class="nav-link">
-            <i class="fas fa-home"></i>
-            <span>หน้าหลัก</span>
-        </a>
-        <!-- เพิ่ม style="color: #dc2626;" เข้าไปที่คลาส nav-link ของปุ่ม logout -->
-        <a href="logout.php" class="nav-link" style="color: #dc2626;">
-            <i class="fas fa-sign-out-alt"></i>
-            <span>ออกจากระบบ</span>
-        </a>
-    </div>
+    </main>
 
 </div>
+
+<!-- Bottom Navigation -->
+<nav class="bottom-nav" aria-label="เมนูหลัก">
+    <a href="main.php" class="nav-link">
+        <i class="fas fa-home"></i>
+        <span>หน้าหลัก</span>
+    </a>
+    <a href="logout.php" class="nav-link danger">
+        <i class="fas fa-sign-out-alt"></i>
+        <span>ออกจากระบบ</span>
+    </a>
+</nav>
 
 <?php if ($is_own_profile): ?>
 <!-- Modal อัปโหลดรูป -->
