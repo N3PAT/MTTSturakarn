@@ -365,11 +365,16 @@ if (isset($conn) && $conn instanceof mysqli) {
         <span class="menu-text">ผลโหวต</span>
       </a>
 
-      <!-- ปุ่มแจ้งเตือน -->
+    
       <button type="button" onclick="triggerPushNotification()" class="menu-item">
-        <div class="icon-box bg-orange"><i class="fas fa-broadcast-tower"></i></div>
+        <div class="icon-box bg-orange"><i class="fa-solid fa-bullhorn"></i></div>
         <span class="menu-text">แจ้งเตือน</span>
       </button>
+       
+      <a href="admin_announcements.php" class="menu-item">
+        <div class="icon-box bg-red"><i class="fas fa-file-pdf"></i></div>
+        <span class="menu-text">ประกาศ</span>
+      </a>
 
       <a href="reports.php" class="menu-item">
         <div class="icon-box bg-red"><i class="fas fa-file-pdf"></i></div>
