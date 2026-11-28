@@ -291,7 +291,7 @@ $menu_items = [
     ['href' => 'discipline_history.php', 'icon' => 'fa-file-alt',          'color' => 'bg-blue',   'label' => 'บัตรวินัย'],
     ['href' => 'duty_substitutions.php', 'icon' => 'fa-address-book',      'color' => 'bg-green',  'label' => 'เปลี่ยนเวร'],
     ['href' => 'commanders.php',         'icon' => 'fa-solid fa-user-tie', 'color' => 'bg-green',  'label' => 'รายนามผู้บังคับบัญชา'],
-    ['href' => 'feedback.php',           'icon' => 'fa-comment-dots',      'color' => 'bg-purple', 'label' => 'ข้อเสนอแนะ'],
+    ['href' => 'feedback.php', 'icon' => 'fa-solid fa-envelope',  'color' => 'bg-purple', 'label' => 'ข้อเสนอแนะ'],
 ];
 
 $nav_items = [
