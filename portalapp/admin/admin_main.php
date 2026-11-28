@@ -343,48 +343,57 @@ if (isset($conn) && $conn instanceof mysqli) {
       <h3>เมนูหลัก</h3>
     </div>
 
-    <div class="menu-grid fade-in-up delay-4">
-      <a href="admin_students.php" class="menu-item">
-        <div class="icon-box bg-blue"><i class="fas fa-user-edit"></i></div>
-        <span class="menu-text">นร.ชท.</span>
-      </a>
+   <div class="menu-grid fade-in-up delay-4">
+  <a href="admin_students.php" class="menu-item">
+    <div class="icon-box bg-blue"><i class="fas fa-user-edit"></i></div>
+    <span class="menu-text">นร.ชท.</span>
+  </a>
 
-      <a href="record_discipline.php" class="menu-item">
-        <div class="icon-box bg-blue"><i class="fas fa-clipboard-list"></i></div>
-        <span class="menu-text">บัตรวินัย.</span>
-      </a>
+  <a href="record_discipline.php" class="menu-item">
+    <div class="icon-box bg-blue"><i class="fas fa-clipboard-list"></i></div>
+    <span class="menu-text">บัตรวินัย.</span>
+  </a>
 
-      <a href="admin_duties.php" class="menu-item">
-        <div class="icon-box bg-purple"><i class="fas fa-calendar-alt"></i></div>
-        <span class="menu-text">จัดเวร</span>
-      </a>
+  <a href="admin_duties.php" class="menu-item">
+    <div class="icon-box bg-purple"><i class="fas fa-calendar-alt"></i></div>
+    <span class="menu-text">จัดเวร</span>
+  </a>
 
-      <a href="admin_votes.php" class="menu-item">
-        <div class="icon-box bg-green"><i class="fas fa-chart-bar"></i></div>
-        <span class="menu-text">ผลโหวต</span>
-      </a>
+  <a href="admin_votes.php" class="menu-item">
+    <div class="icon-box bg-green"><i class="fas fa-chart-bar"></i></div>
+    <span class="menu-text">ผลโหวต</span>
+  </a>
 
-      <button type="button" onclick="triggerPushNotification()" class="menu-item">
-        <div class="icon-box bg-orange"><i class="fa-solid fa-bullhorn"></i></div>
-        <span class="menu-text">แจ้งเตือน</span>
-      </button>
+  <a href="admin_polls.php" class="menu-item">
+    <div class="icon-box bg-purple"><i class="fas fa-poll"></i></div>
+    <span class="menu-text">จัดการโพล</span>
+  </a>
 
-      <a href="admin_announcements.php" class="menu-item">
-        <div class="icon-box bg-red"><i class="fas fa-file-pdf"></i></div>
-        <span class="menu-text">ประกาศ</span>
-      </a>
+  <a href="admin_feedback.php" class="menu-item">
+    <div class="icon-box bg-blue"><i class="fas fa-comment-dots"></i></div>
+    <span class="menu-text">ข้อเสนอแนะ</span>
+  </a>
 
-      <a href="reports.php" class="menu-item">
-        <div class="icon-box bg-red"><i class="fas fa-file-pdf"></i></div>
-        <span class="menu-text">รายงาน</span>
-      </a>
+  <button type="button" onclick="triggerPushNotification()" class="menu-item">
+    <div class="icon-box bg-orange"><i class="fas fa-bullhorn"></i></div>
+    <span class="menu-text">แจ้งเตือน</span>
+  </button>
 
-      <a href="admin_restrict.php" class="menu-item">
-        <div class="icon-box bg-red"><i class="fas fa-dungeon"></i></div>
-        <span class="menu-text">กักบริเวณ</span>
-      </a>
-    </div>
+  <a href="admin_announcements.php" class="menu-item">
+    <div class="icon-box bg-orange"><i class="fas fa-scroll"></i></div>
+    <span class="menu-text">ประกาศ</span>
+  </a>
 
+  <a href="reports.php" class="menu-item">
+    <div class="icon-box bg-red"><i class="fas fa-file-pdf"></i></div>
+    <span class="menu-text">รายงาน</span>
+  </a>
+
+  <a href="admin_restrict.php" class="menu-item">
+    <div class="icon-box bg-red"><i class="fas fa-dungeon"></i></div>
+    <span class="menu-text">กักบริเวณ</span>
+  </a>
+</div>
     <!-- Bottom Navigation -->
     <div class="bottom-nav">
       <a href="#" class="nav-link active">
