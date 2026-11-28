@@ -285,12 +285,13 @@ function build_news_items(array $announcements): array
 }
 
 $menu_items = [
-    ['href' => 'duty.php',               'icon' => 'fa-user-clock',   'color' => 'bg-purple', 'label' => 'เวรของฉัน'],
-    ['href' => 'fill.php',               'icon' => 'fa-vote-yea',     'color' => 'bg-orange', 'label' => 'โหวตกลับบ้าน'],
-    ['href' => 'discipline_history.php', 'icon' => 'fa-file-alt',     'color' => 'bg-blue',   'label' => 'บัตรวินัย'],
-    ['href' => 'duty_substitutions.php', 'icon' => 'fa-address-book', 'color' => 'bg-green',  'label' => 'เปลี่ยนเวร'],
-    ['href' => 'commanders.php', 'icon' => 'fa-solid fa-user-tie', 'color' => 'bg-green',  'label' => 'รายนามผู้บังคับบัญชา'],
-    ['href' => 'feedback.php',           'icon' => 'fa-comment-dots', 'color' => 'bg-purple', 'label' => 'ข้อเสนอแนะ'],
+    ['href' => 'duty.php',               'icon' => 'fa-user-clock',        'color' => 'bg-purple', 'label' => 'เวรของฉัน'],
+    ['href' => 'fill.php',               'icon' => 'fa-vote-yea',          'color' => 'bg-orange', 'label' => 'โหวตกลับบ้าน'],
+    ['href' => 'poll.php',               'icon' => 'fa-poll',              'color' => 'bg-blue',   'label' => 'แบบสำรวจ / โพล'],
+    ['href' => 'discipline_history.php', 'icon' => 'fa-file-alt',          'color' => 'bg-blue',   'label' => 'บัตรวินัย'],
+    ['href' => 'duty_substitutions.php', 'icon' => 'fa-address-book',      'color' => 'bg-green',  'label' => 'เปลี่ยนเวร'],
+    ['href' => 'commanders.php',         'icon' => 'fa-solid fa-user-tie', 'color' => 'bg-green',  'label' => 'รายนามผู้บังคับบัญชา'],
+    ['href' => 'feedback.php',           'icon' => 'fa-comment-dots',      'color' => 'bg-purple', 'label' => 'ข้อเสนอแนะ'],
 ];
 
 $nav_items = [
