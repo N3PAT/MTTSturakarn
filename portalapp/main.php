@@ -293,7 +293,6 @@ $menu_items = [
     ['href' => 'commanders.php',         'icon' => 'fa-solid fa-user-tie',           'color' => 'bg-green',  'label' => 'รายนามผู้บังคับบัญชา'],
     ['href' => 'feedback.php',           'icon' => 'fa-solid fa-envelope',           'color' => 'bg-purple', 'label' => 'ข้อเสนอแนะ'],
 ];
-
 $nav_items = [
     ['href' => 'main.php',    'icon' => 'fa-home', 'label' => 'หน้าหลัก', 'active' => true],
     ['href' => 'profile.php', 'icon' => 'fa-user', 'label' => 'โปรไฟล์',  'active' => false],
